@@ -1,4 +1,3 @@
-import { ForecastChoices } from "@/components/forecast-choices";
 import { TradeActivityDetails } from "@/components/trade-activity-details";
 import Link from "next/link";
 import styles from "./market-detail.module.css";
@@ -20,7 +19,6 @@ import { WatchlistButton } from "@/components/watchlist-button";
 import { ShareButton } from "@/components/share-button";
 import { getServerUser } from "@/lib/server-session";
 import { OrderBookPanel } from "@/components/order-book-panel";
-import { orderEntryHref } from "@/lib/order-entry";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +50,6 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
   const points = orderBookMarket
     ? [...market.orderFills].reverse().map((fill) => ({ timestamp: fill.createdAt, probability: Number(impliedProbabilityBps(fill.canonicalYesPriceMilli, market.payoutMilli)) / 10_000 }))
     : [...market.priceHistory].reverse().map((point) => ({ timestamp: point.createdAt, probability: point.yesProbabilityBps / 10_000 }));
-  const forecastDescription = mark.source === "MID" ? "Midpoint of the current two-sided order book." : mark.source === "LAST" ? `Last traded price${mark.stale ? " (may be stale)" : ""}; not a guaranteed execution price.` : mark.source === "NONE" ? "No market price yet. A qualifying two-sided book or a completed trade is needed." : mark.source === "SETTLEMENT" ? "Final settlement outcome." : "Current market-maker price.";
 
   return <div className={`page-shell market-detail-page ${styles.page}`}>
     <nav className="breadcrumbs" aria-label="Breadcrumb"><Link href="/markets">Markets</Link><ChevronRight /><Link href={`/markets?category=${encodeURIComponent(market.category)}`}>{market.category}</Link></nav>
@@ -64,7 +61,6 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
         </header>
 
         <ProbabilityChart points={points} marketSlug={market.slug} label={orderBookMarket ? "YES execution price" : "YES probability"} executionPrices={orderBookMarket} height={260} />
-        <ForecastChoices yesBps={yesBps} orderHrefs={orderBookMarket ? { YES: orderEntryHref(market.slug, "YES", "BUY"), NO: orderEntryHref(market.slug, "NO", "BUY") } : undefined} description={orderBookMarket ? forecastDescription : undefined} />
 
       </article>
       {orderBookMarket
