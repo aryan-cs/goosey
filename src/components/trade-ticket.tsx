@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowRight, CheckCircle2, Feather, LoaderCircle, RotateCcw, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/client-api";
+import { MAX_TRADE_QUANTITY, tradePayoutMilli, validTradeQuantity } from "@/lib/trade-quantity";
 
 type Outcome = "YES" | "NO";
 type Action = "BUY" | "SELL";
@@ -71,14 +72,15 @@ export function TradeTicket({
   const quoteUrl = quoteEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/quote`;
   const tradeUrl = tradeEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/trades`;
   const currentProbability = outcome === "YES" ? yesProbability : noProbability;
-  const estimatedPayout = useMemo(() => quantity * 100, [quantity]);
+  const quantityValid = validTradeQuantity(quantity);
+  const estimatedPayout = useMemo(() => quantityValid ? quantity * 100 : 0, [quantity, quantityValid]);
   const milli = (value: number | string | bigint | undefined) => BigInt(value ?? 0);
   const featherText = (value: number | string | bigint | undefined) => {
     const amount = milli(value); const negative = amount < 0n; const absolute = negative ? -amount : amount;
     return `${negative ? "-" : ""}${absolute / 1_000n}.${(absolute % 1_000n).toString().padStart(3, "0").slice(0, 2)}`;
   };
   const quotedTotal = quote ? (action === "BUY" ? milli(quote.totalDebitMilli ?? milli(quote.grossMilli) + milli(quote.feeMilli)) : milli(quote.netCreditMilli ?? milli(quote.grossMilli) - milli(quote.feeMilli))) : 0n;
-  const maxPayoutMilli = BigInt(Math.max(0, quantity)) * 100_000n;
+  const maxPayoutMilli = tradePayoutMilli(quantity);
   const potentialProfitMilli = action === "BUY" ? maxPayoutMilli - quotedTotal : quotedTotal;
 
   function edit(next?: { action?: Action; outcome?: Outcome }) {
@@ -88,7 +90,7 @@ export function TradeTicket({
   }
 
   async function requestQuote() {
-    if (!Number.isInteger(quantity) || quantity < 1) return setError("Enter at least one whole contract.");
+    if (!quantityValid) return setError("Enter a whole number from 1 to 100,000 contracts.");
     setState("quoting"); setError(null);
     try {
       const response = await apiFetch(quoteUrl, {
@@ -133,7 +135,8 @@ export function TradeTicket({
           <button className={outcome === "NO" ? "no selected" : "no"} aria-pressed={outcome === "NO"} onClick={() => edit({ outcome: "NO" })}><span>No</span><strong>{Math.round(noProbability * 100)}%</strong></button>
         </div>
         <label className="field-label" htmlFor="trade-quantity">Contracts</label>
-        <div className="quantity-input"><input id="trade-quantity" inputMode="numeric" min={1} step={1} type="number" value={quantity} disabled={state !== "editing"} onChange={(event) => { setQuantity(event.currentTarget.valueAsNumber || 0); setError(null); }} /><span>contracts</span></div>
+        <div className="quantity-input"><input id="trade-quantity" inputMode="numeric" min={1} max={MAX_TRADE_QUANTITY} step={1} type="number" value={quantity} aria-invalid={!quantityValid} aria-describedby={!quantityValid ? "trade-quantity-error" : undefined} disabled={state !== "editing"} onChange={(event) => { setQuantity(event.currentTarget.valueAsNumber || 0); setError(null); }} /><span>contracts</span></div>
+        {!quantityValid && <p id="trade-quantity-error" className="form-error" role="alert">Enter a whole number from 1 to 100,000 contracts.</p>}
         {state === "editing" && <div className="quick-values" aria-label="Quick quantities">{[1, 5, 10, 25].map((value) => <button onClick={() => setQuantity(value)} key={value}>{value}</button>)}</div>}
         <dl className="trade-breakdown">
           {quote ? <><div><dt>Average price</dt><dd>{featherText(quote.averagePriceMilli)} 🪶</dd></div><div><dt>Forecast after trade</dt><dd>{(quote.probabilityYesAfterBps / 100).toFixed(1)}% Yes</dd></div><div><dt>Fee</dt><dd>{featherText(quote.feeMilli)} 🪶</dd></div>{action === "BUY" && <div><dt>Potential profit if correct</dt><dd>{featherText(potentialProfitMilli)} 🪶</dd></div>}<div className="trade-total"><dt>{action === "BUY" ? "Total cost" : "You receive"}</dt><dd>{featherText(quotedTotal)} 🪶</dd></div></> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div><dt>Maximum payout</dt><dd><Feather size={15} /> {estimatedPayout}</dd></div>{balanceMilli !== undefined && <div><dt>Available</dt><dd>{featherText(balanceMilli)} 🪶</dd></div>}</>}
@@ -142,7 +145,7 @@ export function TradeTicket({
         {state === "review" && <p className="review-note">Check the price before you confirm. Quotes can change or expire.</p>}
         <div className="trade-actions">
           {state === "review" && <button className="button button-ghost" onClick={() => edit()}>Edit</button>}
-          <button className="button button-primary trade-submit" disabled={disabled || state === "quoting" || state === "submitting" || quantity < 1} onClick={!signedIn ? () => router.push("/login") : state === "review" ? executeTrade : requestQuote}>
+          <button className="button button-primary trade-submit" disabled={disabled || state === "quoting" || state === "submitting" || !quantityValid} onClick={!signedIn ? () => router.push("/login") : state === "review" ? executeTrade : requestQuote}>
             {(state === "quoting" || state === "submitting") && <LoaderCircle className="spin" />}{!signedIn ? "Sign in to trade" : state === "editing" ? "Review trade" : state === "quoting" ? "Getting quote…" : state === "review" ? `${action === "BUY" ? "Buy" : "Sell"} ${quantity} ${outcome}` : "Placing trade…"}<ArrowRight />
           </button>
         </div>
