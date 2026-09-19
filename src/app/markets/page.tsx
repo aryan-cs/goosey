@@ -33,9 +33,11 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
   });
 
   return <div className="page-shell browse-page">
-    <header className={styles.header}><h1>Markets</h1><Link className={`button button-secondary ${styles.suggest}`} href="/markets/suggest">Suggest a market</Link></header>
-    <p><Link href="/events">Browse grouped events →</Link></p>
     <div className="browse-layout">
+      <div className={styles.intro}>
+        <header className={styles.header}><h1>Markets</h1><Link className={`button button-secondary ${styles.suggest}`} href="/markets/suggest">Suggest a market</Link></header>
+        <p><Link href="/events">Browse grouped events →</Link></p>
+      </div>
       <form className="market-filters" action="/markets">
         <label className="search-field"><Search /><span className="sr-only">Search markets</span><input type="search" name="q" defaultValue={query} placeholder="Search questions and topics" /></label>
         <label><span className="sr-only">Category</span><select name="category" defaultValue={category ?? ""}><option value="">All categories</option>{MARKET_CATEGORIES.filter((item) => item !== "Trending").map((item) => <option value={item} key={item}>{item}</option>)}</select></label>

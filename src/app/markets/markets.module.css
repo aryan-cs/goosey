@@ -35,3 +35,9 @@
   .header p { grid-column: 1 / -1; }
   .header .suggest { grid-row: 1; padding-inline: 12px; font-size: 13px; }
 }
+
+.intro { min-width: 0; margin-bottom: 24px; }
+.intro > p { margin: 0; }
+@media (min-width: 1200px) {
+  .intro { grid-column: 2; margin-bottom: 0; }
+}
