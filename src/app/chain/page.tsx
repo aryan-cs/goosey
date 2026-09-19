@@ -57,9 +57,10 @@ export default async function ChainDirectory({ searchParams }: {
             <div><dt>Scheduled close</dt><dd><time dateTime={item.closesAt.toISOString()}>{item.closesAt.toLocaleString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET</time></dd></div></dl>
           <Link className={styles.marketLink} href={item.href}>View verified market <ArrowRight size={16} aria-hidden="true" /></Link>
         </article>)}</section>}
-    <nav className={styles.pagination} aria-label="Directory pages">
+    <nav className={styles.pagination} aria-label="On-chain navigation">
       {params.cursor && <Link href="/chain">First page</Link>}
       {catalog?.nextCursor && <Link className="button button-secondary" href={`/chain?cursor=${encodeURIComponent(catalog.nextCursor)}`}>More markets <ArrowRight size={16} aria-hidden="true" /></Link>}
+      <Link href="/leaderboard/chain">Finalized activity leaderboard <ArrowRight size={16} aria-hidden="true" /></Link>
     </nav>
     <SolanaIndexerHealth />
     <p className={styles.footer}>Feathers are free play tokens. Transfers, trades and outcome payouts do not provide money or cash redemption.</p>
