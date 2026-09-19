@@ -10,6 +10,7 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 import "./icon-alignment.css";
 import "./mobile-layout.css";
+import "./content-spacing.css";
 
 export const metadata: Metadata = {
   title: "Goosey",

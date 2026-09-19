@@ -13,9 +13,7 @@
 .home :global(.market-canvas) { padding: var(--canvas-inset) 24px; }
 .home :global(.market-canvas) > :first-child { min-height: var(--toolbar-height); margin-bottom: calc(var(--canvas-inset) + 4px); }
 .home :global(.market-canvas) > :first-child a { min-height: 44px; }
-.home :global(.market-canvas .section-heading) { margin-bottom: 8px; }
 .home :global(.market-canvas .section-heading:not(.compact) h2) { font-size: 28px; }
-.home :global(.market-card) { padding: 16px; }
 .home :global(.market-card .market-title-link h3) { min-height: 44px; margin-block: 8px; }
 .home :global(.market-primary) { min-height: 66px; margin-block: 10px; padding-block: 8px; }
 .home :global(.outcome-actions a), .home :global(.market-card .icon-button) { min-height: 44px; }
