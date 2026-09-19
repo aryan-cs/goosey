@@ -50,6 +50,8 @@ model User {
   orderEvents            OrderEvent[]
   orderCommands          OrderCommand[]
   orderReservations      OrderReservation[]
+  solanaWalletChallenges SolanaWalletLinkChallenge[]
+  solanaWalletLinks      SolanaWalletLink[]
 
   @@index([role, status])
   @@index([balanceMilli])
@@ -82,6 +84,46 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model SolanaWalletLinkChallenge {
+  id            String   @id
+  userId        String
+  /// Immutable binding value; intentionally not a foreign key so session rotation cannot erase a consumed nonce tombstone.
+  sessionId     String
+  purpose       String   @default("LINK_WALLET")
+  origin        String
+  domain        String
+  uri           String
+  chainId       String
+  genesisHash   String
+  walletAddress String
+  nonceHash     String   @unique
+  messageHash   String
+  issuedAt      DateTime
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sessionId, consumedAt])
+  @@index([expiresAt])
+}
+
+model SolanaWalletLink {
+  id            String   @id @default(cuid())
+  userId        String
+  chainId       String
+  genesisHash   String
+  walletAddress String
+  verifiedAt    DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chainId, genesisHash, walletAddress])
+  @@unique([userId, chainId, genesisHash])
+  @@index([userId])
 }
 
 model Market {
