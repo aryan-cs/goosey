@@ -51,7 +51,8 @@ function token(account: EscrowChainAccount | null, mint: Address, owner: Address
 
 /** Verify one caller-supplied coherent snapshot at canonical addresses. This pure
  * verifier cannot establish RPC finality/network; use readGooseyEscrow for that.
- * Foundation layout only: nonzero trading fields fail closed until matcher support.
+ * Checks aggregate cash/collateral/positions, not complete order reserve backing:
+ * that requires a coherent order-book reconciliation, which this reader does not do.
  */
 export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: EscrowReadInput,
   seatsAddress: Address, accounts: EscrowSnapshotAccounts) {
@@ -67,12 +68,11 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
     || market.bump !== addresses.marketBump || market.vault !== addresses.vault || market.seats !== seatsAddress || market.seats === ZERO
     || market.payoutMilli < 2n || market.payoutMilli > 1_000_000n || market.feeBps > 10_000
     || market.closesAt <= 0n || market.resolvesAt < market.closesAt) throw new Error("Invalid market binding/parameters");
-  if (market.collateral !== 0n || market.feeRevenue !== 0n) throw new Error("Unsupported foundation trading state");
   const seats = await anchor(accounts.seats, runtime.programAddress, 32_816, "Seats"), seatData = view(seats);
   const count = seatData.getUint32(40, true);
   if (key(seats, 8) !== addresses.market || count > 256 || seats.subarray(44, 48).some(Boolean)) throw new Error("Invalid Seats header");
   const wallets = new Set<Address>();
-  let totalAvailable = 0n;
+  let totalCash = 0n, totalYes = 0n, totalNo = 0n;
   let selected: { index: number; availableCash: bigint; reservedCash: bigint; yes: bigint; no: bigint;
     reservedYes: bigint; reservedNo: bigint; nextNonce: bigint; everTraded: boolean } | null = null;
   for (let index = 0; index < 256; index++) {
@@ -88,15 +88,25 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
       seeds: ["enrollment", getAddressEncoder().encode(addresses.config), getAddressEncoder().encode(seatWallet)] });
     if (enrollment !== expected) throw new Error("Invalid seat enrollment PDA");
     const availableCash = seatData.getBigUint64(offset + 64, true), nextNonce = seatData.getBigUint64(offset + 112, true);
-    // Current program has no matcher: these fields and all alignment bytes stay zero.
-    if (seats.subarray(offset + 72, offset + 112).some(Boolean) || seats.subarray(offset + 120, offset + 128).some(Boolean)) {
-      throw new Error("Unsupported foundation seat trading state");
-    }
-    totalAvailable += availableCash;
-    if (seatWallet === wallet) selected = { index, availableCash, reservedCash: 0n, yes: 0n, no: 0n,
-      reservedYes: 0n, reservedNo: 0n, nextNonce, everTraded: false };
+    const reservedCash = seatData.getBigUint64(offset + 72, true);
+    // YES/NO are total holdings, inclusive of reserved positions. Cash differs:
+    // available_cash excludes reserved_cash, so both enter the cash aggregate.
+    const yes = seatData.getBigUint64(offset + 80, true), no = seatData.getBigUint64(offset + 88, true);
+    const reservedYes = seatData.getBigUint64(offset + 96, true), reservedNo = seatData.getBigUint64(offset + 104, true);
+    const everTraded = seats[offset + 120];
+    if (everTraded > 1 || seats.subarray(offset + 121, offset + 128).some(Boolean)) throw new Error("Invalid seat flag/padding");
+    if (reservedYes > yes || reservedNo > no) throw new Error("Reserved positions exceed total holdings");
+    totalCash += availableCash + reservedCash;
+    totalYes += yes; totalNo += no;
+    if (seatWallet === wallet) selected = { index, availableCash, reservedCash, yes, no,
+      reservedYes, reservedNo, nextNonce, everTraded: everTraded === 1 };
   }
-  if (totalAvailable !== market.accountedVault) throw new Error("Seat cash does not reconcile to accounted vault");
+  if (totalCash + market.collateral + market.feeRevenue !== market.accountedVault) {
+    throw new Error("Seat cash, collateral and fees do not reconcile to accounted vault");
+  }
+  if (totalYes !== totalNo || totalYes * market.payoutMilli !== market.collateral) {
+    throw new Error("Total YES/NO positions do not reconcile to collateral");
+  }
   if (accounts.locator === null) {
     if (selected !== null) throw new Error("Missing locator for registered wallet");
   } else {

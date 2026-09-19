@@ -44,7 +44,7 @@ async function fixture() {
   return { p, config, mint, market, seats, locator, vault, walletTokens, account, accounts, verify };
 }
 
-describe("strict escrow foundation snapshot", () => {
+describe("strict escrow and matcher snapshot", () => {
   it("preserves large exact balances/nonce and distinguishes donated surplus", async () => {
     const f = await fixture();
     expect(await f.verify()).toMatchObject({ registered: true, seat: { index: 0, availableCash: amount, nextNonce: amount + 1n },
@@ -95,7 +95,7 @@ describe("strict escrow foundation snapshot", () => {
     f.seats.writeBigUInt64LE(1n, 240);
     await expect(f.verify()).rejects.toThrow("reconcile");
   });
-  it.each([8, 44, 80, 120, 168, 175, 176])("rejects seat header/enrollment/trading/padding/unused corruption at %i", async offset => {
+  it.each([8, 44, 80, 120, 169, 175, 176])("rejects seat header/enrollment/reserve/padding/unused corruption at %i", async offset => {
     const f = await fixture(); f.seats[offset] ^= 1; await expect(f.verify()).rejects.toThrow();
   });
   it("rejects excessive count and duplicate occupied wallets", async () => {
@@ -105,13 +105,75 @@ describe("strict escrow foundation snapshot", () => {
   it.each([0, 32, 72, 108, 109, 121, 129])("rejects vault mint/owner/delegate/state/native/authority corruption at %i", async offset => {
     const f = await fixture(); f.vault[offset] ^= 1; await expect(f.verify()).rejects.toThrow();
   });
-  it("rejects changed market economics and unsupported future trading layout", async () => {
+  it("rejects invalid market parameters and unreconciled collateral/fees", async () => {
     const f = await fixture();
     for (const [offset, value] of [[144, 1n], [152, 0n], [160, 1n], [176, 1n], [184, 1n]] as const) {
       const old = f.market.readBigUInt64LE(offset); f.market.writeBigUInt64LE(value, offset);
       await expect(f.verify()).rejects.toThrow(); f.market.writeBigUInt64LE(old, offset);
     }
     f.market.writeUInt16LE(10_001, 192); await expect(f.verify()).rejects.toThrow();
+  });
+});
+
+async function matchedFixture() {
+  const f = await fixture();
+  const other = await deriveGooseySeatAddresses({ ...input, wallet: ASSOCIATED_TOKEN_PROGRAM_ADDRESS, programAddress: runtime.programAddress });
+  f.seats.writeUInt32LE(2, 40);
+  key(f.seats, 176, ASSOCIATED_TOKEN_PROGRAM_ADDRESS); key(f.seats, 208, other.enrollment);
+  // Three complete pairs backed by collateral; YES and NO held by different
+  // wallets. Position reservations are subsets, cash reservations are separate.
+  f.seats.writeBigUInt64LE(amount - 300_000n - 7n - 17n - 11n - 29n, 112);
+  f.seats.writeBigUInt64LE(29n, 120); f.seats.writeBigUInt64LE(3n, 128); f.seats.writeBigUInt64LE(2n, 144); f.seats[168] = 1;
+  f.seats.writeBigUInt64LE(17n, 240); f.seats.writeBigUInt64LE(11n, 248);
+  f.seats.writeBigUInt64LE(3n, 264); f.seats.writeBigUInt64LE(1n, 280); f.seats.writeBigUInt64LE(2n, 288); f.seats[296] = 1;
+  f.market.writeBigUInt64LE(300_000n, 176); f.market.writeBigUInt64LE(7n, 184);
+  return f;
+}
+
+describe("matcher aggregate invariants (not order-book reserve proof)", () => {
+  it("decodes real fields with collateral/fees and does not double-count reserved positions", async () => {
+    const f = await matchedFixture();
+    expect(await f.verify()).toMatchObject({ seat: {
+      availableCash: amount - 300_064n, reservedCash: 29n, yes: 3n, no: 0n,
+      reservedYes: 2n, reservedNo: 0n, nextNonce: amount + 1n, everTraded: true,
+    }, marketState: { accountedVault: amount, collateral: 300_000n, feeRevenue: 7n },
+    vaultSurplus: 3n, exchangeVerified: false });
+  });
+  it("allows resting cash reservations before the wallet has traded", async () => {
+    const f = await fixture(); f.seats.writeBigUInt64LE(amount - 5n, 112); f.seats.writeBigUInt64LE(5n, 120);
+    expect(await f.verify()).toMatchObject({ seat: { availableCash: amount - 5n, reservedCash: 5n, everTraded: false } });
+  });
+  it.each([144, 152, 272, 280])("rejects over-reserved positions in either outcome/any seat at %i", async offset => {
+    const f = await matchedFixture(); f.seats.writeBigUInt64LE(4n, offset);
+    await expect(f.verify()).rejects.toThrow("Reserved positions");
+  });
+  it.each([112, 120, 240, 248, 176, 184])("rejects unreconciled cash/collateral/fees at %i", async offset => {
+    const f = await matchedFixture();
+    const bytes = offset === 176 || offset === 184 ? f.market : f.seats;
+    bytes.writeBigUInt64LE(bytes.readBigUInt64LE(offset) + 1n, offset);
+    await expect(f.verify()).rejects.toThrow("accounted vault");
+  });
+  it("rejects unequal YES/NO and undercollateralization even when cash still reconciles", async () => {
+    const f = await matchedFixture();
+    f.seats.writeBigUInt64LE(4n, 264); await expect(f.verify()).rejects.toThrow("YES/NO");
+    f.seats.writeBigUInt64LE(4n, 128); await expect(f.verify()).rejects.toThrow("collateral");
+  });
+  it.each([168, 296])("rejects non-boolean ever_traded at %i", async offset => {
+    const f = await matchedFixture(); f.seats[offset] = 2; await expect(f.verify()).rejects.toThrow("flag");
+  });
+  it("preserves quantities above Number precision and exact bigint collateral multiplication", async () => {
+    const f = await matchedFixture();
+    for (const offset of [112, 120, 240, 248]) f.seats.writeBigUInt64LE(0n, offset);
+    f.seats.writeBigUInt64LE(amount, 128); f.seats.writeBigUInt64LE(amount, 264);
+    f.seats.writeBigUInt64LE(amount, 144); f.seats.writeBigUInt64LE(amount, 280);
+    f.market.writeBigUInt64LE(2n, 144); f.market.writeBigUInt64LE(amount * 2n, 168);
+    f.market.writeBigUInt64LE(amount * 2n, 176); f.market.writeBigUInt64LE(0n, 184);
+    for (const offset of [140, 148, 156, 164]) f.config.writeBigUInt64LE(amount * 2n + 100n, offset);
+    f.mint.writeBigUInt64LE(amount * 2n + 100n, 36); f.vault.writeBigUInt64LE(amount * 2n + 3n, 64);
+    expect(await f.verify()).toMatchObject({ seat: { yes: amount, reservedYes: amount },
+      marketState: { collateral: amount * 2n }, vaultSurplus: 3n });
+    f.seats.writeBigUInt64LE(amount + 1n, 128); f.seats.writeBigUInt64LE(amount + 1n, 264);
+    await expect(f.verify()).rejects.toThrow("collateral");
   });
 });
 
