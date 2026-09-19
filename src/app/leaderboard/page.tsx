@@ -12,7 +12,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
   const { rows, page, totalPages, total } = await getLeaderboardPage(requested, 50);
   const ranked = rows.map((row) => ({ id: row.userId, username: row.username, displayName: row.displayName, score: Number(row.pnlMilli / 1_000n), marketsTraded: row.marketsTraded, rank: row.rank }));
   return <div className="page-shell leaderboard-page">
-    <header className="page-header"><span className="eyebrow">Hackathon standings</span><h1>Leaderboard</h1><p>Your rank uses your balance and what your open positions are worth. Starter feathers do not count. All active players are included. Rankings refresh every 15 seconds.</p><LivePageRefresh /></header>
+    <header className="page-header"><span className="eyebrow">Hackathon standings</span><h1>Leaderboard</h1><p>Your rank uses your balance and what your open positions are worth. Starter feathers do not count.</p><LivePageRefresh showButton={false} /></header>
     {ranked.length ? <>
       {page === 1 && <LeaderboardPodium users={ranked.slice(0, 3)} />}
       <section className="leaderboard-table" aria-label="Leaderboard standings">{ranked.map((user) => <LeaderboardRow user={user} key={user.id} />)}</section>
