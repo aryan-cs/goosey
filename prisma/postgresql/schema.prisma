@@ -128,6 +128,18 @@ model SolanaWalletLink {
   @@index([userId])
 }
 
+/// Durable membership of a signature in one frozen ingestion window; retained after completion.
+model SolanaIngestionVisit {
+  id                String   @id @default(cuid())
+  genesisHash       String
+  programAddress    String
+  scanHeadSignature String
+  signature         String
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([genesisHash, programAddress, scanHeadSignature, signature], map: "SolanaVisit_domain_scan_signature_key")
+}
+
 /// Finalized discovery progress only; never a financial source of truth.
 /// Commit head only after the fixed scan window reaches its previous anchor.
 /// coverageStartSignature is the explicit inclusive backfill boundary, not proof of genesis coverage.
