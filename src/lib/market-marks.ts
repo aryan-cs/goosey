@@ -31,10 +31,11 @@ type DepthRow = {
 };
 
 function settlementMark(market: MarketMarkInput): LoadedMarketMark | null {
-  if (market.status === "VOID" || (market.status === "RESOLVED" && market.resolution === "VOID")) {
+  const payoutKnown = market.status === "RESOLVED" || market.status === "RESOLVING";
+  if (market.status === "VOID" || (payoutKnown && market.resolution === "VOID")) {
     return { probabilityYesBps: 5_000, source: "SETTLEMENT", stale: false };
   }
-  if (market.status !== "RESOLVED") return null;
+  if (!payoutKnown) return null;
   if (market.resolution === "YES") return { probabilityYesBps: 10_000, source: "SETTLEMENT", stale: false };
   if (market.resolution === "NO") return { probabilityYesBps: 0, source: "SETTLEMENT", stale: false };
   return { probabilityYesBps: null, source: "NONE", stale: false };

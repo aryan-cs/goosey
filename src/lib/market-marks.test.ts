@@ -53,6 +53,9 @@ describe("market mark batch loading", () => {
   it.each([
     [{ status: "RESOLVED", resolution: "YES" }, 10_000],
     [{ status: "RESOLVED", resolution: "NO" }, 0],
+    [{ status: "RESOLVING", resolution: "YES" }, 10_000],
+    [{ status: "RESOLVING", resolution: "NO" }, 0],
+    [{ status: "RESOLVING", resolution: "VOID" }, 5_000],
     [{ status: "VOID", resolution: null }, 5_000],
   ])("uses authoritative terminal settlement for %o", async (state, probability) => {
     const input = market(state);
