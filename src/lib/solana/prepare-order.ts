@@ -30,10 +30,18 @@ export async function prepareOrder(input: PrepareOrderInput) {
   const signal = input.signal ?? AbortSignal.timeout(15_000);
   signal.throwIfAborted();
   const rpc = createSolanaRpc(runtime.rpcUrl);
-  const snapshot = await readGooseyEscrow(runtime, { marketId: order.marketId, wallet: senderAddress }, { rpc, signal, includeOrderBook: true, includeResolution: true });
+  const snapshot = await readGooseyEscrow(runtime, { marketId: order.marketId, wallet: senderAddress }, { rpc, signal, includeOrderBook: true, includeResolution: true, includeMarketTerms: true });
   signal.throwIfAborted();
   if (!snapshot.registered || !snapshot.seat) throw new Error("Register a market seat before placing orders");
   if (!snapshot.resolution || snapshot.resolution.phase !== 0) throw new Error("Market resolution is missing or no longer open");
+  const terms = snapshot.marketTerms, resolution = snapshot.resolution;
+  if (!terms || terms.sealed !== true || terms.acceptanceBits !== 3) throw new Error("Market terms require sealing and both reviewer acceptances");
+  if (terms.market !== snapshot.market || terms.creator !== resolution.creator
+    || terms.proposer.wallet !== resolution.proposer.wallet || terms.proposer.enrollment !== resolution.proposer.enrollment
+    || terms.approver.wallet !== resolution.approver.wallet || terms.approver.enrollment !== resolution.approver.enrollment) {
+    throw new Error("Market terms and frozen resolution reviewers mismatch");
+  }
+  if (senderAddress === terms.proposer.wallet || senderAddress === terms.approver.wallet) throw new Error("Designated reviewer wallets cannot trade this market");
   if (!snapshot.orderBook?.reservesReconciled || snapshot.wallet !== senderAddress
     || typeof snapshot.finalizedSlot !== "bigint" || snapshot.finalizedSlot < 0n) throw new Error("Missing or mismatched verified order snapshot");
   const { seat, marketState, orderBook } = snapshot;
@@ -43,7 +51,7 @@ export async function prepareOrder(input: PrepareOrderInput) {
   const plan = await buildPlaceOrderInstruction({ ...order, programAddress: runtime.programAddress,
     wallet: sender, seats: snapshot.seats, expectedNonce: seat.nextNonce });
   if (sender.address !== senderAddress || plan.market !== snapshot.market || plan.config !== snapshot.config
-    || plan.vault !== snapshot.vault || plan.locator !== snapshot.locator || plan.book !== orderBook.book || plan.resolution !== snapshot.resolution.address
+    || plan.vault !== snapshot.vault || plan.locator !== snapshot.locator || plan.book !== orderBook.book || plan.resolution !== snapshot.resolution.address || plan.terms !== terms.address
     || orderBook.market !== snapshot.market || orderBook.seats !== snapshot.seats
     || orderBook.payoutMilli !== marketState.payoutMilli || orderBook.feeBps !== marketState.feeBps) throw new Error("Order snapshot bindings changed");
   // New place_order starts chain_notional=0. This is a conservative full-limit

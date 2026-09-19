@@ -194,6 +194,27 @@ pub fn validate_canonical_sealed_terms(
     Ok(())
 }
 
+/// New market activation and order admission must agree on the already sealed
+/// reviewer identities. Reviewers cannot trade themselves out of eligibility.
+pub fn validate_market_admission(
+    terms_key: Pubkey,
+    terms: &MarketTerms,
+    market_key: Pubkey,
+    market: &escrow::Market,
+    reviewers: [(Pubkey, Pubkey); 2],
+    trader: Option<Pubkey>,
+) -> Checked<()> {
+    validate_canonical_sealed_terms(terms_key, terms, market_key, market)?;
+    if reviewers != [(terms.proposer_wallet, terms.proposer_enrollment),
+        (terms.approver_wallet, terms.approver_enrollment)] {
+        return Err(Fault::Binding);
+    }
+    if trader.is_some_and(|wallet| wallet == terms.proposer_wallet || wallet == terms.approver_wallet) {
+        return Err(Fault::ReviewerCannotTrade);
+    }
+    Ok(())
+}
+
 fn reviewer_has_never_traded(
     seats: &escrow::Seats,
     wallet: Pubkey,
@@ -430,6 +451,7 @@ pub enum Fault {
     AlreadyAccepted,
     MissingAcceptance,
     AlreadySealed,
+    ReviewerCannotTrade,
 }
 
 #[error_code(offset = 7600)]
@@ -460,9 +482,11 @@ pub enum MarketTermsError {
     AlreadySealed,
     #[msg("Market terms must be initialized and sealed before market close")]
     Closed,
+    #[msg("Designated reviewers cannot trade in their market")]
+    ReviewerCannotTrade,
 }
 
-fn instruction_error(fault: Fault) -> anchor_lang::error::Error {
+pub(crate) fn instruction_error(fault: Fault) -> anchor_lang::error::Error {
     let code = match fault {
         Fault::Binding => MarketTermsError::Binding,
         Fault::InvalidConfiguration => MarketTermsError::InvalidConfiguration,
@@ -476,6 +500,7 @@ fn instruction_error(fault: Fault) -> anchor_lang::error::Error {
         Fault::AlreadyAccepted => MarketTermsError::AlreadyAccepted,
         Fault::MissingAcceptance => MarketTermsError::MissingAcceptance,
         Fault::AlreadySealed => MarketTermsError::AlreadySealed,
+        Fault::ReviewerCannotTrade => MarketTermsError::ReviewerCannotTrade,
     };
     error!(code)
 }
@@ -569,6 +594,27 @@ mod tests {
         let mut value = terms();
         value.sealed = true;
         assert_eq!(value.seal(value.creator, value.digest), Err(Fault::InvalidConfiguration));
+    }
+
+    #[test]
+    fn admission_requires_sealed_matching_reviewers_and_excludes_their_trading() {
+        let (market_key, market, _, _) = foundation();
+        let (terms_key, bump) = Pubkey::find_program_address(&[MARKET_TERMS_SEED, market_key.as_ref()], &crate::ID);
+        let mut terms = MarketTerms::initialize(1, market_key, market.creator, digest(1), 123,
+            key(), key(), key(), key(), bump).unwrap();
+        let reviewers = [(terms.proposer_wallet, terms.proposer_enrollment),
+            (terms.approver_wallet, terms.approver_enrollment)];
+        assert_eq!(validate_market_admission(terms_key, &terms, market_key, &market, reviewers, None), Err(Fault::Binding));
+        terms.acceptance_bits = ALL_ACCEPTED; terms.sealed = true;
+        assert_eq!(validate_market_admission(terms_key, &terms, market_key, &market, reviewers, None), Ok(()));
+        assert_eq!(validate_market_admission(terms_key, &terms, market_key, &market, reviewers, Some(key())), Ok(()));
+        for (wallet, _) in reviewers {
+            assert_eq!(validate_market_admission(terms_key, &terms, market_key, &market, reviewers, Some(wallet)), Err(Fault::ReviewerCannotTrade));
+        }
+        assert_eq!(validate_market_admission(terms_key, &terms, market_key, &market,
+            [reviewers[1], reviewers[0]], None), Err(Fault::Binding));
+        assert_eq!(validate_market_admission(terms_key, &terms, market_key, &market,
+            [(reviewers[0].0, key()), reviewers[1]], None), Err(Fault::Binding));
     }
 
     fn foundation() -> (Pubkey, escrow::Market, Box<escrow::Seats>, Vec<u8>) {

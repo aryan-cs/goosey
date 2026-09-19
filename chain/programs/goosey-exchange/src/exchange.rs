@@ -256,6 +256,9 @@ pub struct PlaceOrder<'info> {
     #[account(seeds = [crate::resolution::RESOLUTION_SEED, market.key().as_ref()], bump,
         constraint = resolution.market == market.key().to_bytes())]
     pub resolution: Account<'info, crate::resolution::ResolutionState>,
+    #[account(seeds = [crate::market_terms::MARKET_TERMS_SEED, market.key().as_ref()], bump,
+        constraint = terms.market == market.key())]
+    pub terms: Account<'info, crate::market_terms::MarketTerms>,
 }
 
 pub fn place_order(ctx: Context<PlaceOrder>, args: PlaceOrderArgs) -> Result<()> {
@@ -263,6 +266,12 @@ pub fn place_order(ctx: Context<PlaceOrder>, args: PlaceOrderArgs) -> Result<()>
     let now = Clock::get()?.unix_timestamp;
     crate::resolution::require_anchor_order_admission(&ctx.accounts.resolution, market_key,
         &mut ctx.accounts.market, now).map_err(|_| error!(ExchangeError::Closed))?;
+    let resolution = &ctx.accounts.resolution;
+    crate::market_terms::validate_market_admission(ctx.accounts.terms.key(), &ctx.accounts.terms,
+        market_key, &ctx.accounts.market,
+        [(Pubkey::new_from_array(resolution.proposer.wallet), Pubkey::new_from_array(resolution.proposer.enrollment)),
+         (Pubkey::new_from_array(resolution.approver.wallet), Pubkey::new_from_array(resolution.approver.enrollment))],
+        Some(ctx.accounts.wallet.key())).map_err(crate::market_terms::instruction_error)?;
     let mut data = ctx.accounts.book.try_borrow_mut_data()?;
     require!(data.len() == BOOK_BYTES && data[..8] == BOOK_TAG, ExchangeError::InvalidBook);
     let ptr = data[8..].as_mut_ptr();

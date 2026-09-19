@@ -21,8 +21,13 @@ async function snapshot() {
   const { book } = await deriveGooseyBookAddress(runtime.programAddress, p.market);
   const [resolution] = await getProgramDerivedAddress({ programAddress: runtime.programAddress,
     seeds: ["resolution", getAddressEncoder().encode(p.market)] });
+  const [terms] = await getProgramDerivedAddress({ programAddress: runtime.programAddress,
+    seeds: ["market_terms", getAddressEncoder().encode(p.market)] });
+  const reviewers = await Promise.all([address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")].map(async wallet => ({ wallet: wallet as Address,
+    enrollment: (await getProgramDerivedAddress({ programAddress: runtime.programAddress, seeds: ["enrollment", getAddressEncoder().encode(p.config), getAddressEncoder().encode(wallet)] }))[0] })));
   return { ...p, seats, wallet: sender.address, registered: true, finalizedSlot: 500n,
-    resolution: { address: resolution, phase: 0 },
+    resolution: { address: resolution, phase: 0, creator: seats as Address, proposer: reviewers[0]!, approver: reviewers[1]! },
+    marketTerms: { address: terms, market: p.market, creator: seats as Address, sealed: true, acceptanceBits: 3, proposer: { ...reviewers[0]! }, approver: { ...reviewers[1]! } },
     marketState: { payoutMilli: 100n, feeBps: 100 },
     seat: { index: 0, availableCash: 81n, reservedCash: 1000n, yes: 10n, no: 5n,
       reservedYes: 8n, reservedNo: 4n, nextNonce: 9_007_199_254_740_993n, everTraded: true },
@@ -45,7 +50,7 @@ describe("unsigned order preparation (mocked RPC/snapshot, real instruction buil
     const prepared = await prepareOrder(input());
     const walletContract: PreparedWalletTransaction = prepared;
     expect(walletContract.message).toBe(prepared.message);
-    expect(mocks.read).toHaveBeenCalledWith(runtime, { marketId: 7n, wallet: sender.address }, expect.objectContaining({ includeOrderBook: true, signal: expect.any(AbortSignal) }));
+    expect(mocks.read).toHaveBeenCalledWith(runtime, { marketId: 7n, wallet: sender.address }, expect.objectContaining({ includeOrderBook: true, includeResolution: true, includeMarketTerms: true, signal: expect.any(AbortSignal) }));
     expect(mocks.latest.mock.calls[0]![0]).toEqual([{ commitment: "finalized", minContextSlot: 500n }]);
     expect(prepared).toMatchObject({ sender: sender.address, cluster: "localnet", genesisHash: runtime.genesisHash,
       expectedNonce: 9_007_199_254_740_993n, seats, requiredCash: 81n, observedSlot: 500n, blockhashSlot: 501n, bookRevision: 12n });
@@ -57,11 +62,35 @@ describe("unsigned order preparation (mocked RPC/snapshot, real instruction buil
     expect(Array.from(budget!.data!)).toEqual([2, 192, 92, 21, 0]);
     expect(place!.programAddress).toBe(runtime.programAddress);
     expect(place!.accounts![3]!.address).toBe(seats);
+    expect(place!.accounts).toHaveLength(9);
+    expect(place!.accounts![8]).toEqual({ address: (await snapshot()).marketTerms.address, role: 0 });
     const bytes = new Uint8Array(place!.data!), data = new DataView(bytes.buffer);
     expect(data.getBigUint64(8, true)).toBe(9_007_199_254_740_993n);
     expect(data.getBigUint64(16, true)).toBe(40n); expect(bytes.at(-1)).toBe(16);
     expect(mocks.sign).not.toHaveBeenCalled();
     expect(prepared.message.lifetimeConstraint).toEqual({ blockhash: runtime.genesisHash, lastValidBlockHeight: 900n });
+  });
+  it.each([null, { sealed: false }, { acceptanceBits: 0 }, { acceptanceBits: 1 }, { acceptanceBits: 2 }, { acceptanceBits: 4 }, { sealed: 1 }])("rejects absent/unsealed/unaccepted terms %# before signing lifetime", async patch => {
+    const state = await snapshot(); mocks.read.mockResolvedValue({ ...state, marketTerms: patch === null ? null : { ...state.marketTerms, ...patch } });
+    await expect(prepareOrder(input())).rejects.toThrow("terms");
+    expect(mocks.latest).not.toHaveBeenCalled(); expect(mocks.sign).not.toHaveBeenCalled();
+  });
+  it.each(["proposer", "approver"] as const)("rejects designated %s wallet", async role => {
+    const state = await snapshot(); state.resolution[role].wallet = sender.address; state.marketTerms[role].wallet = sender.address;
+    mocks.read.mockResolvedValue(state);
+    await expect(prepareOrder(input())).rejects.toThrow("reviewer wallets cannot trade");
+    expect(mocks.latest).not.toHaveBeenCalled(); expect(mocks.sign).not.toHaveBeenCalled();
+  });
+  it.each(["proposer", "approver"] as const)("rejects %s wallet or enrollment differing from frozen resolution", async role => {
+    for (const field of ["wallet", "enrollment"] as const) {
+      const state = await snapshot(); state.marketTerms[role][field] = seats; mocks.read.mockResolvedValue(state);
+      await expect(prepareOrder(input())).rejects.toThrow("reviewers mismatch");
+    }
+    expect(mocks.latest).not.toHaveBeenCalled();
+  });
+  it.each(["address", "market", "creator"] as const)("rejects terms %s binding mismatch", async field => {
+    const state = await snapshot(); state.marketTerms[field] = sender.address; mocks.read.mockResolvedValue(state);
+    await expect(prepareOrder(input())).rejects.toThrow(); expect(mocks.latest).not.toHaveBeenCalled();
   });
   it.each([0n, -1n, 1_000_000n, 1 as unknown as bigint])("rejects price %s before snapshot", async price => {
     await expect(prepareOrder({ ...input(), price })).rejects.toThrow(); expect(mocks.read).not.toHaveBeenCalled();

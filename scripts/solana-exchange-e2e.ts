@@ -25,6 +25,9 @@ import { buildFeatherTransfer } from "../src/lib/solana/feather-transfer";
 import { prepareOrder } from "../src/lib/solana/prepare-order";
 import { submitSignedWalletTransaction, type TransferSubmission } from "../src/lib/solana/submit-transfer";
 import { buildInitializeResolutionInstruction } from "../src/lib/solana/resolution-client";
+import { buildInitializeMarketTermsInstruction, buildAcceptMarketTermsInstruction, buildSealMarketTermsInstruction,
+  deriveGooseyMarketTermsAddresses } from "../src/lib/solana/market-terms-client";
+import { encodeMarketTerms, hashMarketTerms } from "../src/lib/solana/market-terms";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -213,6 +216,36 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     await execute(`enroll independent unclaimed resolution reviewer ${i}`, [enrolled.instruction]);
   }
   assert.notEqual(reviewers[0].address, reviewers[1].address);
+  async function termsPlan(id: bigint, seats: Address, close: bigint) {
+    const a = await deriveGooseyMarketTermsAddresses({ programAddress: PROGRAM, marketId: id });
+    const manifest = encodeMarketTerms({ version: 1,
+      binding: { cluster: "localnet", genesisHash: genesis, program: PROGRAM, config: base.config, market: a.market,
+        marketId: String(id), creator: admin.address, featherMint: base.featherMint },
+      question: `Local integration test market ${id}: did the specified transaction scenario complete?`,
+      rules: { yes: "YES if the recorded local integration transaction scenario completes successfully.",
+        no: "NO if its finalized execution fails.", void: "VOID if no finalized execution can be obtained." },
+      observation: { startsAt: "0", endsAt: String(close), timezone: "UTC" },
+      sources: [{ id: "local-test", uri: "https://example.invalid/goosey-local-integration",
+        selection: "Offline test specification only: inspect this isolated validator's finalized transaction receipts. No production event is represented.", snapshotSha256: null }],
+      sourcePolicy: { priority: "array-order-first-authoritative", missing: "Use the explicit VOID criterion.", revisions: "Finalized local receipts are the sole test evidence." },
+      economics: { payoutMilli: String(PAYOUT), feeBps: String(FEE_BPS), closesAt: String(close), resolvesAt: String(close), decimals: 3 },
+      oracle: { kind: "two-reviewer-no-fallback-v1", proposer: { wallet: reviewers[0].address, enrollment: reviewerEnrollments[0] },
+        approver: { wallet: reviewers[1].address, enrollment: reviewerEnrollments[1] },
+        unavailable: "wait-for-designated-reviewers", replacement: "none", automaticVoid: false } });
+    const digest = Buffer.from(await hashMarketTerms(manifest), "hex");
+    const created = await buildInitializeMarketTermsInstruction({ programAddress: PROGRAM, marketId: id, seats, creator: admin,
+      proposer: reviewers[0].address, approver: reviewers[1].address, version: 1, digest, manifestLength: manifest.length });
+    watched.add(created.terms);
+    return { ...created, digest, manifest };
+  }
+  async function acceptAndSeal(id: bigint, seats: Address, digest: Uint8Array) {
+    for (const reviewer of reviewers) {
+      await execute(`market ${id} reviewer accepts exact immutable terms`, [(await buildAcceptMarketTermsInstruction({
+        programAddress: PROGRAM, marketId: id, seats, reviewer, expectedDigest: digest })).instruction]);
+    }
+    await execute(`market ${id} creator seals both accepted terms`, [(await buildSealMarketTermsInstruction({
+      programAddress: PROGRAM, marketId: id, seats, creator: admin, expectedDigest: digest })).instruction]);
+  }
   const seatsSigner = await generateKeyPairSigner();
   const market = await buildCreateMarketInstructions({ programAddress: PROGRAM, marketId: 1n, admin, seats: seatsSigner,
     seatsRentLamports: BigInt(await rpc<number>("getMinimumBalanceForRentExemption", [32_816])), payoutMilli: PAYOUT,
@@ -222,6 +255,7 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   const resolutionPlan = await buildInitializeResolutionInstruction({ programAddress: PROGRAM, marketId: 1n, creator: admin,
     seats: market.seats, proposer: reviewers[0].address, approver: reviewers[1].address });
   const resolution = resolutionPlan.resolution;
+  const terms = await termsPlan(1n, market.seats, closesAt);
   for (const key of [market.market, market.seats, market.vault, book, resolution]) watched.add(key);
   const locators: Address[] = [];
   for (const [i, wallet] of actors.entries()) {
@@ -238,7 +272,7 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     assert.deepEqual(Buffer.from(built.instruction.data!), setup(`${step.kind}_book`, step.kind === "grow" ? step.expectedSize : undefined).data);
     return built.instruction;
   }
-  const place = (owner: number, args: OrderArgs, keys?: AccountMeta[]) => instruction("place_order", keys ?? [signer(actors[owner]), ro(base.config), rw(market.market), rw(market.seats), ro(locators[owner]), ro(market.vault), rw(book), ro(resolution)],
+  const place = (owner: number, args: OrderArgs, keys?: AccountMeta[]) => instruction("place_order", keys ?? [signer(actors[owner]), ro(base.config), rw(market.market), rw(market.seats), ro(locators[owner]), ro(market.vault), rw(book), ro(resolution), ro(terms.terms)],
     Buffer.concat([u64(args.expectedNonce ?? 0n), u64(args.price), u64(args.quantity), Buffer.from([args.outcome, args.action, args.tif ?? 0, args.selfTrade ?? 0, args.postOnly ? 1 : 0]),
       args.expiresAt === undefined ? Buffer.from([0]) : Buffer.concat([Buffer.from([1]), i64(args.expiresAt)]), Buffer.from([args.touches ?? 0])]));
   await execute("wrong admin cannot create the canonical book", [setup("create_book", undefined, actors[0])], 2001);
@@ -247,7 +281,8 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   assert.equal(bytes((await accounts([book]))[0]).subarray(0, 8).toString(), "GOOSEYI1");
   await execute("draft cannot be finalized early", [setup("finalize_book")], 7100);
   await execute("draft placement rejects uninitialized mandatory resolution account", [place(0, { price: 400n, quantity: 1n, outcome: 0, action: 0 })], 3012);
-  await execute("resolution cannot initialize against an unfinished canonical book", [resolutionPlan.instruction], 7405);
+  await execute("draft resolution cannot activate without mandatory terms", [resolutionPlan.instruction], 3012);
+  await execute("terms cannot initialize against an unfinished canonical book", [terms.instruction], 7602);
   await execute("wrong admin cannot grow draft", [setup("grow_book", STEP, actors[0])], 2001);
   await execute("stale growth size rejected", [setup("grow_book", STEP - 1)], 7101);
   // Agave 4.2.2 permits separate top-level growth instructions in one tx;
@@ -266,8 +301,11 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   await execute("ready book cannot be finalized again", [setup("finalize_book")], 7100);
   await execute("ready book cannot grow or reset", [setup("grow_book", BOOK_BYTES)], 7100);
   await execute("ready book still cannot trade before resolution initialization", [place(0, { price: 400n, quantity: 1n, outcome: 0, action: 0 })], 3012);
+  await execute("commit canonical test manifest before activation", [terms.instruction]);
+  await execute("unsealed terms cannot activate resolution", [resolutionPlan.instruction], 7600);
+  await acceptAndSeal(1n, market.seats, terms.digest);
   const conflictKeys = [...resolutionPlan.instruction.accounts]; conflictKeys[6] = conflictKeys[5];
-  await execute("same enrolled identity cannot occupy both resolution reviewer roles", [{ ...resolutionPlan.instruction, accounts: conflictKeys }], 7411);
+  await execute("resolution reviewers must match the exact accepted terms roles", [{ ...resolutionPlan.instruction, accounts: conflictKeys }], 7600);
   await execute("initialize canonical Open resolution with two independent enrolled reviewers", [resolutionPlan.instruction]);
   const resolutionAccount = (await accounts([resolution]))[0];
   assert.equal(resolutionAccount?.owner, PROGRAM);
@@ -282,6 +320,7 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   assert.equal(resolutionBytes[224], 0, "Resolution phase must be Open");
   const omittedResolution = place(0, { price: 400n, quantity: 1n, outcome: 0, action: 0 });
   await execute("legacy seven-account placement cannot omit resolution admission", [{ ...omittedResolution, accounts: omittedResolution.accounts!.slice(0, 7) }], 3005);
+  await execute("legacy eight-account placement cannot omit sealed terms", [{ ...omittedResolution, accounts: omittedResolution.accounts!.slice(0, 8) }], 3005);
 
   async function state(commitment: "confirmed" | "finalized" = "confirmed") {
     const [m, s, b, vault, mint, ...tokens] = await accounts([market.market, market.seats, book, market.vault, base.featherMint, ...walletTokens], commitment);
@@ -369,7 +408,7 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   const runtime = { cluster: "localnet" as const, rpcUrl: endpoint.toString(), genesisHash: genesis, programAddress: PROGRAM };
   const finalizedReaders: Record<string, unknown>[] = [];
   async function verifyReaders(label: string, expected: State, minimumSlot: number) {
-    const snapshots = await Promise.all(actors.map(wallet => readGooseyEscrow(runtime, { marketId: 1n, wallet: wallet.address }, { includeOrderBook: true, includeResolution: true })));
+    const snapshots = await Promise.all(actors.map(wallet => readGooseyEscrow(runtime, { marketId: 1n, wallet: wallet.address }, { includeMarketTerms: true })));
     snapshots.forEach((snapshot, i) => {
       const seat = expected.seats[i];
       assert(snapshot.finalizedSlot >= BigInt(minimumSlot));
@@ -393,6 +432,10 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
       assert.equal(snapshot.resolution.market, market.market);
       assert.equal(snapshot.resolution.proposer.wallet, reviewers[0].address);
       assert.equal(snapshot.resolution.approver.wallet, reviewers[1].address);
+      assert(snapshot.marketTerms?.sealed);
+      assert.equal(snapshot.marketTerms.address, terms.terms);
+      assert.deepEqual(Buffer.from(snapshot.marketTerms.digest), terms.digest);
+      assert.equal(snapshot.marketTerms.manifestLength, terms.manifest.length);
       assert(snapshot.orderBook);
       assert.equal(snapshot.orderBook.book, book);
       assert.equal(snapshot.orderBook.revision, expected.revision);
@@ -571,9 +614,9 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   ] as [string, OrderArgs, number][]) await order(`${label} rejects without mutation`, 0, args, { error: code });
   current = await state();
   await order("stale placement nonce rejects without mutation", 0, { ...buyYes(100n, 1n), expectedNonce: current.seats[0].nonce - 1n }, { error: 7003 });
-  const wrongLocatorKeys = [signer(actors[0]), ro(base.config), rw(market.market), rw(market.seats), ro(locators[1]), ro(market.vault), rw(book), ro(resolution)];
+  const wrongLocatorKeys = [signer(actors[0]), ro(base.config), rw(market.market), rw(market.seats), ro(locators[1]), ro(market.vault), rw(book), ro(resolution), ro(terms.terms)];
   await execute("another wallet locator cannot authorize a placement", [place(0, { ...buyYes(100n, 1n), expectedNonce: current.seats[0].nonce }, wrongLocatorKeys)], 2006);
-  const wrongBookKeys = [signer(actors[0]), ro(base.config), rw(market.market), rw(market.seats), ro(locators[0]), ro(market.vault), rw(base.config), ro(resolution)];
+  const wrongBookKeys = [signer(actors[0]), ro(base.config), rw(market.market), rw(market.seats), ro(locators[0]), ro(market.vault), rw(base.config), ro(resolution), ro(terms.terms)];
   await execute("noncanonical program-owned book rejected", [place(0, { ...buyYes(100n, 1n), expectedNonce: current.seats[0].nonce }, wrongBookKeys)], 2006);
 
   current = await state();
@@ -643,6 +686,9 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     assert.equal(bytes((await accounts([shortBook]))[0]).length, Math.min(size + STEP, BOOK_BYTES));
   }
   await execute("close-boundary book is finalized before close", [(await shortSetup({ kind: "finalize" })).instruction]);
+  const shortTerms = await termsPlan(shortId, shortMarket.seats, shortClose);
+  await execute("commit close-boundary test terms", [shortTerms.instruction]);
+  await acceptAndSeal(shortId, shortMarket.seats, shortTerms.digest);
   const shortResolution = await buildInitializeResolutionInstruction({ programAddress: PROGRAM, marketId: shortId, creator: admin,
     seats: shortMarket.seats, proposer: reviewers[0].address, approver: reviewers[1].address });
   watched.add(shortResolution.resolution);
@@ -687,7 +733,7 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   const withdrawAfterClose = await buildWithdrawInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[0], seats: shortMarket.seats, amount: 1_495n, expectedNonce: 3n });
   const closedWithdrawal = await execute("close blocks new trades but permits withdrawal of genuinely unreserved cash", [withdrawAfterClose.instruction]);
   const closedRoot = await finalized(closedWithdrawal.signature, closedWithdrawal.receipt.slot);
-  const closedReads = await Promise.all(actors.slice(0, 2).map(wallet => readGooseyEscrow(runtime, { marketId: shortId, wallet: wallet.address }, { includeOrderBook: true, includeResolution: true })));
+  const closedReads = await Promise.all(actors.slice(0, 2).map(wallet => readGooseyEscrow(runtime, { marketId: shortId, wallet: wallet.address }, { includeMarketTerms: true })));
   const shortFinalAccounts = await accounts([shortMarket.market, shortMarket.seats, shortBook, shortMarket.vault], "finalized");
   const shortVaultAmount = getTokenDecoder().decode(bytes(shortFinalAccounts[3])).amount;
   assert.equal(shortVaultAmount, 2_505n); assert.deepEqual(shortFinalAccounts[2], shortBeforeClose[2]);
@@ -704,6 +750,9 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     assert.equal(snapshot.resolution.closesAt, shortClose);
     assert.equal(snapshot.resolution.proposer.wallet, reviewers[0].address);
     assert.equal(snapshot.resolution.approver.wallet, reviewers[1].address);
+    assert(snapshot.marketTerms?.sealed);
+    assert.equal(snapshot.marketTerms.address, shortTerms.terms);
+    assert.deepEqual(Buffer.from(snapshot.marketTerms.digest), shortTerms.digest);
     assert(snapshot.orderBook);
     assert.equal(snapshot.orderBook.book, shortBook);
     assert.equal(snapshot.orderBook.reservesReconciled, true);
@@ -800,7 +849,7 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     bookBytes: BOOK_BYTES, bootstrapSizes: [10_240, 20_480, 30_720, 40_960, 51_200, 61_440, 69_720], transactionCaseCount: receipts.length,
     successBuilders: ["program-client.ts", "escrow-client.ts", "exchange-client.ts", "resolution-client.ts"],
     resolutionAdmission: { resolution, reviewers: reviewers.map((wallet, i) => ({ wallet: wallet.address, enrollment: reviewerEnrollments[i] })),
-      reviewerAllowanceEach: 1, reviewerClaims: 0, finalizedReaderBatchAccounts: 9 },
+      reviewerAllowanceEach: 1, reviewerClaims: 0, finalizedReaderBatchAccounts: 10 },
     additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots"],
     preparedOrder: { signature: preparedSignature, submissionStatus: submittedOrder.status, finalizedSlot: preparedRoot,
       sender: prepared.sender, expectedNonce: prepared.expectedNonce, observedSlot: prepared.observedSlot,

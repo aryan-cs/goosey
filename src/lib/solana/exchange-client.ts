@@ -80,9 +80,11 @@ export async function buildPlaceOrderInstruction(input: ChainOrderInput) {
   const book = await deriveGooseyBookAddress(programAddress, addresses.market);
   const [resolution] = await getProgramDerivedAddress({ programAddress,
     seeds: ["resolution", getAddressEncoder().encode(addresses.market)] });
+  const [terms] = await getProgramDerivedAddress({ programAddress,
+    seeds: ["market_terms", getAddressEncoder().encode(addresses.market)] });
   const instruction = { programAddress, accounts: [wallet, meta(addresses.config), meta(addresses.market, true), meta(seats, true),
-    meta(addresses.locator), meta(addresses.vault), meta(book.book, true), meta(resolution)], data: await data("place_order", ...fields) } satisfies Instruction;
-  return { ...addresses, ...book, resolution, seats, instruction };
+    meta(addresses.locator), meta(addresses.vault), meta(book.book, true), meta(resolution), meta(terms)], data: await data("place_order", ...fields) } satisfies Instruction;
+  return { ...addresses, ...book, resolution, terms, seats, instruction };
 }
 
 export type ChainOrderTarget = { orderId: bigint; side: "BID" | "ASK"; heapIndex: number };

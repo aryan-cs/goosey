@@ -885,6 +885,9 @@ pub struct InitializeResolution<'info> {
     )]
     pub resolution: Account<'info, ResolutionState>,
     pub system_program: Program<'info, System>,
+    #[account(seeds = [crate::market_terms::MARKET_TERMS_SEED, market.key().as_ref()], bump,
+        constraint = terms.market == market.key())]
+    pub terms: Account<'info, crate::market_terms::MarketTerms>,
 }
 
 #[derive(Accounts)]
@@ -1021,6 +1024,11 @@ pub fn initialize_resolution(ctx: Context<InitializeResolution>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     require!(now < ctx.accounts.market.closes_at, ResolutionError::TradingClosed);
     let market_key = ctx.accounts.market.key();
+    crate::market_terms::validate_market_admission(ctx.accounts.terms.key(), &ctx.accounts.terms,
+        market_key, &ctx.accounts.market,
+        [(ctx.accounts.proposer_enrollment.wallet, ctx.accounts.proposer_enrollment.key()),
+         (ctx.accounts.approver_enrollment.wallet, ctx.accounts.approver_enrollment.key())],
+        None).map_err(crate::market_terms::instruction_error)?;
     let mut book_data = ctx.accounts.book.try_borrow_mut_data()?;
     let book = attach_canonical_book(&mut book_data)?;
     let seats = ctx.accounts.seats.load()?;
