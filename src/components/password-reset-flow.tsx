@@ -100,9 +100,9 @@ export function PasswordResetFlow({ redirectTo = "/" }: { redirectTo?: string })
       <p>{confirming ? "Use at least 12 characters. Completing this reset signs out every existing session." : "Enter your account email. We will send a time-limited, one-use reset link if the account is eligible."}</p>
       <form onSubmit={confirming ? submitConfirmation : submitRequest}>
         {confirming ? <>
-          <label><span>New password</span><div className="input-with-icon"><LockKeyhole /><input name="newPassword" type="password" autoComplete="new-password" minLength={12} required /></div></label>
-          <label><span>Confirm new password</span><div className="input-with-icon"><LockKeyhole /><input name="confirmation" type="password" autoComplete="new-password" minLength={12} required /></div></label>
-        </> : <label><span>Email</span><div className="input-with-icon"><Mail /><input name="email" type="email" autoComplete="email" required /></div></label>}
+          <label><span>New password</span><div className="input-with-icon"><LockKeyhole /><input name="newPassword" placeholder="At least 12 characters" type="password" autoComplete="new-password" minLength={12} required /></div></label>
+          <label><span>Confirm new password</span><div className="input-with-icon"><LockKeyhole /><input name="confirmation" placeholder="Re-enter your new password" type="password" autoComplete="new-password" minLength={12} required /></div></label>
+        </> : <label><span>Email</span><div className="input-with-icon"><Mail /><input name="email" placeholder="you@example.com" type="email" autoComplete="email" required /></div></label>}
         {error ? <p className="form-error" role="alert"><AlertCircle /> {error}</p> : null}
         {message ? <p className="success-message" role="status"><CheckCircle2 /> {message}</p> : null}
         <button className="button button-primary auth-submit" disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : null}{confirming ? "Update password" : "Send reset link"}</button>
