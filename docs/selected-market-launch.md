@@ -1,6 +1,6 @@
-# Approved six-market launch
+# Approved market catalog launch
 
-`prisma/selected-markets.json` contains the six user-approved closing-ceremony
+`prisma/selected-markets.json` contains the user-approved Hack the North
 markets. The launch uses `createAdminMarket` so ordinary pricing, collateral,
 ledger, rate-limit, and audit checks still apply. No orders are placed.
 
@@ -17,19 +17,19 @@ It never creates a user, changes a password, or marks an email verified.
 Existing matching slugs are preserved; conflicting definitions stop the run.
 Each creation uses a stable idempotency key. Reruns do not duplicate markets.
 
-The September 19 launch was authorized for `bowenzhu21` on the `goosey-test`
+The original September 19 launch was authorized for `bowenzhu21` on the `goosey-test`
 Vercel project and its separate Neon database. The explicit one-time Vercel
 build override runs the launcher after the build, using protected database
 environment variables. The normal committed build command does not run it.
 
-Local verification: six OPEN markets, one promotion audit record, zero trades,
-and no duplicate creation on a second run. Automated tests also cover inactive
+Local verification for that launch: six OPEN markets, one promotion audit record,
+zero trades, and no duplicate creation on a second run. Automated tests also cover inactive
 accounts, non-participant roles, repeated promotions and concurrent changes.
 
 ## Launch without a participant account
 
 Use `--system-operator` instead of `--username`, with `--apply` and explicit
-`GOOSEY_CONFIRM_MARKET_LAUNCH=selected-six-v1` for the approved publication.
+`GOOSEY_CONFIRM_MARKET_LAUNCH=selected-market-catalog-v2` for the full approved catalog.
 This provisions a dedicated private admin audit principal with a discarded
 random login secret and an invalid delivery address, not a participant account.
 No personal account is promoted. Existing operator identity must match its

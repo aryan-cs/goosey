@@ -42,8 +42,8 @@ positions merely because the interface now groups the replacement options.
 Fresh local seeds consume `prisma/htn-2026-markets.ts`: five other ceremony
 questions plus these four children, divided into the main ceremony event and
 the first-dance event. Existing seeded markets retain their contract terms.
-`scripts/launch-selected-markets.ts` remains the historical six-market publisher;
-use the new first-dance publisher for this group. Do not run the SQLite-only
+`scripts/launch-selected-markets.ts` publishes the approved selected-market catalog;
+use the dedicated first-dance publisher for this grouped replacement. Do not run the SQLite-only
 legacy replacement script against the live database.
 
 ## Resolution

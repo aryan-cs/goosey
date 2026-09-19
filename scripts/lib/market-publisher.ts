@@ -24,7 +24,7 @@ export async function marketPublisher(database: PrismaClient) {
     } });
     await tx.auditLog.create({ data: {
       actorUserId: ID, action: "MARKET_PUBLISHER_PROVISIONED", entityType: "USER", entityId: ID,
-      metadata: JSON.stringify({ method: "scripts/launch-selected-markets.ts", purpose: "user-approved six-market publication" }),
+      metadata: JSON.stringify({ method: "scripts/launch-selected-markets.ts", purpose: "user-approved market catalog publication" }),
     } });
     return user;
   });

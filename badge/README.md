@@ -1,4 +1,4 @@
-# Goosey badge 0.9.1
+# Goosey badge 0.10.0
 
 ## Public markets over USB
 
@@ -69,12 +69,12 @@ not proof of full-capacity histories, radio scale or long-running flash enduranc
 
 ## Legacy local build
 
-The installable app is an offline practice app using the six requested
+The installable app is an offline practice app using the eleven selected
 markets in `prisma/selected-markets.json`, shared with the web database seed.
 Arm wrestling is deferred. Version 0.8.0 uses a separate `paper_v2` save and
 fresh 1,000 local balance; the old `paper_v1` wallet and holdings stay untouched.
 It does not transfer old positions into unrelated questions or modify cloud
-accounts. All six start at a neutral 50%, not a researched probability.
+accounts. All eleven start at a neutral 50%, not a researched probability.
 Existing valid `paper_v2` balances and holdings are preserved, including wallets
 created with the previous 10,000 starting balance.
 Database-backed history/account integration remains pending.
@@ -136,7 +136,7 @@ It refuses to silently reinterpret another market's holdings.
 
 Practice trades use local cent-rounded, fee-free simulation. Connected trading
 will use server milli-feather quotes and idempotent commits instead. No local
-balance or graph is presented as a shared server portfolio. The selected six markets have no order-book screen. Green LEDs mean **local practice save**, not cloud receipt.
+balance or graph is presented as a shared server portfolio. The selected markets have no order-book screen. Green LEDs mean **local practice save**, not cloud receipt.
 
 ## Connected foundation (not wired into the installable app)
 
@@ -216,8 +216,8 @@ the open app session; balance and holdings persist across launches.
 Version 0.7 supersedes the legacy-catalog pin described above. The old catalog
 is retained for recovery only; new builds use the shared selected-markets file.
 
-The three stage markets append to the initial paper_v2 catalog. Existing
-three-market balances and holdings are read unchanged; new positions start at
-zero, and the next successful trade saves the expanded record. The initial
-three-slug prefix is checked at build time. No live database is changed by a
-build, and the seed does not remove existing markets.
+New markets append to the paper_v2 catalog. Existing three-market and six-market
+balances and holdings are read unchanged; new positions start at zero, and the
+next successful trade saves the expanded record. The initial three-slug prefix
+and full append-only order are checked at build time. No live database is changed
+by a build, and the seed does not remove existing markets.
