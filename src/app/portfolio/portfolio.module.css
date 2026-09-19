@@ -1,9 +1,18 @@
 .links { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; }
-.tabs { display: flex; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; margin-bottom: 28px; border-radius: var(--radius-control); background: var(--surface-sunken); }
-.tabs a { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 24px; border-radius: inherit; font-weight: 600; color: var(--ink-muted); }
-.tabs a[aria-current="page"] { background: var(--surface); color: var(--ink); }
+.tabs { --portfolio-tab-count: 3; --portfolio-tab-index: 0; position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(var(--portfolio-tab-count), minmax(0, 1fr)); width: min(100%, 390px); padding: 4px; margin-bottom: 28px; border-radius: var(--radius-control); background: var(--surface-sunken); }
+.tabIndicator { position: absolute; z-index: 0; inset: 4px auto 4px 4px; width: calc((100% - 8px) / var(--portfolio-tab-count)); border-radius: inherit; background: var(--surface); pointer-events: none; transform: translateX(calc(var(--portfolio-tab-index) * 100%)); transition: transform 340ms var(--ease-emphasized); }
+.tabs a { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; padding: 10px 16px; border-radius: inherit; font-weight: 600; color: var(--ink-muted); transition: color var(--motion-fast) var(--ease-standard); }
+.tabs a[aria-current="page"] { color: var(--ink); }
 .tabs a:hover { color: var(--ink); }
+.viewViewport { min-width: 0; overflow: hidden; }
+.viewPanel { min-width: 0; }
+.viewPanelForward { animation: portfolio-view-from-right 340ms var(--ease-emphasized); }
+.viewPanelBackward { animation: portfolio-view-from-left 340ms var(--ease-emphasized); }
+@keyframes portfolio-view-from-right { from { opacity: .35; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes portfolio-view-from-left { from { opacity: .35; transform: translateX(-28px); } to { opacity: 1; transform: translateX(0); } }
 .valuation { color: var(--ink-muted); font-size: 13px; margin: 24px 0; max-width: 720px; }
 .valuation summary { cursor: pointer; width: fit-content; }
 .valuation p { margin-top: 12px; line-height: 1.6; }
-@media (max-width: 600px) { .tabs { width: 100%; } .tabs a { flex: 1; padding-inline: 12px; } }
+@media (prefers-reduced-motion: reduce) { .tabIndicator { transition: none; } .viewPanelForward, .viewPanelBackward { animation: none; } }
+@media (forced-colors: active) { .tabIndicator { border: 1px solid CanvasText; } }
+@media (max-width: 600px) { .tabs { width: 100%; } .tabs a { padding-inline: 12px; } }

@@ -20,6 +20,7 @@ import { ApiError } from "@/lib/market-service";
 import { TradeHistory } from "@/components/trade-history";
 import { authDestination, authPageHref } from "@/lib/auth-destination";
 import { SolanaPortfolio } from "@/components/solana-portfolio";
+import { PortfolioSwitcher } from "./portfolio-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   return <div className="page-shell portfolio-page">
     <header className="page-header"><h1>Portfolio</h1><div className={styles.links}><Link className="section-link" href="/wallet">Wallet</Link><Link className="section-link" href="/watchlist">Watchlist</Link></div><LivePageRefresh showButton={false} /></header>
     <section className="metric-grid" aria-label="Account balance"><MetricCard label="Total value" value={<><FeatherIcon /> {formatFeathers(totalValue)}</>} /><MetricCard label="Available" value={<><FeatherIcon /> {formatFeathers(availableCash)}</>} detail={reservedCash > 0n ? `${formatFeathers(reservedCash)} reserved in orders` : undefined} /><MetricCard label="Estimated exit value" value={<><FeatherIcon /> {formatFeathers(positionValue)}</>} /><MetricCard label="Unrealized return" value={<><FeatherIcon /> {formatFeathers(unrealized)}</>} trend={cost > 0n ? Number(unrealized * 10_000n / cost) / 100 : undefined} /></section>
-    <nav className={styles.tabs} aria-label="Portfolio views">{(["positions", "orders", "history"] as const).map(item => <Link key={item} href={`/portfolio?view=${item}`} aria-current={view === item ? "page" : undefined}>{item === "positions" ? "Positions" : item === "orders" ? "Orders" : "History"}</Link>)}</nav>
+    <PortfolioSwitcher view={view}>
     {view === "orders" && <PortfolioActivity ordersOnly />}
     {view === "positions" && <>
     <SolanaPortfolio />
@@ -84,5 +85,6 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
     <details className={styles.valuation}><summary>How values are calculated</summary><p>Total value includes available feathers, reserved feathers and estimated position value. Exit estimates include fees and available liquidity, assuming your resting orders are canceled. Actual proceeds can change.</p></details>
     </>}
     {view === "history" && <section><SectionHeader title="Trade history" /><TradeHistory history={history} olderPage={Boolean(cursor)} invalidCursor={invalidCursor} /></section>}
+    </PortfolioSwitcher>
   </div>;
 }
