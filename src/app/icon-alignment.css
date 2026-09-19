@@ -72,13 +72,21 @@
 .search-clear > svg,
 .notification-read > svg { display: block; }
 
-/* Podium markers fill their reserved space and sit above the avatar group. */
-.podium-icon { flex-shrink: 0; transform: translateY(-6px); }
+/* Center each marker in the full space between the card top and avatar. */
+.leaderboard-podium .podium-place {
+  display: grid;
+  grid-template-rows: minmax(64px, 1fr) auto auto auto;
+  justify-items: center;
+  gap: 8px;
+  padding-top: 0;
+}
+.leaderboard-podium .podium-place .leader-avatar { margin: 0; }
+.leaderboard-podium .podium-place.podium-1 { padding-top: 0; }
+.podium-place > .podium-icon { width: 100%; height: 100%; }
 .podium-icon > svg { width: 32px; height: 32px; }
-.podium-icon > .rank { font-size: 28px; line-height: 1; }
+.podium-icon > .rank { font: 600 28px/1 var(--font-display); }
 
 @media (max-width: 809.98px) {
-  .podium-icon { transform: translateY(-3px); }
   .podium-icon > svg { width: 28px; height: 28px; }
   .podium-icon > .rank { font-size: 24px; }
 }
