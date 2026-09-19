@@ -1,12 +1,12 @@
 {
-  "lastReviewedUpstreamRevision": "b3693f3342332099385859cff89859c730c785de",
-  "reviewedAt": "2026-09-19T20:40:52.943209+00:00",
-  "outcome": "Badge 0.10.1 built and tested against the expanded 14-market production catalog; not flashed",
+  "lastReviewedUpstreamRevision": "3bd08baf3d193829aaf4dbab9bdb9cbddc9684a0",
+  "reviewedAt": "2026-09-19T23:04:38.304640+00:00",
+  "outcome": "Reviewed upstream and repaired obsolete cloud UI regression test; 13-market USB bundle verified on host",
   "reviewedChanges": [
-    "Seven published contracts: four new questions and three independent dances; rules remain server-authoritative",
-    "Fetch up to 50 catalog records before enforcing the existing 16-market Lua limit; omit only the five explicitly retired PAUSED dance contracts with zero volume and zero traders",
-    "Existing active/traded/closed contracts retained; no fabricated history or wallet changes",
-    "Reviewed teammate wireless diagnostics: PING/PONG only, no authenticated trading; Solana additions remain unsupported by stock Lua"
+    "Reviewed SQL/Solana execution isolation: badge stays on database-backed catalog; stock Lua has no wallet signer.",
+    "Reviewed incremental market parser, generation marker and 32-point history budget from teammate hardware fixes.",
+    "Updated cloud UI test to use real mailbox framing and fresh simulated account rather than removed embedded snapshot/startup behavior. Tests exercise all market screens, empty/single histories and preserved local saves.",
+    "Leaderboard, web activity and chain wallet UI are web-only; no invented badge endpoints."
   ],
-  "integrationStatus": "Current 14-market snapshot builds; snapshot, Lua account/trade, mailbox bounds, legacy save/sync, gateway, SSE and wireless diagnostic tests pass. Host layouts inspected. No hardware flash or live database mutation. Physical authenticated trading remains unverified after prior USB console timeout and pending account linking. Two-badge wireless code is diagnostic only; no supported zero-input Socials email authentication."
+  "integrationStatus": "Cloud, trade, snapshot, reader, gateway and wireless host tests pass; layout inspected. Only /dev/cu.usbmodem1101 is connected. Wireless worktree has in-progress native-headroom edits, preserved untouched. Known native BLE memory failure remains; no repeated crash, no physical two-device proof or authenticated wireless channel. No live data changes, orders or hardware installation this review."
 }
