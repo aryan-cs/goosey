@@ -20,7 +20,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
   const listed = page === 1 ? ranked.filter((user) => user.rank > 3) : ranked;
   const viewerHref = viewer ? `/leaderboard?focus=me#player-${viewer.userId}` : "";
   return <div className="page-shell leaderboard-page">
-    <LeaderboardFocus />
+    <LeaderboardFocus focusKey={query.focus === "me" ? viewer?.userId ?? "" : ""} />
     <header className="page-header"><span className="eyebrow">Hackathon standings</span><h1>Leaderboard</h1><p>Total balance includes your available feathers, reserved feathers and open positions. Available is what you can spend now. Rank is based on total portfolio value, highest first, including welcome feathers.</p><LivePageRefresh showButton={false} /></header>
     <div className={viewer ? styles.layout : undefined}>
     {viewer && <aside className={styles.yourRank} aria-labelledby="your-ranking-heading"><Link className={styles.yourRankLink} href={viewerHref} aria-label={`Your ranking: ${viewer.rank.toLocaleString()} of ${total.toLocaleString()}. Jump to your position in the leaderboard.`} data-leaderboard-locate>

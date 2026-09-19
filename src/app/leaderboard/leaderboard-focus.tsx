@@ -11,7 +11,7 @@ export function centerLeaderboardTarget(target: HTMLElement, reduceMotion: boole
   target.classList.add(styles.highlighted);
 }
 
-export function LeaderboardFocus() {
+export function LeaderboardFocus({ focusKey }: { focusKey: string }) {
   useEffect(() => {
     let highlightTimer = 0;
     let frame = 0;
@@ -44,7 +44,7 @@ export function LeaderboardFocus() {
       window.removeEventListener("hashchange", locate);
       document.removeEventListener("click", locateAfterClick);
     };
-  }, []);
+  }, [focusKey]);
 
   return null;
 }
