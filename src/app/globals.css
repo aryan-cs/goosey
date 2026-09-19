@@ -223,6 +223,15 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .balance-chip { min-height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: var(--feather-50); border: 1px solid var(--feather-100); border-radius: var(--radius-sm); font: 650 13px var(--font-data); transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), transform var(--motion-base) var(--ease-emphasized); }
 .balance-chip:hover { background: var(--yes-soft); border-color: color-mix(in srgb, var(--yes) 24%, transparent); transform: translateY(-1px); }
 .balance-chip svg { width: 17px; color: var(--feather-700); }
+/* Header actions share the same quiet, circular hit targets as search. */
+.header-actions { gap: 6px; }
+.header-actions .icon-button, .header-actions .avatar-button { width: 44px; height: 44px; flex: none; color: var(--ink); background: transparent; border: 0; border-radius: 50%; box-shadow: none; }
+.header-actions .icon-button > svg, .header-actions .avatar-button > svg { width: 20px; height: 20px; stroke-width: 1.75; }
+.header-actions .balance-chip { height: 44px; min-height: 44px; padding: 0 12px; gap: 8px; color: var(--ink); background: transparent; border: 0; border-radius: 22px; font: 600 16px/1 var(--font-ui); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.header-actions .balance-chip svg { width: 18px; height: 18px; }
+.header-actions .icon-button:hover, .header-actions .avatar-button:hover, .header-actions .balance-chip:hover, .header-actions .search-trigger:hover { background: var(--surface-sunken); border-color: transparent; box-shadow: none; transform: none; }
+.header-actions .notification-trigger > span { top: 2px; right: 1px; min-width: 17px; height: 17px; padding: 0 3px; border: 2px solid var(--glass-solid); font: 600 10px/1 var(--font-ui); }
+
 .button { min-height: 44px; border-radius: var(--radius-sm); padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; font-weight: 600; font-size: 16px; line-height: 22px; letter-spacing: .2px; cursor: pointer; transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard), transform var(--motion-base) var(--ease-emphasized); }
 .button svg { width: 17px; height: 17px; }
 .button .lucide-arrow-right { width: 16px; height: 16px; stroke-width: 1.75; }
