@@ -9,10 +9,9 @@ import { SolanaSignMessage, SolanaSignTransaction,
 import { address, assertIsSignatureBytes, compileTransaction, getAddressEncoder, getBase64Decoder,
   getPublicKeyFromAddress, getTransactionDecoder, getTransactionEncoder, verifySignature,
   type Address, type Transaction, type TransactionPartialSigner } from "@solana/kit";
-import type { prepareFeatherTransfer } from "./prepare-transfer";
+import type { PreparedWalletTransaction } from "./wallet-transaction";
 import type { WalletChallenge, WalletChallengeChain } from "./wallet-challenge";
 
-type PreparedTransfer = Awaited<ReturnType<typeof prepareFeatherTransfer>>;
 export type BrowserWalletSnapshot = Readonly<{
   /** Only wallets supporting the exact chain, signing features and v0 are listed. */
   wallets: readonly Wallet[];
@@ -250,7 +249,7 @@ export function createBrowserWallet(input: { chain: WalletChallengeChain; genesi
       signerGenerations.set(signer, selection.generation);
       return signer;
     },
-    async signTransaction(prepared: PreparedTransfer, signal?: AbortSignal) {
+    async signTransaction(prepared: PreparedWalletTransaction, signal?: AbortSignal) {
       const selection = current();
       requireValue(signerGenerations.get(prepared.message.feePayer) === selection.generation, "Prepare again with this selection's getSigner(); previous wallet generation is stale");
       requireValue(prepared.sender === selection.address && `solana:${prepared.cluster}` === chain

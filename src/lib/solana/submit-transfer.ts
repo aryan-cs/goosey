@@ -3,10 +3,9 @@ import {
   getBase64EncodedWireTransaction, getPublicKeyFromAddress, getSignatureFromTransaction,
   verifySignature, type Transaction,
 } from "@solana/kit";
-import type { prepareFeatherTransfer } from "./prepare-transfer";
+import type { PreparedWalletTransaction } from "./wallet-transaction";
 import type { SolanaRuntime } from "./runtime";
 
-type PreparedTransfer = Awaited<ReturnType<typeof prepareFeatherTransfer>>;
 export type TransferSubmission = {
   status: "submitted" | "unknown";
   signature: string;
@@ -21,9 +20,9 @@ export type TransferSubmission = {
  * Persist the onPrepared receipt before the single send to recover an ambiguous
  * network interruption. Throwing from that callback prevents sending.
  */
-export async function submitSignedFeatherTransfer(input: {
+export async function submitSignedWalletTransaction(input: {
   runtime: SolanaRuntime;
-  prepared: PreparedTransfer;
+  prepared: PreparedWalletTransaction;
   signed: Transaction;
   onPrepared: (receipt: Omit<TransferSubmission, "status">) => void | Promise<void>;
   signal?: AbortSignal;
@@ -80,3 +79,7 @@ export async function submitSignedFeatherTransfer(input: {
     return { ...receipt, status: "unknown" };
   }
 }
+
+/** Backwards-compatible transfer entry point; both paths enforce identical
+ * exact-message approval, receipt persistence and one-send safeguards. */
+export const submitSignedFeatherTransfer = submitSignedWalletTransaction;

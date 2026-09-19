@@ -3,7 +3,8 @@ import { address, appendTransactionMessageInstructions, blockhash, createTransac
   getSignatureFromTransaction, pipe, setTransactionMessageFeePayerSigner, setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners, type Transaction } from "@solana/kit";
 import { buildFeatherTransfer } from "./feather-transfer";
-import { submitSignedFeatherTransfer } from "./submit-transfer";
+import { submitSignedFeatherTransfer, submitSignedWalletTransaction } from "./submit-transfer";
+import { buildCancelOrderInstruction } from "./exchange-client";
 
 const mock = vi.hoisted(() => ({ genesis: vi.fn(), height: vi.fn(), send: vi.fn(), options: vi.fn() }));
 vi.mock("@solana/kit", async original => ({ ...await original<typeof import("@solana/kit")>(),
@@ -29,6 +30,23 @@ async function fixture() {
 }
 beforeEach(() => { vi.resetAllMocks(); mock.genesis.mockResolvedValue(runtime.genesisHash); mock.height.mockResolvedValue(50n); });
 describe("signed transfer submission (real Ed25519, mocked RPC)", () => {
+  it("supports a real signed program instruction without transfer-specific fabricated fields", async () => {
+    const sender = await generateKeyPairSigner();
+    const plan = await buildCancelOrderInstruction({ programAddress: runtime.programAddress, marketId: 1n, wallet: sender,
+      seats: address("SysvarRent111111111111111111111111111111111"), expectedNonce: 7n,
+      target: { orderId: 42n, side: "BID", heapIndex: 0 } });
+    const message = pipe(createTransactionMessage({ version: 0 }), tx => setTransactionMessageFeePayerSigner(sender, tx),
+      tx => setTransactionMessageLifetimeUsingBlockhash({ blockhash: blockhash(runtime.genesisHash), lastValidBlockHeight: 100n }, tx),
+      tx => appendTransactionMessageInstructions([plan.instruction], tx));
+    const signed = await signTransactionMessageWithSigners(message);
+    mock.send.mockResolvedValue(getSignatureFromTransaction(signed));
+    const prepared = { message, sender: sender.address, cluster: runtime.cluster, genesisHash: runtime.genesisHash };
+    const onPrepared = vi.fn();
+    const result = await submitSignedWalletTransaction({ runtime, prepared, signed, onPrepared });
+    expect(result.status).toBe("submitted"); expect(result.signature).toBe(getSignatureFromTransaction(signed));
+    expect(onPrepared).toHaveBeenCalledOnce(); expect(mock.send).toHaveBeenCalledOnce();
+    expect(submitSignedFeatherTransfer).toBe(submitSignedWalletTransaction);
+  });
   it("persists exact signed receipt before a single preflight-enabled send, never claims finality", async () => {
     const f = await fixture(), order: string[] = [];
     f.onPrepared.mockImplementation(receipt => { order.push("persist"); expect(Object.isFrozen(receipt)).toBe(true); });
