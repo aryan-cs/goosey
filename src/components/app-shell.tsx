@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, ChartNoAxesColumnIncreasing, ChevronDown, Menu, Search, UserRound, X } from "lucide-react";
+import { Bell, ChartNoAxesColumnIncreasing, ChevronDown, CircleHelp, Menu, Search, UserRound, X } from "lucide-react";
 import { FeatherIcon, GooseMark } from "./brand";
 import { MARKET_CATEGORIES } from "@/lib/market-categories";
 import { EmailVerificationGuard } from "./email-verification-guard";
@@ -211,7 +211,19 @@ export function Footer() {
           <Link href="/settings">Settings</Link>
           <Link href="/settings/privacy">Privacy</Link>
         </div>
-        <p className="legal">Play-money only. Goosey is an independent community project and is not an official University of Waterloo or Hack the North service.</p>
+        <div className="footer-bottom">
+          <p className="legal">Play-money only. Goosey is an independent community project and is not an official University of Waterloo or Hack the North service.</p>
+          <a
+            className="footer-issue-link"
+            href="https://forms.gle/uJVou9X5Gfppeuk67"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Report an issue with Goosey (opens in a new tab)"
+          >
+            <CircleHelp aria-hidden="true" />
+            Report an issue
+          </a>
+        </div>
       </div>
     </footer>
   );
