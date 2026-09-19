@@ -1,14 +1,12 @@
-# Goosey badge 0.6.0
+# Goosey badge 0.7.0
 
-The installable app is an **offline practice app**, built from the repository's
-11 legacy seeded markets (10 visible). It does not place cloud orders or issue account-link codes.
-New in 0.6: numeric balances without F; no list Practice/counter; order-book
-market hidden without reindexing persistent holdings. Detail has a 178x97 chart,
-right-hand probability/change, fixed 0/50/100 scale, and volume/close placeholders.
-One recorded price draws one marker; timestamp-spaced history spans the plot.
-Change is calculated over the displayed observations, with elapsed seconds.
-19 reused widgets; A/B navigation and Start settings remain. Missing cloud
-volume and closing timestamps show -- rather than generated values.
+The installable app is an offline practice app using the three requested
+markets in `prisma/selected-markets.json`, shared with the web database seed.
+Arm wrestling is deferred. Version 0.7.0 uses a separate `paper_v2` save and
+fresh 10,000 local balance; the old `paper_v1` wallet and holdings stay untouched.
+It does not transfer old positions into unrelated questions or modify cloud
+accounts. All three start at a neutral 50%, not a researched probability.
+Database-backed history/account integration remains pending.
 
 ## Build and install
 
@@ -33,7 +31,7 @@ Exit Goosey to the home screen before Push: reloading while it was running
 caused a firmware abort/reboot. Reopening after reboot succeeded.
 Radio and custom font rendering remain unverified.
 
-The builder checks `market-order.json`: changing/removing/reordering a market
+The builder checks `market-order-v2.json`: changing/removing/reordering a market
 requires a deliberate migration because `paper_v1` uses positional holdings.
 It refuses to silently reinterpret another market's holdings.
 
@@ -130,3 +128,6 @@ A deliberate slug-based migration is required before switching badge catalogs.
 This pin preserves the exact previously tested build; it does not supply live
 history, volume, or closing timestamps. Price history currently lasts only for
 the open app session; balance and holdings persist across launches.
+
+Version 0.7 supersedes the legacy-catalog pin described above. The old catalog
+is retained for recovery only; new builds use the shared selected-markets file.
