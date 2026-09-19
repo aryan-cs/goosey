@@ -38,7 +38,12 @@ export function notificationTypeFilter(preferences: NotificationPreferencesValue
   return hiddenTypes.length ? { type: { notIn: hiddenTypes } } : {};
 }
 
-export async function getNotificationFilter(userId: string): Promise<Prisma.NotificationWhereInput> {
-  const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { notificationPreferences: true } });
+type NotificationPreferenceReader = Pick<Prisma.TransactionClient, "user">;
+
+export async function getNotificationFilter(
+  userId: string,
+  client: NotificationPreferenceReader = db,
+): Promise<Prisma.NotificationWhereInput> {
+  const user = await client.user.findUniqueOrThrow({ where: { id: userId }, select: { notificationPreferences: true } });
   return notificationTypeFilter(parseNotificationPreferences(user.notificationPreferences));
 }
