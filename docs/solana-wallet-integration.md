@@ -4,6 +4,44 @@ Research date: 2026-09-19. Design contract for the main integration. The user co
 
 ## Responsibility boundary
 
+### Browser configuration and balance contract (implemented)
+
+`GET /api/solana/status` remains uncached and reports `financialBackend: database`
+and `exchangeVerified: false`. After server-side foundation verification it adds
+`browserRuntime`, built by `buildPublicBrowserRuntime` from **explicit** settings:
+
+```text
+GOOSEY_SOLANA_BROWSER_ENABLED=true
+GOOSEY_SOLANA_PUBLIC_RPC_URL=<intentionally public RPC endpoint>
+```
+
+Neither setting is enabled by this implementation. The server's private
+`GOOSEY_SOLANA_RPC_URL` is never a fallback. Public URLs cannot contain userinfo,
+queries or fragments. Localnet requires loopback; devnet requires HTTPS. A path
+may contain an explicitly public routing identifier, so operators must never
+copy a private provider key into it. Invalid enabled configuration fails closed.
+The Next.js `connect-src` policy admits only this configured public origin,
+including its explicit port; private RPC origins and wildcard hosts are never
+added. These headers are config/build-time values: restart development or rebuild
+the deployment when changing browser RPC configuration. This does not configure
+CORS on the RPC provider, which must separately allow the application's origin.
+
+The wallet UI should parse the whole same-origin status response using
+`parsePublicBrowserRuntime`. It returns null when unavailable/disabled and a
+frozen runtime only for consistent explicit configuration. `endpointVerified`
+is always false: server verification concerns the server endpoint. Probe the
+browser endpoint and use verified readers before requesting wallet signatures.
+
+`readGooseyWalletBalance({ runtime, wallet, signal? })` returns exact bigint
+`featherAmount` and `solLamports`, canonical mint/ATA, separate present/absent
+statuses, and configuration/observation slots. Wallet and ATA are read together
+at finalized commitment after mint/configuration verification. Missing accounts
+can legitimately mean zero; RPC errors, malformed accounts and wrong bindings
+must never be displayed as zero. `ordinaryFeePayerAccount` distinguishes an
+ordinary System wallet from arbitrary program-owned SOL accounts. This is not
+a fee quote, an airdrop or a claim of signing capability. Do not combine these
+balances with the legacy database balance.
+
 The wallet signs user-authorized transactions. SPL Token owns wallet token balances and user-to-user transfers; the exchange program owns escrow-backed balances, reservations, positions, matching, order lifecycle, grants, resolution, and claims. A relayer/keeper may submit already authorized operations or permissionless cleanup, but cannot choose arbitrary fills or move another user's available feathers. SIWS proves control for an application account link; it does not authorize trading, transfers, or grant signing custody.
 
 The database remains suitable for email accounts, profiles, comments, metadata, wallet-link challenges, and rebuildable chain projections. It must never create a spendable balance after a chain transaction, execute a parallel match, or settle a chain market independently. Existing source points requiring explicit routing in the main implementation are:

@@ -1,11 +1,18 @@
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
+import { buildPublicBrowserRuntime } from "./src/lib/solana/browser-runtime";
+import { resolveSolanaRuntime } from "./src/lib/solana/runtime";
 
 export default function configureNext(phase: string): NextConfig {
   const development = phase === PHASE_DEVELOPMENT_SERVER;
   const scriptPolicy = development
     ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
     : "script-src 'self' 'unsafe-inline'";
+  // Same explicit capability as the status API; never whitelist private RPC
+  // hosts or all HTTPS endpoints. Read at config/build time, not from requests.
+  const browser = process.env.GOOSEY_SOLANA_BROWSER_ENABLED === "true"
+    ? buildPublicBrowserRuntime(resolveSolanaRuntime(), process.env) : null;
+  const connectPolicy = `connect-src 'self'${browser?.enabled ? ` ${new URL(browser.publicRpcUrl).origin}` : ""}`;
 
   return {
     // Keep `next build` from clearing a running dev server's client and HMR
@@ -41,7 +48,7 @@ export default function configureNext(phase: string): NextConfig {
             {
               key: "Content-Security-Policy",
               value:
-                `default-src 'self'; ${scriptPolicy}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src https://sketchfab.com https://*.sketchfab.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+                `default-src 'self'; ${scriptPolicy}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; ${connectPolicy}; frame-src https://sketchfab.com https://*.sketchfab.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
             },
             ...(!development
               ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readGooseyConfiguration } from "@/lib/solana/configuration";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
+import { buildPublicBrowserRuntime } from "@/lib/solana/browser-runtime";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
@@ -15,11 +16,15 @@ export async function GET() {
   }
   try {
     const runtime = resolveSolanaRuntime();
+    // Only an independently configured public endpoint may cross this boundary.
+    // Never derive browser RPC configuration from the private server URL.
+    const browserRuntime = buildPublicBrowserRuntime(runtime, process.env);
     const config = await readGooseyConfiguration(runtime);
     return NextResponse.json({
       status: "foundation_verified",
       financialBackend: "database",
       exchangeVerified: false,
+      browserRuntime,
       cluster: runtime.cluster,
       genesisHash: runtime.genesisHash,
       programAddress: runtime.programAddress,
