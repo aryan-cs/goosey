@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LivePageRefresh } from "@/components/live-page-refresh";
 import { LeaderboardPodium, LeaderboardRow } from "@/components/data-primitives";
 import { EmptyState } from "@/components/states";
+import { PageNavigation } from "@/components/page-navigation";
 import { getLeaderboardPage } from "@/lib/leaderboard";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +17,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
     {ranked.length ? <>
       {page === 1 && <LeaderboardPodium users={ranked.slice(0, 3)} />}
       <section className="leaderboard-table" aria-label="Leaderboard standings">{ranked.map((user) => <LeaderboardRow user={user} key={user.id} />)}</section>
-      {totalPages > 1 && <nav aria-label="Leaderboard pages" className="pagination">
-        {page > 1 && <Link className="button button-secondary" href={`/leaderboard?page=${page - 1}`} rel="prev">Previous</Link>}
-        {page < totalPages && <Link className="button button-secondary" href={`/leaderboard?page=${page + 1}`} rel="next">Next</Link>}
-      </nav>}
+      <PageNavigation page={page} totalPages={totalPages} href={number => `/leaderboard?page=${number}`} label="Leaderboard pages" />
     </> : <EmptyState title="No rankings yet" description="Active players appear here automatically." action={<Link className="button button-primary" href="/signup">Join Goosey</Link>} />}
   </div>;
 }
