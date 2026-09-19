@@ -72,6 +72,14 @@ The real transfer used `prepareFeatherTransfer` after finalized claim state, sig
 
 After wiring book bootstrap and `place_order`, the newly built SBPFv3 ELF (`da9809206f856402ffb37003ec06ebba2404e3277219501d0ec7303d9640d9c7`) passed the same 53-case foundation suite on a fresh isolated validator. Genesis: `4mojgA1zamwXERzHVZ565NG9Auc5irCZ7UH2FQwjCfJH`; evidence: `/tmp/goosey-solana-runner-SCClCw/`. Finalized reader passed at slot 121, and owned children stopped normally. This is regression coverage of existing instructions on the new artifact, **not actual placement-instruction verification**. The shared validator at 18999 remains on its previous deployment.
 
+### Wallet-prepared grant claim and missing token account
+
+The foundation suite subsequently passed **55 actual transaction cases**, preserving the original 53 and adding participant funding plus an actual `prepareFeatherClaim` transaction. Evidence: `/tmp/goosey-solana-runner-Md7c9p/`; genesis `8ggG7utfQVdrpdhxH7NsM7mZSGq4Bdawg2KLvMJ751rr`; loaded artifact `6222b66ef8964e902fee47acf5e9336dad58c0e1478dffd986954eff07a93523`. This does not cover the later terms-enabled artifact.
+
+An existing issuer-authorized participant signed and paid alone. The transaction created its missing associated token account idempotently and minted exactly 500,000 base units. The finalized receipt verified actual SPL MintTo instruction bytes and account bindings, not an assumed log message. The mode-0600 signed receipt file was written and synced before submission; exact-signature finality was checked at slot 186. Signature: `Nr7ZQipy1rqZgqKEpvnLBeVchRBUCiF7W4TVrSXJ2PnZvcQKnGubYqMjp9rWM6nxi7dAQBbJu9ceLufaiMT3d4a`; 33,901 CU. Program lifetime issuance and mint supply rose to 1,500,000 units, while the permanent identity record was unchanged.
+
+The preparer also rejected the already-paid grant and a separate expired grant using actual finalized Clock state. This proves the local wallet-keypair preparation/submission path, not browser-extension approval, browser persistence, user enrollment eligibility, SOL sponsorship or devnet operation.
+
 ## Actual exchange execution
 
 `npm run test:chain:exchange` selects the exchange suite in the same isolated lifecycle runner. On 2026-09-19 it passed **109 actual transaction cases**, plus identical-wire replay and finality checks. The main agent reviewed the complete harness and its recorded output. Evidence: `/tmp/goosey-solana-runner-qTYC9P/`, genesis `Feh2yTUhoB4SpD5CGmFfC6P4g7HL55gpZnUqpdAkF891`, using the same SBPFv3 artifact hash above. Runner processes exited afterward; the shared app and validator were not reset.

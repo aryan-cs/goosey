@@ -5,14 +5,14 @@
  */
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readFile, realpath } from "node:fs/promises";
+import { open, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   AccountRole, address, appendTransactionMessageInstructions, blockhash,
   createKeyPairSignerFromBytes, createTransactionMessage, generateKeyPairSigner,
-  getAddressDecoder, getAddressEncoder, getBase64EncodedWireTransaction,
-  getProgramDerivedAddress, getSignatureFromTransaction, pipe,
+  getAddressDecoder, getAddressEncoder, getBase58Encoder, getBase64EncodedWireTransaction,
+  getProgramDerivedAddress, getSignatureFromTransaction, getSignersFromTransactionMessage, pipe,
   setTransactionMessageFeePayerSigner, setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners,
   type Address, type AccountMeta, type Instruction, type TransactionSigner,
@@ -27,7 +27,8 @@ import { buildFeatherTransfer } from "../src/lib/solana/feather-transfer";
 import { buildCreateMarketInstructions, buildRegisterSeatInstruction, buildDepositInstruction, buildWithdrawInstruction } from "../src/lib/solana/escrow-client";
 import { readGooseyEscrow } from "../src/lib/solana/escrow-read";
 import { prepareFeatherTransfer } from "../src/lib/solana/prepare-transfer";
-import { submitSignedFeatherTransfer, type TransferSubmission } from "../src/lib/solana/submit-transfer";
+import { prepareFeatherClaim } from "../src/lib/solana/prepare-feather-claim";
+import { submitSignedFeatherTransfer, submitSignedWalletTransaction, type TransferSubmission } from "../src/lib/solana/submit-transfer";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -470,16 +471,137 @@ async function main() {
   assert.equal(shippingRead.walletTokenAmount, 875_544n);
   assert.equal(shippingRead.exchangeVerified, false);
   console.log("PASS shipping readGooseyEscrow verifies real finalized accounts and donation surplus");
+
+  // Preserve every original foundation case and its original issuance assertions.
+  // The previously authorized final wallet now exercises the shipping grant path;
+  // no new capacity, account injection, or replacement of the original 53 cases.
+  assert.equal(receipts.length, 53, "Original foundation transaction baseline changed");
+  const baselineTransactionCaseCount = receipts.length;
+  const runtime = { cluster: "localnet" as const, rpcUrl: endpoint.toString(), genesisHash: genesis, programAddress: PROGRAM };
+  async function finalized(signature: string) {
+    const deadline = Date.now() + 45_000;
+    while (Date.now() < deadline) {
+      const status = (await rpc<Context<({ err: unknown; confirmationStatus: string } | null)[]>>(
+        "getSignatureStatuses", [[signature], { searchTransactionHistory: true }])).value[0];
+      if (status?.confirmationStatus === "finalized") { assert.equal(status.err, null); return; }
+      await delay(200);
+    }
+    throw new Error(`Exact-signature finality timed out: ${signature}`);
+  }
+  await execute("fund authorized grant wallet as sole transaction and ATA rent payer", [
+    getTransferSolInstruction({ source: admin, destination: other.address, amount: 100_000_000n }),
+  ]);
+  await finalized(String(receipts.at(-1)!.signature));
+  const [grantAta] = await findAssociatedTokenPda({ mint, owner: other.address, tokenProgram: TOKEN_PROGRAM_ADDRESS });
+  const grantKeys = [config, mint, finalEnrollment.record, finalEnrollment.identity, grantAta, CLOCK] as const;
+  const beforeGrant = await rpc<Context<(ChainAccount | null)[]>>("getMultipleAccounts", [grantKeys, { encoding: "base64", commitment: "finalized" }]);
+  assert.equal(beforeGrant.value[4], null, "Grant helper must exercise actual missing ATA creation");
+  assert.equal(bytes(beforeGrant.value[2]).readBigUInt64LE(112), 0n);
+  assert.deepEqual(decodeConfig(beforeGrant.value[0]), { authorized: 2_000_000n, minted: 1_000_000n });
+  const grant = await prepareFeatherClaim({ runtime, wallet: other });
+  const afterPrepareClock = await rpc<Context<ChainAccount | null>>("getAccountInfo", [CLOCK,
+    { encoding: "base64", commitment: "finalized", minContextSlot: Number(grant.observedSlot) }]);
+  assert(grant.observedSlot >= BigInt(beforeGrant.context.slot));
+  assert(grant.observedSlot <= BigInt(afterPrepareClock.context.slot));
+  assert(grant.chainTimestamp >= bytes(beforeGrant.value[5]).readBigInt64LE(32));
+  assert(grant.chainTimestamp <= bytes(afterPrepareClock.value).readBigInt64LE(32));
+  assert(grant.chainTimestamp < grant.expiresAt);
+  assert.equal(grant.expiresAt, bytes(beforeGrant.value[2]).readBigInt64LE(120));
+  assert.equal(bytes(afterPrepareClock.value).readBigUInt64LE(0), BigInt(afterPrepareClock.context.slot));
+  assert.equal(grant.amount, 500_000n);
+  assert.equal(grant.claimed, 0n);
+  assert.equal(grant.observedBalance, 0n);
+  assert.equal(grant.createsAta, true);
+  assert.equal(grant.enrollment, finalEnrollment.record);
+  assert.equal(grant.identity, finalEnrollment.identity);
+  assert.equal(grant.walletTokens, grantAta);
+  assert.equal(grant.mint, mint);
+  assert.equal(grant.sender, other.address);
+  assert.equal(grant.message.feePayer.address, other.address);
+  assert.deepEqual(getSignersFromTransactionMessage(grant.message).map(s => s.address), [other.address]);
+  assert.deepEqual(grant.message.lifetimeConstraint, grant.lifetime);
+  assert.equal(grant.message.instructions.length, 2);
+  assert.equal(grant.message.instructions[0].programAddress, ASSOCIATED_TOKEN_PROGRAM_ADDRESS);
+  assert.deepEqual(new Uint8Array(grant.message.instructions[0].data!), new Uint8Array([1]));
+  assert.equal(grant.message.instructions[1].programAddress, PROGRAM);
+  assert.deepEqual(Buffer.from(grant.message.instructions[1].data!), discriminator("global", "claim_feathers"));
+  // The old short-lived grant must also be rejected by the shipping preparer
+  // using real finalized Clock, without signing or submitting another intent.
+  await assert.rejects(prepareFeatherClaim({ runtime, wallet: expiring }), /expired.*chain Clock/);
+  const signedGrant = await signTransactionMessageWithSigners(grant.message);
+  assert.deepEqual(Object.keys(signedGrant.signatures), [other.address]);
+  const grantSignature = getSignatureFromTransaction(signedGrant), grantWire = getBase64EncodedWireTransaction(signedGrant);
+  const submissionPath = path.join(path.dirname(actualAdminPath), "prepared-feather-claim-submission.json");
+  let persistedCount = 0;
+  const grantSubmission = await submitSignedWalletTransaction({ runtime, prepared: grant, signed: signedGrant,
+    onPrepared: async receipt => {
+      assert.equal(receipt.signature, grantSignature);
+      assert.equal(receipt.signedWireBase64, grantWire);
+      assert.equal(receipt.lastValidBlockHeight, grant.lifetime.lastValidBlockHeight);
+      const status = await rpc<Context<(unknown | null)[]>>("getSignatureStatuses", [[receipt.signature], { searchTransactionHistory: true }]);
+      assert.equal(status.value[0], null, "Claim reached ledger before persistence callback");
+      const persisted = JSON.stringify(receipt, (_, value) => typeof value === "bigint" ? value.toString() : value);
+      const file = await open(submissionPath, "wx", 0o600);
+      try { await file.writeFile(persisted); await file.sync(); } finally { await file.close(); }
+      assert.equal(await readFile(submissionPath, "utf8"), persisted);
+      persistedCount++;
+    },
+  });
+  assert.equal(persistedCount, 1);
+  assert.equal(grantSubmission.signature, grantSignature);
+  assert.equal(grantSubmission.signedWireBase64, grantWire);
+  assert(["submitted", "unknown"].includes(grantSubmission.status));
+  assert.equal((await confirmed(grantSignature, grantWire)).err, null);
+  await finalized(grantSignature);
+  const grantReceipt = await rpc<(Receipt & { transaction: { signatures: string[]; message: {
+    accountKeys: string[]; header: { numRequiredSignatures: number } } }; meta: { err: unknown; fee: number;
+      logMessages: string[]; preBalances: number[]; postBalances: number[]; computeUnitsConsumed: number;
+      innerInstructions: { index: number; instructions: { programIdIndex: number; accounts: number[]; data: string }[] }[] } }) | null>(
+    "getTransaction", [grantSignature, { commitment: "finalized", maxSupportedTransactionVersion: 0 }]);
+  assert(grantReceipt?.meta, "Missing finalized grant execution receipt");
+  assert.equal(grantReceipt.meta.err, null);
+  assert.deepEqual(grantReceipt.transaction.signatures, [grantSignature]);
+  assert.equal(grantReceipt.transaction.message.header.numRequiredSignatures, 1);
+  assert.equal(grantReceipt.transaction.message.accountKeys[0], other.address);
+  // Instruction logs are not an ABI. Verify actual classic SPL MintTo bytes
+  // (tag 7 + u64 amount) and CPI account bindings in the finalized receipt.
+  const mintCpi = grantReceipt.meta.innerInstructions.find(group => group.index === 1)?.instructions.find(ix =>
+    grantReceipt.transaction.message.accountKeys[ix.programIdIndex] === TOKEN_PROGRAM_ADDRESS
+    && Buffer.from(getBase58Encoder().encode(ix.data)).equals(Buffer.concat([Buffer.from([7]), u64(grant.amount)])));
+  assert(mintCpi, "Finalized claim lacks exact SPL MintTo CPI");
+  assert.deepEqual(mintCpi.accounts.map(index => grantReceipt.transaction.message.accountKeys[index]), [mint, grantAta, mintAuthority]);
+  const afterGrant = await rpc<Context<(ChainAccount | null)[]>>("getMultipleAccounts", [grantKeys,
+    { encoding: "base64", commitment: "finalized", minContextSlot: grantReceipt.slot }]);
+  assert.deepEqual(decodeConfig(afterGrant.value[0]), { authorized: 2_000_000n, minted: 1_500_000n });
+  assert.equal(getMintDecoder().decode(bytes(afterGrant.value[1])).supply, 1_500_000n);
+  assert.equal(bytes(afterGrant.value[2]).readBigUInt64LE(112), 500_000n);
+  assert.deepEqual(afterGrant.value[3], beforeGrant.value[3], "Identity record must remain immutable");
+  assert.equal(afterGrant.value[4]?.owner, TOKEN_PROGRAM_ADDRESS);
+  const grantToken = getTokenDecoder().decode(bytes(afterGrant.value[4]));
+  assert.equal(grantToken.owner, other.address); assert.equal(grantToken.mint, mint); assert.equal(grantToken.amount, 500_000n);
+  assert.equal(grantReceipt.meta.preBalances[0] - grantReceipt.meta.postBalances[0],
+    grantReceipt.meta.fee + afterGrant.value[4]!.lamports, "Only wallet pays transaction fee plus ATA rent");
+  await assert.rejects(prepareFeatherClaim({ runtime, wallet: other }), /already claimed/);
+  assert.deepEqual((await accounts(grantKeys.slice(0, 5))), afterGrant.value.slice(0, 5), "Rejected replay preparation changed accounts");
+  receipts.push({ name: "prepareFeatherClaim -> sole-wallet signing -> persisted submission -> finalized missing-ATA claim",
+    signature: grantSignature, slot: grantReceipt.slot, error: null, feeLamports: grantReceipt.meta.fee,
+    computeUnits: grantReceipt.meta.computeUnitsConsumed });
+  console.log(`PASS wallet-prepared missing-ATA grant, chain Clock expiry/replay checks and exact-signature finality: ${grantSignature}`);
   console.log(JSON.stringify({ result: "PASS", rpc: endpoint.toString(), genesis, program: PROGRAM, programData,
     validator: await rpc("getVersion"), config, mint, mintAuthority, admin: admin.address, enrollmentAuthority: issuer.address,
-    sourceAta: walletAta, recipientAta: transfer.destination, totalAuthorized: "2000000", totalMinted: "1000000",
+    sourceAta: walletAta, recipientAta: transfer.destination, totalAuthorized: "2000000", totalMinted: "1500000",
     sourceUnits: "875544", recipientUnits: "123456", decimals: 3,
     market: book.market, seats: book.seats.address, vault: book.vault, vaultUnits: "1000", availableCash: "0", nextNonce: "3",
-    transactionCaseCount: receipts.length, clientBuilders: "src/lib/solana/escrow-client.ts", receipts,
+    transactionCaseCount: receipts.length, baselineTransactionCaseCount, clientBuilders: "src/lib/solana/escrow-client.ts", receipts,
     finalizedReader: { passed: true, slot: shippingRead.finalizedSlot.toString(), source: "src/lib/solana/escrow-read.ts" },
     preparedTransfer: { passed: true, observedSlot: transfer.observedSlot.toString(), feePayer: wallet.address, source: "src/lib/solana/prepare-transfer.ts" },
     preparedSubmissions,
-    scope: "Actual deployed issuance, prepared/signed/submitted wallet transfer, market creation, seat registration, token CPI deposits/withdrawals, nonce rejection, donation surplus and atomic rollback. Matching, resolution, reserved positions, seat capacity exhaustion, concurrent sends, RPC restart/recovery and browser wallets are not tested. This suite does not stop its supplied validator; the isolated runner owns lifecycle. This suite writes or prints no private keys.",
+    preparedFeatherClaim: { passed: true, source: "src/lib/solana/prepare-feather-claim.ts", observedSlot: grant.observedSlot.toString(),
+      chainTimestamp: grant.chainTimestamp.toString(), expiresAt: grant.expiresAt.toString(), amount: grant.amount.toString(),
+      createsAta: true, ata: grantAta, feePayer: other.address, soleSigner: other.address, finalizedSignature: grantSignature,
+      finalizedSlot: grantReceipt.slot, computeUnits: grantReceipt.meta.computeUnitsConsumed, receiptPath: submissionPath,
+      persistedBeforeSend: true, alreadyClaimedRejected: true, expiredGrantRejectedUsingChainClock: true },
+    scope: "Actual deployed issuance, prepared/signed/submitted wallet transfer and missing-ATA grant claim, chain-Clock expiry and preparation replay rejection, market creation, seat registration, token CPI deposits/withdrawals, nonce rejection, donation surplus and atomic rollback. Matching, resolution, reserved positions, seat capacity exhaustion, concurrent sends, RPC restart/recovery and browser wallets are not tested. This suite does not stop its supplied validator; the isolated runner owns lifecycle. This suite writes or prints no private keys.",
   }, null, 2));
 }
 main().catch((error: unknown) => { console.error(error instanceof Error ? error.message : "Foundation E2E failed"); process.exitCode = 1; });
