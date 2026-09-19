@@ -1,5 +1,7 @@
 # Goosey
 
+Website: [getgoosey.vercel.app](https://getgoosey.vercel.app).
+
 **Solana work in progress:** the requested free, transferable, non-cash-redeemable feather system is being implemented for localnet/devnet. The current website's trades are still database-backed, not on-chain. See [the migration scope, implemented foundations, and remaining gates](docs/solana-migration.md).
 
 Goosey is a working play-money prediction market for a University of Waterloo and Hack the North-inspired hackathon experience. Its unit is the feather (`🪶`). Feathers are free, have no promised cash value, and cannot be purchased or redeemed for money or prizes through Goosey. The Solana implementation will support user-to-user feather transfers without introducing a cash-out feature.

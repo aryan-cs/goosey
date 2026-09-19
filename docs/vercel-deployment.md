@@ -1,7 +1,13 @@
 # Vercel test deployment
 
-The `goosey-test` Vercel project uses a separate free Neon database named
-`goosey-test`. This is a test destination, not the live participant database.
+The `goosey` Vercel project is published at https://getgoosey.vercel.app.
+Its existing free Neon database is still named `goosey-test`; the domain rename
+does not move, replace, or reset that database.
+
+Set production `APP_URL` and `NEXT_PUBLIC_APP_URL` to
+`https://getgoosey.vercel.app`. Recovery links derive from this origin unless
+explicitly overridden. The former `goosey-test.vercel.app` address redirects
+to the new domain, preserving paths and query strings.
 Connect the Neon integration using the `NEON` environment-variable prefix.
 The runtime accepts `NEON_DATABASE_URL` only with explicit
 `DATABASE_PROVIDER=postgresql`; `POSTGRES_DATABASE_URL` takes precedence.
