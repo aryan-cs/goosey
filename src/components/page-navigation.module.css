@@ -1,0 +1,4 @@
+.navigation { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 24px; padding-block: 8px; }
+.navigation .arrow { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; min-width: 48px; min-height: 48px; padding: 0; border-radius: 50%; }
+.arrow svg { width: 20px; height: 20px; flex: none; }
+.arrow:disabled { opacity: .35; cursor: default; }
