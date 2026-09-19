@@ -12,11 +12,12 @@ type MarketResult = {
   shortTitle: string;
   category: string;
   status: string;
-  probabilityYesBps: number;
+  probabilityYesBps: number | null;
 };
 
 type EventResult = {
   id: string;
+  slug: string;
   title: string;
   shortTitle: string;
   description: string;
@@ -98,8 +99,8 @@ export function SearchExperience({ initialQuery = "" }: { initialQuery?: string 
     </div>
 
     {status === "ready" && count > 0 && <div className="search-results" aria-label={`Search results for ${results?.query}`}>
-      {!!results?.markets.length && <section><div className="search-group-heading"><h2>Markets</h2><Link href={`/markets?q=${encodeURIComponent(results.query)}`}>See all</Link></div><div className="search-result-list">{results.markets.map((market) => <Link className="search-result-row" href={`/markets/${market.slug}`} key={market.id}><span className="search-result-icon market"><Search aria-hidden="true" /></span><span><strong>{market.shortTitle || market.title}</strong><small>{market.category} · {market.status.toLocaleLowerCase()}</small></span><b>{(market.probabilityYesBps / 100).toFixed(0)}% <small>YES</small></b></Link>)}</div></section>}
-      {!!results?.events.length && <section><div className="search-group-heading"><h2>Events</h2></div><div className="search-result-list">{results.events.map((event) => <Link className="search-result-row" href={`/markets?category=${encodeURIComponent(event.category)}`} key={event.id}><span className="search-result-icon"><CalendarDays aria-hidden="true" /></span><span><strong>{event.shortTitle || event.title}</strong><small>{event.marketCount} market{event.marketCount === 1 ? "" : "s"} · {event.category}</small></span></Link>)}</div></section>}
+      {!!results?.markets.length && <section><div className="search-group-heading"><h2>Markets</h2><Link href={`/markets?q=${encodeURIComponent(results.query)}`}>See all</Link></div><div className="search-result-list">{results.markets.map((market) => <Link className="search-result-row" href={`/markets/${market.slug}`} key={market.id}><span className="search-result-icon market"><Search aria-hidden="true" /></span><span><strong>{market.shortTitle || market.title}</strong><small>{market.category} · {market.status.toLocaleLowerCase()}</small></span><b>{market.probabilityYesBps === null ? "No price" : `${(market.probabilityYesBps / 100).toFixed(0)}%`} <small>YES</small></b></Link>)}</div></section>}
+      {!!results?.events.length && <section><div className="search-group-heading"><h2>Events</h2><Link href="/events">See all</Link></div><div className="search-result-list">{results.events.map((event) => <Link className="search-result-row" href={`/events/${event.slug}`} key={event.id}><span className="search-result-icon"><CalendarDays aria-hidden="true" /></span><span><strong>{event.shortTitle || event.title}</strong><small>{event.marketCount} market{event.marketCount === 1 ? "" : "s"} · {event.category}</small></span></Link>)}</div></section>}
       {!!results?.profiles.length && <section><div className="search-group-heading"><h2>People</h2></div><div className="search-result-list">{results.profiles.map((profile) => <Link className="search-result-row" href={`/users/${profile.username}`} key={profile.id}><span className="search-result-icon"><UserRound aria-hidden="true" /></span><span><strong>{profile.displayName}</strong><small>@{profile.username}{profile.bio ? ` · ${profile.bio}` : ""}</small></span></Link>)}</div></section>}
     </div>}
   </div>;
