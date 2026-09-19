@@ -1,0 +1,90 @@
+[
+  {
+    "slug": "closing-ceremony-on-time",
+    "title": "Will the closing ceremony begin within 10 minutes of schedule?",
+    "shortTitle": "Closing ceremony on time?",
+    "qYes": 12,
+    "qNo": 0,
+    "orderBook": false
+  },
+  {
+    "slug": "hardware-top-prize",
+    "title": "Will a hardware-first project win a top overall prize?",
+    "shortTitle": "Hardware project wins?",
+    "qYes": 5,
+    "qNo": 0,
+    "orderBook": false
+  },
+  {
+    "slug": "gallery-150-projects",
+    "title": "Will at least 150 projects appear in the public showcase gallery?",
+    "shortTitle": "150+ submitted projects?",
+    "qYes": 18,
+    "qNo": 0,
+    "orderBook": false
+  },
+  {
+    "slug": "midnight-snack-before-1215",
+    "title": "Will the midnight snack open before 12:15 a.m.?",
+    "shortTitle": "Midnight snack before 12:15?",
+    "qYes": 0,
+    "qNo": 7,
+    "orderBook": false
+  },
+  {
+    "slug": "goose-in-demo",
+    "title": "Will a goose appear in a finalist demo?",
+    "shortTitle": "Goose in a finalist demo?",
+    "qYes": 0,
+    "qNo": 16,
+    "orderBook": false
+  },
+  {
+    "slug": "ai-majority-finalists",
+    "title": "Will a majority of finalists prominently use AI?",
+    "shortTitle": "AI in most finalist projects?",
+    "qYes": 20,
+    "qNo": 0,
+    "orderBook": false
+  },
+  {
+    "slug": "waterloo-team-podium",
+    "title": "Will a team with a Waterloo student place in the overall top three?",
+    "shortTitle": "Waterloo team on podium?",
+    "qYes": 15,
+    "qNo": 0,
+    "orderBook": false
+  },
+  {
+    "slug": "outdoor-temperature-20",
+    "title": "Will Waterloo reach 20 C during demo day?",
+    "shortTitle": "20 C on demo day?",
+    "qYes": 0,
+    "qNo": 9,
+    "orderBook": false
+  },
+  {
+    "slug": "workshop-capacity",
+    "title": "Will at least one workshop hit posted capacity?",
+    "shortTitle": "Workshop reaches capacity?",
+    "qYes": 8,
+    "qNo": 0,
+    "orderBook": false
+  },
+  {
+    "slug": "finalist-live-demo-success",
+    "title": "Will every finalist complete a working live demo?",
+    "shortTitle": "Every finalist demo works?",
+    "qYes": 0,
+    "qNo": 12,
+    "orderBook": false
+  },
+  {
+    "slug": "venue-wifi-through-demos",
+    "title": "Will the main Hack the North venue Wi-Fi stay available through demos?",
+    "shortTitle": "Venue Wi-Fi stays up?",
+    "qYes": 0,
+    "qNo": 0,
+    "orderBook": true
+  }
+]
