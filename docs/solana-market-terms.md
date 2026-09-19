@@ -27,6 +27,14 @@ Canonical manifests are clearly labeled local test specifications, not live
 Hack the North market content. These checks do not prove browser display,
 independent content availability, legacy migration, or web financial cutover.
 
+The resolution regression also passed **147 actual transaction cases** on this
+same artifact (`/tmp/goosey-solana-runner-ADao7p/`, genesis
+`8N4LAmwmtdVrxMac4WW6Y7AqadJ3q76S6fBfa2CnuUCR`). All 127 earlier YES/NO/VOID,
+prepared claim, and deposit/withdrawal cases remain, plus 20 terms setup and
+admission cases. Each reviewer verifies retained canonical test-manifest bytes
+against the actual commitment before signing; missing, unsealed, and foreign
+market terms fail activation. This does not add a new browser-flow proof.
+
 The TypeScript implementation also includes unsigned initialize/accept/seal
 builders and a strict 240-byte account decoder. `readGooseyEscrow` can request
 `includeMarketTerms: true`, forcing a single finalized ten-account batch with
