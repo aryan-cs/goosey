@@ -562,7 +562,7 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 
 .sidebar-panel .empty-state { min-height: 126px; padding: 12px; }
 .comments-section .empty-state { min-height: 150px; padding: 18px; }
-.error-state { min-height: 84px; padding: 14px; display: flex; align-items: center; gap: 12px; color: var(--no); background: var(--no-soft); border: 0; border-radius: var(--radius-sm); }.error-state > svg { width: 22px; height: 22px; }.error-state div { flex: 1; }.error-state p { margin: 2px 0 0; color: var(--ink-secondary); font-size: 13px; }
+.error-state { min-height: 84px; padding: 14px; display: flex; align-items: center; gap: 12px; color: var(--no); background: var(--no-soft); border: 0; border-radius: var(--radius-sm); }.error-state > svg { width: 22px; height: 22px; }.error-state div { flex: 1; }.error-state h1 { margin: 0; font: 700 16px/1.35 var(--font-ui); }.error-state p { margin: 2px 0 0; color: var(--ink-secondary); font-size: 13px; }
 
 .featured-grid .market-card:nth-child(2), .market-grid .market-card:nth-child(2), .market-list-row:nth-child(2) { animation-delay: 55ms; }
 .featured-grid .market-card:nth-child(3), .market-grid .market-card:nth-child(3), .market-list-row:nth-child(3) { animation-delay: 110ms; }
