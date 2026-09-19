@@ -9,25 +9,31 @@ import { marketSummary, formatFeathers } from "@/lib/view-models";
 import { MarketCard, MarketListRow } from "@/components/market";
 import { EmptyState } from "@/components/states";
 import { getLeaderboardRows } from "@/lib/leaderboard";
+import { loadMarketMarks } from "@/lib/market-marks";
+import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [markets, leaders, recentTrades] = await Promise.all([
-    db.market.findMany({
+    runSerializableTransaction(db, async (tx) => {
+      const rows = await tx.market.findMany({
       where: { status: "OPEN", closesAt: { gt: new Date() } },
-      include: { priceHistory: { orderBy: { createdAt: "desc" }, take: 24 } },
+      include: { priceHistory: { orderBy: { createdAt: "desc" }, take: 24 }, orderFills: { orderBy: { tradeSequence: "desc" }, take: 24, select: { canonicalYesPriceMilli: true, createdAt: true } } },
       orderBy: [{ featured: "desc" }, { volumeMilli: "desc" }, { closesAt: "asc" }],
       take: 12,
+      });
+      const marks = await loadMarketMarks(tx, rows);
+      return rows.map((market) => ({ ...market, mark: marks.get(market.id)! }));
     }),
-    getLeaderboardRows(5),
+    getLeaderboardRows(8),
     db.trade.findMany({
       include: { user: { select: { username: true, profilePublic: true } }, market: { select: { slug: true, shortTitle: true } } },
       orderBy: { createdAt: "desc" },
-      take: 6,
+      take: 3,
     }),
   ]);
-  const summaries = markets.map((market) => marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }));
+  const summaries = markets.map((market) => marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, market.mark.probabilityYesBps));
   const featured = summaries.slice(0, 3);
   const rest = summaries.slice(3);
 
@@ -77,7 +83,7 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {summaries.length > 0 && <section className="dense-market-section" aria-labelledby="closing-heading"><div className="section-heading"><h2 id="closing-heading">Closing soon</h2></div><div className="market-list">{markets.slice().sort((a, b) => a.closesAt.getTime() - b.closesAt.getTime()).slice(0, 5).map((market) => <MarketListRow market={marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() })} key={market.id} />)}</div></section>}
+        {summaries.length > 0 && <section className="dense-market-section" aria-labelledby="closing-heading"><div className="section-heading"><h2 id="closing-heading">Closing soon</h2></div><div className="market-list">{markets.slice().sort((a, b) => a.closesAt.getTime() - b.closesAt.getTime()).slice(0, 5).map((market) => <MarketListRow market={marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, market.mark.probabilityYesBps)} key={market.id} />)}</div></section>}
       </section>
     </div>
   );
