@@ -168,6 +168,16 @@ SQL
 
 ## Transaction intent and wallet failures
 
+The isolated exchange run `/tmp/goosey-solana-runner-hFxIzv` verified the shipping
+wallet-balance reader against actual canonical token accounts and SOL balances.
+An existing 2,000-unit transfer moved sender 996,778 → 994,778 and recipient
+0 → 2,000, with unchanged participant SOL (the test admin paid fees). A fresh
+unsent wallet and its ATA were genuinely absent and reported zero. All 153
+transaction cases and the 151-receipt/108-event ingestion scan remained intact.
+Genesis: `HK2YvCh4TRFPPoaptHQyiFL9M97URm7SL1kTZKunwy17`; artifact SHA-256:
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
+This is actual reader/transfer integration, not browser transaction approval proof.
+
 Create an immutable semantic intent before asking for a signature: operation, wallet, deployment domain, market, outcome, side, limit, quantity, time-in-force, post-only, expiry, expected order version, fee schedule version, deadline, and unique command ID. Hash a canonical integer encoding. Derive its receipt/nonce scope onchain from the wallet and deployment; include market/operation in the payload. An HTTP idempotency key alone is insufficient.
 
 The client must decode and validate any server-built transaction against that intent: exact allowed program IDs, account ownership/addresses, signer, fee payer, mint/destination if applicable, compute/priority fee cap, and no extra transfers/approvals. A sponsor may pay SOL fees but must not become the authority for the user's feather account. Simulation can preview failures; it is not an execution guarantee. Request the supported Wallet Standard signing method with the selected account and chain. Revalidate the draft if either changes while the wallet prompt is open.

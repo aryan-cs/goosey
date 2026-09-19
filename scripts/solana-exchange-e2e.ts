@@ -36,6 +36,7 @@ import { decodeFinalizedProgramEvents, type GooseyProgramEvent } from "../src/li
 import { readFinalizedProgramEvents } from "../src/lib/solana/program-event-read";
 import { ingestFinalizedProgramTransaction } from "../src/lib/solana/event-journal";
 import { ingestFinalizedProgramPage } from "../src/lib/solana/ingestion-worker";
+import { readGooseyWalletBalance } from "../src/lib/solana/wallet-balance";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -683,6 +684,57 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   const primaryFinalized = await state("finalized"); invariants(primaryFinalized);
   await verifyReaders("post-trade withdrawal with positions and fees still backed", primaryFinalized, primaryRoot);
 
+  const fundedWalletRead = await readGooseyWalletBalance({ runtime, wallet: actors[0].address });
+  assert.equal(fundedWalletRead.walletTokens, walletTokens[0]);
+  assert.equal(fundedWalletRead.mint, base.featherMint);
+  assert.equal(fundedWalletRead.featherAmount, primaryFinalized.walletAmounts[0]);
+  assert(fundedWalletRead.featherAmount >= 2_000n);
+  assert.equal(fundedWalletRead.featherAccountStatus, "present");
+  assert.equal(fundedWalletRead.walletAccountStatus, "present");
+  assert.equal(fundedWalletRead.walletAccountOwner, SYSTEM_PROGRAM_ADDRESS);
+  assert.equal(fundedWalletRead.ordinaryFeePayerAccount, true);
+  assert(fundedWalletRead.observedSlot >= BigInt(primaryRoot));
+  const [fundedWalletAccount] = await accounts([actors[0].address], "finalized");
+  assert(fundedWalletAccount); assert.equal(fundedWalletRead.solLamports, BigInt(fundedWalletAccount.lamports));
+
+  // This signer is generated only to prove a genuinely absent wallet and ATA.
+  // It is never funded, enrolled, claimed, signed, or submitted anywhere.
+  const absentWallet = await generateKeyPairSigner();
+  const absentWalletBalance = await readGooseyWalletBalance({ runtime, wallet: absentWallet.address });
+  assert.deepEqual(await accounts([absentWallet.address, absentWalletBalance.walletTokens], "finalized"), [null, null]);
+  assert.deepEqual({ featherAmount: absentWalletBalance.featherAmount, featherAccountStatus: absentWalletBalance.featherAccountStatus,
+    solLamports: absentWalletBalance.solLamports, walletAccountStatus: absentWalletBalance.walletAccountStatus,
+    walletAccountOwner: absentWalletBalance.walletAccountOwner, ordinaryFeePayerAccount: absentWalletBalance.ordinaryFeePayerAccount },
+  { featherAmount: 0n, featherAccountStatus: "absent", solLamports: 0n, walletAccountStatus: "absent",
+    walletAccountOwner: null, ordinaryFeePayerAccount: false });
+
+  const funding = await buildFeatherTransfer({ mint: base.featherMint, sender: actors[0], recipient: actors[1].address, payer: admin, amount: 2_000n });
+  const senderTransferBefore = await readGooseyWalletBalance({ runtime, wallet: actors[0].address });
+  const recipientTransferBefore = await readGooseyWalletBalance({ runtime, wallet: actors[1].address });
+  assert.equal(funding.source, senderTransferBefore.walletTokens); assert.equal(funding.destination, recipientTransferBefore.walletTokens);
+  const fundingReceipt = await execute("close-boundary funding transfers actual previously withdrawn feathers", funding.instructions);
+  const fundingRoot = await finalized(fundingReceipt.signature, fundingReceipt.receipt.slot);
+  const fundedWalletAfterTransfer = await readGooseyWalletBalance({ runtime, wallet: actors[0].address });
+  const recipientAfterTransfer = await readGooseyWalletBalance({ runtime, wallet: actors[1].address });
+  assert(fundedWalletAfterTransfer.observedSlot >= BigInt(fundingRoot));
+  assert(recipientAfterTransfer.observedSlot >= BigInt(fundingRoot));
+  assert.equal(fundedWalletAfterTransfer.featherAmount, senderTransferBefore.featherAmount - funding.amount);
+  assert.equal(recipientAfterTransfer.featherAmount, recipientTransferBefore.featherAmount + funding.amount);
+  assert.equal(fundedWalletAfterTransfer.solLamports, senderTransferBefore.solLamports);
+  assert.equal(recipientAfterTransfer.solLamports, recipientTransferBefore.solLamports);
+  assert.equal(fundedWalletAfterTransfer.walletTokens, funding.source);
+  assert.equal(recipientAfterTransfer.walletTokens, funding.destination);
+  const walletBalanceEvidence = { fundedWallet: actors[0].address, canonicalAta: funding.source,
+    fundedReadLamports: fundedWalletRead.solLamports, transferLamports: senderTransferBefore.solLamports,
+    featherBefore: senderTransferBefore.featherAmount,
+    featherAfter: fundedWalletAfterTransfer.featherAmount, recipient: actors[1].address,
+    recipientCanonicalAta: funding.destination, recipientBefore: recipientTransferBefore.featherAmount,
+    recipientAfter: recipientAfterTransfer.featherAmount, transferAmount: funding.amount,
+    transferSignature: fundingReceipt.signature, finalizedRoot: fundingRoot,
+    absentWallet: absentWallet.address, absentAta: absentWalletBalance.walletTokens,
+    absentFeathers: absentWalletBalance.featherAmount, absentLamports: absentWalletBalance.solLamports };
+  console.log("PASS finalized wallet-balance reader observes canonical ATA, SOL, true absence and exact existing-transfer movement");
+
   // Separate short-lived market. Fund only from the real primary withdrawal;
   // no new grants, account rewrites, clock warps, or synthetic positions.
   const shortId = 2n, shortClose = (await time()) + 30n;
@@ -712,8 +764,6 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     watched.add(registered.locator);
     await execute(`close-boundary register already-enrolled wallet ${i}`, [registered.instruction]);
   }
-  const funding = await buildFeatherTransfer({ mint: base.featherMint, sender: actors[0], recipient: actors[1].address, payer: admin, amount: 2_000n });
-  await execute("close-boundary funding transfers actual previously withdrawn feathers", funding.instructions);
   for (let i = 0; i < 2; i++) {
     const deposited = await buildDepositInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[i], seats: shortMarket.seats, amount: 2_000n, expectedNonce: 0n });
     await execute(`close-boundary deposit real balance for wallet ${i}`, [deposited.instruction]);
@@ -1095,8 +1145,8 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     successBuilders: ["program-client.ts", "escrow-client.ts", "exchange-client.ts", "resolution-client.ts"],
     resolutionAdmission: { resolution, reviewers: reviewers.map((wallet, i) => ({ wallet: wallet.address, enrollment: reviewerEnrollments[i] })),
       reviewerAllowanceEach: 1, reviewerClaims: 0, finalizedReaderBatchAccounts: 10 },
-    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots", "actual finalized program-event decoding", "disposable SQLite finalized-event journal restart replay", "bounded restart-safe full-window program ingestion"],
-    decodedEventEvidence, journalEvidence,
+    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots", "actual finalized wallet balance and absent-account reads", "actual finalized program-event decoding", "disposable SQLite finalized-event journal restart replay", "bounded restart-safe full-window program ingestion"],
+    walletBalanceEvidence, decodedEventEvidence, journalEvidence,
     preparedOrder: { signature: preparedSignature, submissionStatus: submittedOrder.status, finalizedSlot: preparedRoot,
       sender: prepared.sender, expectedNonce: prepared.expectedNonce, observedSlot: prepared.observedSlot,
       bookRevision: prepared.bookRevision, receiptStorage: "in-memory callback only; not durable storage proof",
