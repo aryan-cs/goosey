@@ -602,7 +602,7 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
   .market-trade-aside { position: static; max-width: 520px; width: 100%; margin: auto; }
   .order-book-panel { position: static; width: 100%; max-width: 620px; margin: auto; }
   .market-detail-page { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
-  .ticket-shell .trade-ticket { max-height: calc(90dvh - 16px); overflow: auto; overscroll-behavior: contain; }
+  .ticket-shell .trade-ticket { max-height: none; overflow: visible; }
 }
 
 @media (min-width: 810px) and (max-width: 959.98px) {
