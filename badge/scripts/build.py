@@ -1,5 +1,4 @@
 import json
-import re
 import argparse
 import shutil
 from pathlib import Path
@@ -8,16 +7,9 @@ root = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
 parser.add_argument('--output', type=Path, default=root / 'badge/dist')
 args = parser.parse_args()
-seed = (root / 'prisma/seed.ts').read_text()
-section = seed.split('const markets = [', 1)[1].split('] as const;', 1)[0]
-markets = []
-for block in re.findall(r'\{(.*?)\n  \}', section, re.S):
-    def val(key):
-        return re.search(r'\b' + key + r': "([^"]+)"', block).group(1).replace('°', ' ')
-    markets.append(dict(slug=val('slug'), title=val('title'), shortTitle=val('shortTitle'),
-                        qYes=int(re.search(r'qYes: (\d+)', block).group(1)),
-                        qNo=int(re.search(r'qNo: (\d+)', block).group(1)),
-                        orderBook='pricingModel: "ORDER_BOOK"' in block))
+# paper_v1 holds positions by index. Preserve its original catalog until a
+# deliberate slug-based migration is implemented for the new upstream markets.
+markets = json.loads((root / 'badge/catalog-v1.json').read_text())
 assert len(markets) == 11
 rows = []
 for m in markets:

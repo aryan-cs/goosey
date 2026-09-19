@@ -1,7 +1,7 @@
 # Goosey badge 0.6.0
 
 The installable app is an **offline practice app**, built from the repository's
-11 seeded markets. It does not place cloud orders or issue account-link codes.
+11 legacy seeded markets (10 visible). It does not place cloud orders or issue account-link codes.
 New in 0.6: numeric balances without F; no list Practice/counter; order-book
 market hidden without reindexing persistent holdings. Detail has a 178x97 chart,
 right-hand probability/change, fixed 0/50/100 scale, and volume/close placeholders.
@@ -118,3 +118,15 @@ Pokemon Red/Blue-style typography is requested but not implemented. Stock Lua
 only exposes built-in font sizes, not custom font loading. A bitmap renderer
 or firmware font binding is needed; avoid adding hundreds of glyph widgets
 without memory profiling on hardware. Current body text uses native fonts.
+
+## Latest upstream integration
+
+Merged master c26990d. Upstream now defines a replacement catalog in
+`prisma/htn-2026-markets.ts`, with explicit closing timestamps and editorial
+opening probabilities. The installed badge still uses the original catalog,
+now pinned in `catalog-v1.json`, because `paper_v1` positions are indexed.
+Rebuilding after pulling must not silently attach holdings to new questions.
+A deliberate slug-based migration is required before switching badge catalogs.
+This pin preserves the exact previously tested build; it does not supply live
+history, volume, or closing timestamps. Price history currently lasts only for
+the open app session; balance and holdings persist across launches.
