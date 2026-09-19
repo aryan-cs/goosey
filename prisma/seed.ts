@@ -7,6 +7,9 @@ import { lmsrCostMilli, probabilityYesBps } from "../src/lib/market-maker";
 
 const prisma = new PrismaClient();
 const PAYOUT_MILLI = 100_000n;
+const SEED_IDEMPOTENCY_KEYS: Record<string, string> = {
+  "htn-2026-goose-incidents-1": "htn-2026-goose-incidents-1:reported-v2",
+};
 
 async function main() {
   const systemPassword = await hash(randomBytes(48).toString("base64url"), 12);
@@ -170,7 +173,7 @@ async function main() {
             referenceType: "MARKET",
             referenceId: market.id,
             idempotencyScope: "seed-market",
-            idempotencyKey: market.slug,
+            idempotencyKey: SEED_IDEMPOTENCY_KEYS[market.slug] ?? market.slug,
             actorUserId: system.id,
             metadata: JSON.stringify({ liquidityParameter: b, openingProbability: definition.openingProbability, pricingRationale: definition.pricingRationale, houseInventory: { yes: qYes, no: qNo } }),
             postings: { create: [{ ledgerAccountId: treasury.id, amountMilli: -subsidy }, { ledgerAccountId: market.collateralAccount.id, amountMilli: subsidy }] },

@@ -32,7 +32,7 @@ press('B','A');has('Order saved');assert g.writes==1;snapshot('05-receipt')
 # The next A leaves receipt, a repeated A only opens a ticket.
 press('A','A');assert g.writes==1
 press('RIGHT','DOWN','DOWN','RIGHT','RIGHT','DOWN','A','A');has('Sold 3 YES');assert g.writes==2
-parts=[int(x) for x in g.saved['paper_v2'].split(',')];assert parts[1]<=100000 and parts[2:]==[0]*12
+parts=[int(x) for x in g.saved['paper_v2'].split(',')];assert parts[1]<=100000 and parts[2:]==[0]*22
 press('A','A','RIGHT');review();has('Not enough shares');assert g.writes==2
 # Buy NO, then verify saved portfolio and account.
 press('B','RIGHT','A');review();press('A');has('Bought 1 NO');saved=g.saved['paper_v2']
@@ -89,8 +89,8 @@ g.clock=20000;buy();press('A')
 assert not line.hide
 assert line.points[1][1]==0 and line.points[2][1]==170
 assert 'pts' in g.visible()
-# List wraps through the six selected markets.
-g.fresh();press('UP','A');has('selfie')
+# List wraps through the full selected catalog.
+g.fresh();press('UP','A');has('GPT wrapper')
 assert 'order book' not in g.visible().lower()
 
 # Legacy save is untouched and never interpreted under new market identities.
@@ -109,7 +109,7 @@ settings_item(2);has('2Y\n3N');has('4Y\n5N');has('6Y\n7N')
 press('DOWN','DOWN','DOWN');has('0Y\n0N')
 press('A');buy()
 record=[int(v) for v in g.saved['paper_v2'].split(',')]
-assert len(record)==14 and record[2:8]==[2,3,4,5,6,7]
+assert len(record)==24 and record[2:8]==[2,3,4,5,6,7]
 
 # Existing six-market balances are not reduced by the new welcome grant.
 g.saved['paper_v2']='1,1000000,'+','.join(['0']*12);before_writes=g.writes;g.fresh()
