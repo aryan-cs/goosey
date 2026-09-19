@@ -1,7 +1,8 @@
+import { runAuthenticatedMutation } from "@/lib/mutation-session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { readJsonObject } from "@/lib/http";
-import { ApiError, apiErrorResponse, jsonResponse, prisma, requireUser } from "@/lib/market-service";
+import { ApiError, apiErrorResponse, jsonResponse, requireUser } from "@/lib/market-service";
 import { isPrismaErrorCode } from "@/lib/prisma-errors";
 import { canonicalizeUsername } from "@/lib/security";
 
@@ -29,7 +30,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     const user = await requireUser(request, true);
     const body = profileSchema.parse(await readJsonObject(request));
     const data = body.username === undefined ? body : { ...body, displayName: body.username };
-    const profile = await prisma.user.update({ where: { id: user.id }, data, select: { username: true, displayName: true, bio: true, profilePublic: true, leaderboardVisible: true } });
+    const profile = await runAuthenticatedMutation(request, user.id, (tx) => tx.user.update({ where: { id: user.id }, data, select: { username: true, displayName: true, bio: true, profilePublic: true, leaderboardVisible: true } }));
     return jsonResponse({ profile }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (isPrismaErrorCode(error, "P2002")) {

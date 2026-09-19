@@ -1,3 +1,10 @@
+vi.mock("@/lib/mutation-session", async () => {
+  const { prisma } = await import("@/lib/market-service");
+  return { runAuthenticatedMutation: async (_request: unknown, _userId: string, operation: (tx: unknown, actor: { role: string }) => Promise<unknown>) => {
+    if ("$transaction" in prisma) return prisma.$transaction((tx) => operation(tx, { role: "USER" }));
+    return operation(prisma, { role: "USER" });
+  } };
+});
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -81,6 +88,14 @@ describe("PATCH /api/profile", () => {
     { ...profile, profilePublic: "true" },
     { leaderboardVisible: null },
     { ...profile, role: "ADMIN" },
+    { ...profile, id: "victim-user" },
+    { ...profile, userId: "victim-user" },
+    { ...profile, balanceMilli: "999999999999999" },
+    { ...profile, realizedPnlMilli: "999999999999999" },
+    { ...profile, leaderboardRank: 1 },
+    { ...profile, status: "ACTIVE" },
+    { ...profile, emailVerifiedAt: "2026-09-19T12:00:00Z" },
+    { ...profile, ledgerAccounts: { updateMany: { data: { balanceMilli: "999999999" } } } },
   ])("rejects invalid or unsupported profile fields", async (body) => {
     expect((await PATCH(request(body))).status).toBe(400);
     expect(mocks.update).not.toHaveBeenCalled();

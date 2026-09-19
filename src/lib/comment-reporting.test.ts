@@ -28,6 +28,7 @@ function transactionFixture(input: {
       findUnique: vi.fn().mockResolvedValue({
         userId: "author_1",
         status: "VISIBLE",
+        market: { status: "OPEN" },
         updatedAt: input.commentUpdatedAt,
       }),
     },
@@ -49,6 +50,14 @@ const request = {
 };
 
 describe("comment re-report moderation integrity", () => {
+  it("rejects a guessed comment ID belonging to a draft market before report lookup", async () => {
+    const tx = transactionFixture({ commentUpdatedAt: new Date() });
+    tx.comment.findUnique.mockResolvedValue({ userId: "author_1", status: "VISIBLE", updatedAt: new Date(), market: { status: "DRAFT" } });
+    await expect(submitCommentReportInTransaction(tx as never, request)).rejects.toMatchObject({ status: 404, code: "COMMENT_NOT_FOUND" });
+    expect(tx.commentReport.findUnique).not.toHaveBeenCalled();
+    expect(tx.commentReport.create).not.toHaveBeenCalled();
+  });
+
   it("reopens a dismissed report when the author edited the comment afterward", async () => {
     const resolvedAt = new Date("2029-01-02T00:00:00.000Z");
     const tx = transactionFixture({

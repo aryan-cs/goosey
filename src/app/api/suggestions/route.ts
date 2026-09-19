@@ -1,3 +1,4 @@
+import { runAuthenticatedMutation } from "@/lib/mutation-session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { apiErrorResponse, consumeRateLimit, jsonResponse, prisma, requireUser } from "@/lib/market-service";
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const user = await requireUser(request, true);
     await consumeRateLimit(prisma, `suggestion:${user.id}`, 5, 24 * 60 * 60 * 1_000);
     const body = suggestionSchema.parse(await readJsonObject(request));
-    const suggestion = await prisma.marketSuggestion.create({ data: { ...body, userId: user.id } });
+    const suggestion = await runAuthenticatedMutation(request, user.id, (tx) => tx.marketSuggestion.create({ data: { ...body, userId: user.id } }));
     return jsonResponse({ suggestion }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiErrorResponse(error); }
 }

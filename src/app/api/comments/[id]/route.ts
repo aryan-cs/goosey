@@ -1,3 +1,4 @@
+import { runAuthenticatedMutation } from "@/lib/mutation-session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { readJsonObject } from "@/lib/http";
@@ -32,7 +33,7 @@ export async function PATCH(
     const { id } = paramsSchema.parse(await context.params);
     const body = updateSchema.parse(await readJsonObject(request));
     await consumeRateLimit(prisma, `comment-edit:${user.id}`, 10, 60_000);
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await runAuthenticatedMutation(request, user.id, async (tx) => {
       const changed = await tx.comment.updateMany({
         where: { id, userId: user.id, status: "VISIBLE" },
         data: { body: body.body },
@@ -60,7 +61,7 @@ export async function DELETE(
   try {
     const user = await requireUser(request, true);
     const { id } = paramsSchema.parse(await context.params);
-    await prisma.$transaction(async (tx) => {
+    await runAuthenticatedMutation(request, user.id, async (tx) => {
       const comment = await tx.comment.findUnique({
         where: { id },
         select: { userId: true, marketId: true, status: true },

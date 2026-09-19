@@ -1,3 +1,4 @@
+import { runAuthenticatedMutation } from "@/lib/mutation-session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiErrorResponse, consumeRateLimit, jsonResponse, prisma, requireUser } from "@/lib/market-service";
@@ -22,11 +23,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const user = await requireUser(request, true);
     await consumeRateLimit(prisma, `watchlist:${user.id}`, 40, 60_000);
     const { marketId } = bodySchema.parse(await readJsonObject(request));
-    const market = await prisma.market.findFirst({ where: { id: marketId, ...(user.role === "ADMIN" ? {} : { status: { not: "DRAFT" } }) }, select: { id: true } });
-    if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
-    const item = await prisma.watchlistEntry.upsert({
-      where: { userId_marketId: { userId: user.id, marketId } },
-      create: { userId: user.id, marketId }, update: {},
+    const item = await runAuthenticatedMutation(request, user.id, async (tx, actor) => {
+      const market = await tx.market.findFirst({ where: { id: marketId, ...(actor.role === "ADMIN" ? {} : { status: { not: "DRAFT" } }) }, select: { id: true } });
+      if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+      return tx.watchlistEntry.upsert({
+        where: { userId_marketId: { userId: user.id, marketId } },
+        create: { userId: user.id, marketId }, update: {},
+      });
     });
     return jsonResponse({ saved: true, item }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiErrorResponse(error); }
@@ -36,7 +39,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
     const user = await requireUser(request, true);
     const { marketId } = bodySchema.parse(await readJsonObject(request));
-    await prisma.watchlistEntry.deleteMany({ where: { userId: user.id, marketId } });
+    await runAuthenticatedMutation(request, user.id, (tx) => tx.watchlistEntry.deleteMany({ where: { userId: user.id, marketId } }));
     return jsonResponse({ saved: false }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiErrorResponse(error); }
 }

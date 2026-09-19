@@ -20,9 +20,9 @@ export async function submitCommentReportInTransaction(
 ) {
   const comment = await tx.comment.findUnique({
     where: { id: input.commentId },
-    select: { userId: true, status: true, updatedAt: true },
+    select: { userId: true, status: true, updatedAt: true, market: { select: { status: true } } },
   });
-  if (!comment || comment.status !== "VISIBLE") {
+  if (!comment || comment.status !== "VISIBLE" || comment.market.status === "DRAFT") {
     throw new ApiError(404, "COMMENT_NOT_FOUND", "Comment not found.");
   }
   if (comment.userId === input.reporterId) {

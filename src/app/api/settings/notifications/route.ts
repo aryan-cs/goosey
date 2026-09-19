@@ -1,3 +1,4 @@
+import { runAuthenticatedMutation } from "@/lib/mutation-session";
 import { NextRequest } from "next/server";
 import { readJsonObject } from "@/lib/http";
 import { apiErrorResponse, jsonResponse, prisma, requireUser } from "@/lib/market-service";
@@ -17,7 +18,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const user = await requireUser(request, true);
     const preferences = notificationPreferencesSchema.parse(await readJsonObject(request));
-    await prisma.user.update({ where: { id: user.id }, data: { notificationPreferences: JSON.stringify(preferences) }, select: { id: true } });
+    await runAuthenticatedMutation(request, user.id, (tx) => tx.user.update({ where: { id: user.id }, data: { notificationPreferences: JSON.stringify(preferences) }, select: { id: true } }));
     return jsonResponse({ preferences }, responseOptions);
   } catch (error) { return apiErrorResponse(error); }
 }

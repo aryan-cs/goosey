@@ -1,3 +1,4 @@
+import { runAuthenticatedMutation } from "@/lib/mutation-session";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -202,7 +203,7 @@ export async function POST(
     const requestHash = createHash("sha256").update(jsonStringify({ slug, body })).digest("hex");
     await consumeRateLimit(prisma, `comment:${user.id}:minute`, 5, 60_000);
     await consumeRateLimit(prisma, `comment:${user.id}:day`, 50, 86_400_000);
-    const payload = await prisma.$transaction(async (tx) => {
+    const payload = await runAuthenticatedMutation(request, user.id, async (tx) => {
       const route = `/api/markets/${slug}/comments`;
       const previous = await tx.idempotencyRequest.findUnique({ where: { userId_route_key: { userId: user.id, route, key: idempotencyKey } } });
       if (previous) {

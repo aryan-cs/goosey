@@ -1,3 +1,10 @@
+vi.mock("@/lib/mutation-session", async () => {
+  const { prisma } = await import("@/lib/market-service");
+  return { runAuthenticatedMutation: async (_request: unknown, _userId: string, operation: (tx: unknown, actor: { role: string }) => Promise<unknown>) => {
+    if ("$transaction" in prisma) return prisma.$transaction((tx) => operation(tx, { role: "USER" }));
+    return operation(prisma, { role: "USER" });
+  } };
+});
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({ requireUser: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() }));
