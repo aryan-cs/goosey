@@ -231,6 +231,22 @@ confirmed invalid-ID 400 and absent-chain-market 503. Successful market snapshot
 runtime behavior is covered by the underlying exchange reader suite, but a
 successful HTTP market response still requires a published market on that network.
 
+Append `&format=terms` to retrieve exact canonical UTF-8 manifest bytes. The server
+uses `GOOSEY_SOLANA_TERMS_DIRECTORY` (an existing private directory) and verifies
+retained bytes against digest, length, deployment, market identity, economics and
+reviewer addresses from that same finalized account batch. No arbitrary file path
+or source URL is accepted. Missing/corrupt retention returns `TERMS_UNAVAILABLE`,
+not reconstructed text. `X-Goosey-Terms-Digest` uses the codec's domain-separated
+hash (not raw SHA-256); clients must independently use `verifyMarketTerms` before
+signing. Headers also state the observed slot and whether terms were sealed.
+
+`retainMarketTerms` validates before exclusive staging, fsyncs bytes, publishes
+with an atomic no-overwrite link, and fsyncs the directory. Identical concurrent
+writes are idempotent; changed rules for the same market/deployment conflict.
+The private filesystem and ancestors remain operator-trusted. Every read verifies
+content again; this is not replication or a guarantee against disk loss. Twenty-
+three filesystem tests plus 28 route tests cover retention and delivery boundaries.
+
 Market YES/NO positions should likewise have one representation. If positions are program-owned quantities, no second independently spendable outcome-token balance exists. If outcome tokens are later adopted, escrow/reserve or burn/mint them atomically and reconcile their supply against positions and collateral. Supporting arbitrary transfer-fee/hook extensions is not part of the initial contract.
 
 Transition the application in this order:
