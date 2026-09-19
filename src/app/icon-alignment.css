@@ -71,3 +71,14 @@
 .avatar-button > svg,
 .search-clear > svg,
 .notification-read > svg { display: block; }
+
+/* Podium markers fill their reserved space and sit above the avatar group. */
+.podium-icon { flex-shrink: 0; transform: translateY(-6px); }
+.podium-icon > svg { width: 32px; height: 32px; }
+.podium-icon > .rank { font-size: 28px; line-height: 1; }
+
+@media (max-width: 809.98px) {
+  .podium-icon { transform: translateY(-3px); }
+  .podium-icon > svg { width: 28px; height: 28px; }
+  .podium-icon > .rank { font-size: 24px; }
+}
