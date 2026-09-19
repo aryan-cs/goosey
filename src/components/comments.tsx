@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertCircle, Flag, LoaderCircle, MessageCircle, Pencil, Reply, Send, Shield, Trash2, X } from "lucide-react";
+import { AlertCircle, Flag, MessageCircle, Pencil, Reply, Shield, Trash2, X } from "lucide-react";
 import { EmptyState, LoadingState } from "./states";
 import { apiFetch } from "@/lib/client-api";
 
@@ -141,7 +141,7 @@ export function CommentSection({ marketId, currentUserId, csrfToken, endpoint, m
         {replyTo && <div className="replying-to"><span>Replying to {replyTo.author.displayName}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X /></button></div>}
         <textarea id="comment-body" value={body} maxLength={maxLength} rows={3} disabled={!canPost || sending} onChange={(event) => { setBody(event.target.value); pendingKey.current = null; }} placeholder={canPost === null ? "Checking your account..." : canPost ? replyTo ? "Write a reply" : "What do you think, and why?" : "Sign in to join the discussion"} />
         {canPost === false && <p className="signed-out-guidance"><Link href="/login">Sign in</Link> to comment, reply, or report a problem.</p>}
-        <div><span className={body.length > maxLength * .9 ? "near-limit" : ""}>{body.length}/{maxLength}</span><button className="button button-primary" disabled={!canPost || !body.trim() || sending}>{sending ? <LoaderCircle className="spin" /> : <Send />} Post</button></div>
+        <div><span className={body.length > maxLength * .9 ? "near-limit" : ""}>{body.length}/{maxLength}</span><button className="button button-primary" disabled={!canPost || !body.trim() || sending}>{sending ? "Posting…" : "Post"}</button></div>
       </form>
       {reporting && <form className="report-form" onSubmit={report}><div><strong>Report comment by {reporting.author.displayName}</strong><button type="button" onClick={() => setReporting(null)} aria-label="Cancel report"><X /></button></div><label>Reason<select name="reason" defaultValue="HARASSMENT"><option value="HARASSMENT">Harassment</option><option value="PRIVATE_INFORMATION">Private information</option><option value="SPAM">Spam</option><option value="MANIPULATION">Market manipulation</option><option value="OTHER">Other</option></select></label><label>Details<textarea name="details" maxLength={500} rows={3} /></label><button className="button button-secondary">Send report</button></form>}
       {editing && <form className="report-form" onSubmit={saveEdit}><div><strong>Edit your comment</strong><button type="button" onClick={() => setEditing(null)} aria-label="Cancel edit"><X /></button></div><label>Comment<textarea value={editBody} onChange={(event) => setEditBody(event.target.value)} maxLength={maxLength} rows={4} required /></label><button className="button button-secondary">Save edit</button></form>}

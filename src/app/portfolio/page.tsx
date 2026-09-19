@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChartNoAxesCombined, Feather, HandCoins, WalletCards } from "lucide-react";
+import { FeatherIcon } from "@/components/brand";
 import { MetricCard, PositionRow, SectionHeader } from "@/components/data-primitives";
 import { EmptyState } from "@/components/states";
 import { RedemptionForm } from "@/components/redemption-form";
@@ -29,7 +29,7 @@ export default async function PortfolioPage() {
 
   return <div className="page-shell portfolio-page">
     <header className="page-header"><span className="eyebrow">Your account</span><h1>Portfolio</h1><p>Values show what you could cash out now after price changes and fees.</p><Link className="button button-secondary" href="/portfolio/activity">Orders and fills</Link></header>
-    <section className="metric-grid"><MetricCard label="Total value" value={<>🪶 {formatFeathers(totalValue, 2)}</>} detail="Balance plus open positions" icon={<ChartNoAxesCombined />} /><MetricCard label="Available" value={<>🪶 {formatFeathers(user.balanceMilli, 2)}</>} detail="Ready to trade" icon={<WalletCards />} /><MetricCard label="Position value" value={<>🪶 {formatFeathers(positionValue, 2)}</>} detail={`${positions.length} open market${positions.length === 1 ? "" : "s"}`} icon={<Feather />} /><MetricCard label="Open profit/loss" value={<>🪶 {formatFeathers(unrealized, 2)}</>} trend={cost > 0n ? Number(unrealized * 10_000n / cost) / 100 : 0} icon={<HandCoins />} /></section>
+    <section className="metric-grid"><MetricCard label="Total value" value={<><FeatherIcon /> {formatFeathers(totalValue, 2)}</>} detail="Balance plus open positions" /><MetricCard label="Available" value={<><FeatherIcon /> {formatFeathers(user.balanceMilli, 2)}</>} detail="Ready to trade" /><MetricCard label="Position value" value={<><FeatherIcon /> {formatFeathers(positionValue, 2)}</>} detail={`${positions.length} open market${positions.length === 1 ? "" : "s"}`} /><MetricCard label="Open profit/loss" value={<><FeatherIcon /> {formatFeathers(unrealized, 2)}</>} trend={cost > 0n ? Number(unrealized * 10_000n / cost) / 100 : 0} /></section>
     <section><SectionHeader eyebrow="Open positions" title="Positions" description="These values include price changes and fees." />{values.length ? <div className="position-list">{values.map(({ position }) => {
       const probability = marketProbabilityBps(position.market) / 100;
       const completeSets = Math.min(position.yesShares, position.noShares);
@@ -45,6 +45,6 @@ export default async function PortfolioPage() {
       const redeemable = completeSets > 0 && position.market.resolution === null && (position.market.status === "OPEN" || position.market.status === "CLOSED");
       return <Fragment key={position.id}>{sides}{redeemable ? <RedemptionForm marketSlug={position.market.slug} marketVersion={position.market.version} maxQuantity={completeSets} payoutMilli={position.market.payoutMilli.toString()} /> : null}</Fragment>;
     })}</div> : <EmptyState title="No open positions" description="Your positions will show up here after your first trade." action={<Link className="button button-primary" href="/markets">Find a market</Link>} />}</section>
-    <section><SectionHeader eyebrow="Activity" title="Trade history" />{trades.length ? <div className="history-table" role="table">{trades.map((trade) => <div className="history-row" role="row" key={trade.id}><Link href={`/markets/${trade.market.slug}`}>{trade.market.shortTitle}</Link><span className={`side-badge ${trade.side.toLowerCase()}`}>{trade.side}</span><span>{trade.action} {trade.quantity}</span><span>🪶 {formatFeathers(trade.amountMilli, 2)}</span><time>{trade.createdAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</time></div>)}</div> : <p className="muted-copy">No trades yet.</p>}</section>
+    <section><SectionHeader eyebrow="Activity" title="Trade history" />{trades.length ? <div className="history-table" role="table">{trades.map((trade) => <div className="history-row" role="row" key={trade.id}><Link href={`/markets/${trade.market.slug}`}>{trade.market.shortTitle}</Link><span className={`side-badge ${trade.side.toLowerCase()}`}>{trade.side}</span><span>{trade.action} {trade.quantity}</span><span><FeatherIcon /> {formatFeathers(trade.amountMilli, 2)}</span><time>{trade.createdAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</time></div>)}</div> : <p className="muted-copy">No trades yet.</p>}</section>
   </div>;
 }

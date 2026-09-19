@@ -91,7 +91,7 @@ export function RedemptionForm({
         />
       </label>
       <p className="muted-copy">
-        Guaranteed payout: 🪶 {formatMilli(payout)}. You can cash out one matching YES and NO contract together.
+        Guaranteed payout: {formatMilli(payout)} feathers. You can cash out one matching YES and NO contract together.
       </p>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       <button className="button button-secondary" disabled={state === "submitting"} type="submit">

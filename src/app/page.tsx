@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Radio, Sparkles, Trophy, Users } from "lucide-react";
-import { GooseMark } from "@/components/brand";
+import { FeatherIcon, GooseMark } from "@/components/brand";
 import { db } from "@/lib/db";
 import { marketSummary, formatFeathers } from "@/lib/view-models";
 import { MarketCard, MarketListRow } from "@/components/market";
@@ -63,7 +63,7 @@ export default async function HomePage() {
             <aside className="home-sidebar">
               <section className="sidebar-panel" aria-labelledby="leader-preview">
                 <div className="section-heading compact"><h2 id="leader-preview"><Trophy /> Leaderboard</h2><Link href="/leaderboard">All</Link></div>
-                {leaders.length ? <ol className="mini-leaderboard">{leaders.map((leader) => <li key={leader.userId}><span className="rank">{leader.rank}</span><span><strong>{leader.displayName}</strong><small>@{leader.username}</small></span><b>🪶 {formatFeathers(leader.pnlMilli)}</b></li>)}</ol> : <EmptyState title="No rankings yet" description="Rankings start after the first trade." />}
+                {leaders.length ? <ol className="mini-leaderboard">{leaders.map((leader) => <li key={leader.userId}><span className="rank">{leader.rank}</span><span><strong>{leader.displayName}</strong><small>@{leader.username}</small></span><b><FeatherIcon /> {formatFeathers(leader.pnlMilli)}</b></li>)}</ol> : <EmptyState title="No rankings yet" description="Rankings start after the first trade." />}
               </section>
               <section className="sidebar-panel" aria-labelledby="activity-preview">
                 <div className="section-heading compact"><h2 id="activity-preview"><Users /> Live activity</h2></div>

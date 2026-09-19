@@ -100,7 +100,7 @@ export function MarketListRow({ market }: { market: MarketSummary }) {
         <span><small>{market.category}</small><strong>{market.title}</strong></span>
       </Link>
       <MiniSparkline values={market.sparkline} />
-      <span className="market-list-meta"><small>Volume</small><strong>🪶 {market.volume}</strong></span>
+      <span className="market-list-meta"><small>Volume</small><strong><FeatherIcon /> {market.volume}</strong></span>
       <span className="market-list-meta"><small>Closes</small><strong>{market.closesAt}</strong></span>
       {lead && <span className="market-list-probability"><strong>{formatProbability(lead.probability)}</strong><ProbabilityMovement change={lead.change} /></span>}
     </article>

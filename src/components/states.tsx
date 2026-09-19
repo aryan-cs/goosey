@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
-import { AlertCircle, Feather, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { FeatherIcon } from "./brand";
 
 export function LoadingState({ rows = 3, label = "Loading" }: { rows?: number; label?: string }) {
   return <div className="loading-state" role="status" aria-label={label}>{Array.from({ length: rows }, (_, i) => <div className="skeleton-row" key={i} />)}<span className="sr-only">{label}</span></div>;
 }
 
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
-  return <div className="empty-state"><span className="empty-icon"><Feather /></span><h3>{title}</h3><p>{description}</p>{action}</div>;
+  return <div className="empty-state"><span className="empty-icon"><FeatherIcon width={22} height={22} /></span><h3>{title}</h3><p>{description}</p>{action}</div>;
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
