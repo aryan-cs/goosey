@@ -19,7 +19,7 @@ import {
   type WalletLinkConfiguration,
 } from "@/lib/solana/wallet-link-service";
 
-const GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+import { DEVNET_GENESIS_HASH as GENESIS } from "./runtime";
 const CONFIGURATION: WalletLinkConfiguration = {
   origin: "https://goosey.example",
   chainId: "solana:devnet",

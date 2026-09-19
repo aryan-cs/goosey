@@ -11,6 +11,7 @@ import { address, assertIsSignatureBytes, compileTransaction, getAddressEncoder,
   type Address, type Transaction, type TransactionPartialSigner } from "@solana/kit";
 import type { PreparedWalletTransaction } from "./wallet-transaction";
 import type { WalletChallenge, WalletChallengeChain } from "./wallet-challenge";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "./runtime";
 
 export type BrowserWalletSnapshot = Readonly<{
   /** Only wallets supporting the exact chain, signing features and v0 are listed. */
@@ -52,9 +53,9 @@ export function createBrowserWallet(input: { chain: WalletChallengeChain; genesi
   const { chain, genesisHash } = input;
   requireValue(chain === "solana:localnet" || chain === "solana:devnet", "Only exact localnet/devnet wallet chains are supported");
   requireValue(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(genesisHash), "An explicit genesis pin is required");
-  const devnet = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
-  requireValue(!["5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY"].includes(genesisHash)
-    && (chain === "solana:devnet" ? genesisHash === devnet : genesisHash !== devnet), "Genesis does not match the permitted wallet chain");
+  address(genesisHash); // Reject shortened identifiers even if base58 text length looks plausible.
+  requireValue(![MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH].includes(genesisHash)
+    && (chain === "solana:devnet" ? genesisHash === DEVNET_GENESIS_HASH : genesisHash !== DEVNET_GENESIS_HASH), "Genesis does not match the permitted wallet chain");
   const origin = window.location.origin;
   requireValue(["http:", "https:"].includes(window.location.protocol), "Wallet challenges require an HTTP(S) origin");
   const registry = getWallets();

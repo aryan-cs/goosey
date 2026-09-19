@@ -10,7 +10,7 @@ import {
 } from "./wallet-challenge";
 
 const NOW = new Date("2026-09-19T15:00:00.000Z");
-const GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+import { DEVNET_GENESIS_HASH as GENESIS, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "./runtime";
 
 function wallet() {
   const pair = generateKeyPairSync("ed25519");
@@ -80,6 +80,11 @@ describe("SIWS-style wallet-link challenge creation", () => {
     expect(() => createWalletChallenge({ ...base, origin: "https://goosey.example/path" })).toThrow("origin");
     expect(() => createWalletChallenge({ ...base, walletAddress: "not-a-wallet" })).toThrow("Wallet address");
     expect(() => createWalletChallenge({ ...base, genesisHash: "not-a-genesis" })).toThrow("Genesis hash");
+    for (const genesisHash of [GENESIS.slice(0, 32), MAINNET_GENESIS_HASH.slice(0, 32), MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH]) {
+      for (const chainId of ["solana:devnet", "solana:localnet"] as const) {
+        expect(() => createWalletChallenge({ ...base, chainId, genesisHash })).toThrow("Genesis hash");
+      }
+    }
     expect(() => createWalletChallenge({ ...base, lifetimeMs: WALLET_CHALLENGE_MAX_LIFETIME_MS + 1 })).toThrow("5 minutes");
   });
 });

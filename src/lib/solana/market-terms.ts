@@ -1,5 +1,5 @@
 import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
-import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH } from "./runtime";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "./runtime";
 
 export const MARKET_TERMS_VERSION = 1 as const;
 export const MARKET_TERMS_MAX_BYTES = 24_576;
@@ -66,8 +66,9 @@ function binding(value: unknown): MarketTermsBinding {
   const v = record(value, ["cluster", "genesisHash", "program", "config", "market", "marketId", "creator", "featherMint"]);
   if (v.cluster !== "localnet" && v.cluster !== "devnet") throw new Error("Unsupported terms cluster");
   if (typeof v.genesisHash !== "string" || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v.genesisHash)
-    || v.genesisHash === MAINNET_GENESIS_HASH
+    || v.genesisHash === MAINNET_GENESIS_HASH || v.genesisHash === TESTNET_GENESIS_HASH
     || (v.cluster === "devnet" ? v.genesisHash !== DEVNET_GENESIS_HASH : v.genesisHash === DEVNET_GENESIS_HASH)) throw new Error("Invalid terms genesis binding");
+  address(v.genesisHash); // Genesis hashes are exactly 32 bytes, never shortened network IDs.
   return { cluster: v.cluster, genesisHash: v.genesisHash, program: key(v.program), config: key(v.config),
     market: key(v.market), marketId: integer(v.marketId, U64), creator: key(v.creator), featherMint: key(v.featherMint) };
 }

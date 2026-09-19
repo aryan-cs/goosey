@@ -57,3 +57,13 @@ fee funding and the deliberate single-authority backend cutover remain gates.
 Do not enable dual financial writes or silently translate database feathers
 into minted tokens. Production identity/enrollment policy must explicitly
 authorize issuance; client input must never become mint authority.
+
+## Network identity correction
+
+Read-only public `getGenesisHash` checks exposed shortened devnet/mainnet
+identifiers in the initial configuration. Runtime, wallet challenges, browser
+wallet selection, terms and transfer receipts now require full 32-byte hashes.
+Devnet is pinned to `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`;
+known mainnet and testnet hashes are rejected even under a localnet label.
+Regression tests explicitly reject the old shortened values. Reading public
+RPC network identity did not deploy the program or submit any transaction.

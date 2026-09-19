@@ -4,6 +4,7 @@
  * test upgrade-authority key. Other signers exist only in memory. No key output.
  */
 import assert from "node:assert/strict";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "../src/lib/solana/runtime";
 import { createHash, randomBytes } from "node:crypto";
 import { open, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
@@ -52,7 +53,8 @@ async function main() {
   assert(["http:", "https:"].includes(endpoint.protocol) && !endpoint.username && !endpoint.password && !endpoint.hash && !endpoint.search, "Unsafe RPC URL");
   const genesis = process.env.GOOSEY_SOLANA_GENESIS_HASH;
   assert(genesis && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(genesis), "Explicit genesis pin required");
-  assert(!["5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1", "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY"].includes(genesis), "Public cluster prohibited");
+  address(genesis);
+  assert(![MAINNET_GENESIS_HASH, DEVNET_GENESIS_HASH, TESTNET_GENESIS_HASH].includes(genesis), "Public cluster prohibited");
   const adminPath = process.env.GOOSEY_SOLANA_TEST_ADMIN_KEYPAIR;
   assert(adminPath, "GOOSEY_SOLANA_TEST_ADMIN_KEYPAIR must explicitly name the new test-admin key");
   const actualAdminPath = await realpath(adminPath);

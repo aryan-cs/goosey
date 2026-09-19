@@ -4,6 +4,7 @@ import { address, appendTransactionMessageInstructions, blockhash, createTransac
   setTransactionMessageLifetimeUsingBlockhash, signTransactionMessageWithSigners } from "@solana/kit";
 import { buildFeatherTransfer } from "./feather-transfer";
 import { createTransferReceiptStore } from "./transfer-receipts";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "./runtime";
 
 function storage() {
   const data = new Map<string, string>();
@@ -76,7 +77,16 @@ describe("immutable local transfer recovery journal (real signatures, in-memory 
   });
   it("rejects unsupported/mainnet contexts", async () => {
     const f = await fixture();
-    expect(() => createTransferReceiptStore(storage(), { ...f.domain, genesisHash: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" })).toThrow("domain");
+    expect(() => createTransferReceiptStore(storage(), { ...f.domain, genesisHash: MAINNET_GENESIS_HASH })).toThrow("domain");
     expect(() => createTransferReceiptStore(storage(), { ...f.domain, cluster: "devnet" })).toThrow("domain");
+  });
+  it("accepts full devnet and rejects truncated pins/full mainnet across domain labels", async () => {
+    const f = await fixture();
+    expect(() => createTransferReceiptStore(storage(), { ...f.domain, cluster: "devnet", genesisHash: DEVNET_GENESIS_HASH })).not.toThrow();
+    for (const cluster of ["localnet", "devnet"] as const) {
+      for (const genesisHash of [DEVNET_GENESIS_HASH.slice(0, 32), MAINNET_GENESIS_HASH.slice(0, 32), MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH]) {
+        expect(() => createTransferReceiptStore(storage(), { ...f.domain, cluster, genesisHash })).toThrow("domain");
+      }
+    }
   });
 });
