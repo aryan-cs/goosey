@@ -43,6 +43,19 @@ function database() {
   return { client: { $transaction: transaction } as unknown as TransactionRunner, user, find, createMarket, createBinding, audit, transaction };
 }
 describe("verified chain catalog registration", () => {
+  it("revalidates the caller session before reads and inside the write transaction", async () => {
+    const d = database(), authorize = vi.fn().mockResolvedValue(undefined);
+    await registerSolanaMarket({ ...input(), authorize }, d.client);
+    expect(authorize).toHaveBeenCalledTimes(2);
+    expect(authorize.mock.invocationCallOrder[0]).toBeLessThan(mocks.read.mock.invocationCallOrder[0]);
+    expect(authorize.mock.invocationCallOrder[1]).toBeLessThan(d.createMarket.mock.invocationCallOrder[0]);
+  });
+  it("refuses a session revoked during chain verification before writing", async () => {
+    const d = database(), authorize = vi.fn().mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Session revoked"));
+    await expect(registerSolanaMarket({ ...input(), authorize }, d.client)).rejects.toThrow("Session revoked");
+    expect(d.createMarket).not.toHaveBeenCalled(); expect(d.audit).not.toHaveBeenCalled();
+  });
   it("requires startup safety checks for the default application database", async () => {
     mocks.startup.mockRejectedValue(new Error("Database startup refused"));
     await expect(registerSolanaMarket(input())).rejects.toThrow("startup refused");

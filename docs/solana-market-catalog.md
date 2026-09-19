@@ -66,3 +66,23 @@ Twenty orchestration tests cover authorization, full publication prerequisites,
 network/errors, exact values, idempotency and conflicts using explicitly mocked
 chain/store boundaries. Real SQL rollback and full chain-to-catalog runtime
 verification are separate gates; unit fixtures are not deployment evidence.
+# Administrator HTTP registration
+
+`POST /api/admin/solana/markets` accepts only a canonical unsigned-u64
+`chainMarketId` string and `metadata` containing `slug`, `shortTitle`,
+`description`, and `category`. It requires the existing active administrator
+session and same-origin mutation checks. Requests are bounded JSON and limited
+to ten per administrator per minute. Neither actor identity, runtime, terms
+directory, balances nor publication status may be supplied in the JSON.
+
+The server requires all four explicit Solana runtime variables and
+`GOOSEY_SOLANA_TERMS_DIRECTORY`. It revalidates the session and administrator
+privilege before RPC work and again inside the catalog write transaction.
+Revocation during the RPC/manifest checks therefore prevents the write.
+An exact existing identity/metadata replay returns 200; a new draft returns 201.
+Conflicts return 409. Responses are private/no-store and expose only catalog
+identity, visibility, execution backend and the canonical public chain binding.
+
+This endpoint does not deploy or activate a program market, sign a transaction,
+open a public listing, create collateral, or convert database feathers. Financial
+operations remain exclusively in the market's immutable execution backend.

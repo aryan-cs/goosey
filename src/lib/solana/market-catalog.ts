@@ -35,8 +35,11 @@ function date(seconds: bigint) {
 export async function registerSolanaMarket(input: {
   actorUserId: string; runtime: SolanaRuntime; termsDirectory: string; chainMarketId: bigint;
   metadata: z.input<typeof chainCatalogMetadataSchema>; signal?: AbortSignal;
+  /** HTTP callers must revalidate their session inside both transactions. */
+  authorize?: (tx: Parameters<Parameters<TransactionRunner["$transaction"]>[0]>[0]) => Promise<void>;
 }, client: TransactionRunner = db) {
   const actorUserId = input.actorUserId, metadata = chainCatalogMetadataSchema.parse(input.metadata);
+  const authorize = input.authorize;
   const chainMarketId = input.chainMarketId, termsDirectory = input.termsDirectory;
   if (typeof chainMarketId !== "bigint" || chainMarketId < 0n || chainMarketId > (1n << 64n) - 1n) throw new Error("Invalid chain market ID");
   const supplied = { ...input.runtime };
@@ -45,7 +48,10 @@ export async function registerSolanaMarket(input: {
   const signal = input.signal ?? AbortSignal.timeout(15_000);
   signal.throwIfAborted();
   if (client === db) await requireDatabaseStartup();
-  await runSerializableTransaction(client, tx => admin(tx, actorUserId));
+  await runSerializableTransaction(client, async tx => {
+    await authorize?.(tx);
+    await admin(tx, actorUserId);
+  });
   const rpc = createSolanaRpc(runtime.rpcUrl);
   // Public program address is only a neutral selected wallet for this complete
   // account reader. No signer/ownership/enrollment is inferred from it.
@@ -77,6 +83,7 @@ export async function registerSolanaMarket(input: {
   try {
     return await runSerializableTransaction(client, async tx => {
       signal.throwIfAborted();
+      await authorize?.(tx);
       await admin(tx, actorUserId);
       const prior = await tx.solanaMarketBinding.findUnique({ where: { genesisHash_programAddress_chainMarketId: {
         genesisHash: identity.genesisHash, programAddress: identity.programAddress, chainMarketId: identity.chainMarketId,
