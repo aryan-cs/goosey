@@ -107,7 +107,27 @@ Keep link identity separate from chain authority. A valid cookie or linked addre
 
 ### Existing SQLite database upgrade
 
-Fresh databases receive the wallet-link tables from the Prisma schema. An existing SQLite database must receive the additive `prisma/sqlite-upgrades/20260919210000_solana_wallet_links.sql` upgrade exactly once before wallet-link routes are enabled. Stop the web process and workers first so no writer can race the schema change. Do not run `prisma db push` against a participant database as a substitute for this reviewed upgrade.
+Fresh databases receive the wallet-link tables from the Prisma schema. An existing SQLite database must receive the additive `prisma/sqlite-upgrades/20260919210000_solana_wallet_links.sql` upgrade before wallet-link routes are enabled. Do not run `prisma db push` against a participant database as a substitute for this reviewed upgrade.
+
+The reviewed `npm run db:upgrade:solana:sqlite -- --source /absolute/app.db
+--backup /absolute/new-backup.db` runner handles all three Solana migrations
+(wallet links, event journal and ingestion visits). It requires existing WAL mode,
+creates a verified private backup, rejects partial/drifted schema, and rechecks
+the entire schema under one bounded immediate transaction before applying pending
+DDL. Readers remain available; writers may briefly encounter busy errors. It
+performs no financial DML. The backup precedes concurrent writes and must never be
+automatically restored over the live database. Twelve real SQLite tests cover
+rollback, schema mismatch, contention and an existing writer connection.
+
+The local development database received these three upgrades on 2026-09-19.
+Backup: `/Users/aryan/.local/share/goosey-db-upgrade-7wATB3/before-solana.sqlite`,
+SHA-256 `1e2a2b739a08d13d7ec3246f70d61d1ba663451639408c367ca1f60bffcce176`.
+Post-upgrade integrity/FK checks passed; bidirectional comparisons of user
+balances and every ledger-account row against that backup showed no changes.
+This is not a PostgreSQL deployment migration.
+
+For the manual alternative below, stop web/worker writers first; the runner's
+schema race checks do not apply to arbitrary manual commands.
 
 Create a verified online snapshot at a new absolute path before changing the database:
 

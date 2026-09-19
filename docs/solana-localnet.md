@@ -21,8 +21,10 @@ The development caps are 10,000 feathers per wallet and 10,000,000 feathers acro
 the campaign (10,000,000 and 10,000,000,000 base units). Initial authorized,
 minted and supply counters were independently observed as zero through the live
 application `/api/solana/status`. The status is `foundation_verified`, **not**
-on-chain web trading readiness. Browser capability remains explicitly disabled
-pending database and wallet integration. Runtime bindings reside only in ignored
+on-chain web trading readiness. Following the backed-up additive SQLite upgrade,
+browser capability is enabled for the explicit loopback RPC origin; the CSP permits
+that exact origin. The wallet interface and economic web cutover remain unfinished.
+Runtime bindings reside only in ignored
 local environment configuration; neither keys nor ledger files belong in Git.
 
 The isolated operator rehearsal at
