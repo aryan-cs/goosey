@@ -29,7 +29,7 @@ function item(index: number, createdAt = CREATED_AT) {
     body: `Community comment ${index}`,
     parentId: index % 2 === 0 ? null : "cm99999999999999999999999",
     createdAt,
-    user: { username: `hacker_${index}`, displayName: `Hacker ${index}` },
+    user: { username: `hacker_${index}`, displayName: `Hacker ${index}`, profilePublic: true },
     market: { slug: `market-${index}`, shortTitle: `Market ${index}` },
   };
 }
@@ -44,7 +44,7 @@ describe("getCommunityFeed", () => {
     mocks.findMany.mockResolvedValue([]);
   });
 
-  it("loads only public visible comments from non-draft markets and eligible reply parents", async () => {
+  it("loads visible comments from non-draft markets and eligible reply parents", async () => {
     mocks.findMany.mockResolvedValue([item(1)]);
 
     const result = await getCommunityFeed();
@@ -52,7 +52,6 @@ describe("getCommunityFeed", () => {
     expect(mocks.findMany).toHaveBeenCalledWith({
       where: {
         status: "VISIBLE",
-        user: { profilePublic: true },
         market: { status: { not: "DRAFT" } },
         AND: [{
           OR: [
@@ -66,13 +65,31 @@ describe("getCommunityFeed", () => {
         body: true,
         parentId: true,
         createdAt: true,
-        user: { select: { username: true, displayName: true } },
+        user: { select: { username: true, displayName: true, profilePublic: true } },
         market: { select: { slug: true, shortTitle: true } },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 26,
     });
     expect(result).toEqual({ items: [item(1)], nextCursor: null });
+  });
+
+  it("includes public comments by private-profile authors and retains the profile-link visibility flag", async () => {
+    const privateAuthorComment = item(2);
+    privateAuthorComment.user.profilePublic = false;
+    const publicAuthorReply = item(3);
+    mocks.findMany.mockResolvedValue([privateAuthorComment, publicAuthorReply]);
+
+    const result = await getCommunityFeed();
+
+    const query = mocks.findMany.mock.calls[0]![0];
+    expect(query.where).not.toHaveProperty("user");
+    expect(query.select.user).toEqual({
+      select: { username: true, displayName: true, profilePublic: true },
+    });
+    expect(result.items).toEqual([privateAuthorComment, publicAuthorReply]);
+    expect(result.items.map(comment => comment.user.profilePublic)).toEqual([false, true]);
+    expect(result.items[0].user.username).toBe("hacker_2");
   });
 
   it("uses lookahead and returns a cursor for the twenty-fifth item", async () => {
