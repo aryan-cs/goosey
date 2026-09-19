@@ -25,11 +25,17 @@
 
 @media (max-width: 809.98px) {
   .home:global(.page-shell) { --hero-top: 124px; --canvas-inset: 20px; padding-top: var(--hero-top); }
-  .home :global(.hero-intro) { gap: 24px; padding: 0 20px 48px; }
+  .home :global(.hero-intro) {
+    /* Follow a shrinking browser viewport as well as its initial small size. */
+    min-height: calc(min(100svh, 100dvh) - var(--hero-top) - var(--toolbar-height) - 2 * var(--canvas-inset));
+    gap: 24px;
+    padding: 0 20px 48px;
+  }
   .home :global(.hero-intro h1) { font-size: clamp(34px, 8.8vw, 44px); line-height: 1.05; }
   .home :global(.hero-intro > .hero-copy > p) { font-size: 16px; line-height: 23px; }
   .home :global(.hero-actions) { margin-top: 24px; }
   .home :global(.field-note p) { font-size: 13px; line-height: 18px; }
-  .home :global(.market-canvas) { padding: var(--canvas-inset); }
+  /* Search is an initial-screen control, so never hide it behind the canvas entrance. */
+  .home :global(.market-canvas) { padding: var(--canvas-inset); animation: none; }
   .home :global(.home-main), .home :global(.home-layout) { gap: 28px; }
 }
