@@ -1,4 +1,38 @@
-# Goosey badge 0.8.0
+# Goosey badge 0.9.0
+
+## Website snapshot build
+
+The deployed backend is now https://getgoosey.vercel.app. To build the badge
+browser using its actual public markets, prices, volume, closing timestamps and
+up to 32 database history samples per market:
+
+```sh
+python3 badge/scripts/build.py --cloud-url https://getgoosey.vercel.app --output badge/dist-cloud
+BADGE_OUTPUT=badge/dist-cloud python3 badge/tests/test_cloud.py
+```
+
+If a Python.org macOS install lacks its certificate bundle, configure its
+trusted CA store first (for example `SSL_CERT_FILE=/etc/ssl/cert.pem` on macOS).
+Certificate verification must remain enabled.
+
+Import `badge/dist-cloud/goosey.lua` and use the accompanying repository logo.
+The same `goosey_base` slug preserves private app saves. This build does not
+write any private save data, read website sessions, display a fake balance,
+or execute local trades. The header explicitly shows **Saved snapshot** with
+its UTC capture time; it does not auto-refresh. Empty history stays empty and
+one sample is a dot. A on a market opens the website sign-in instructions;
+it does not submit an order. Public snapshots contain no account information
+and can be shared. Rebuild/reinstall to refresh this snapshot.
+
+The production snapshot path is intentionally separate from the legacy local
+practice build below. A USB transport that can safely deliver responses to a
+running Lua app, plus authenticated device linking, is still required for live
+accounts and trading. The current official guide exposes no HTTP client,
+inbound USB callback, Socials email, or cryptographic API. No wireless relay
+is available with only one badge. Do not mistake these host-tested snapshots
+for a completed live transport or hardware-tested release.
+
+## Legacy local build
 
 The installable app is an offline practice app using the six requested
 markets in `prisma/selected-markets.json`, shared with the web database seed.
