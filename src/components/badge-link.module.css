@@ -1,0 +1,34 @@
+.card {
+  gap: 16px;
+}
+
+.card > h1,
+.card > h2,
+.card > p,
+.device > p {
+  margin: 0;
+}
+
+.card > h1 {
+  margin-bottom: 4px;
+}
+
+.card > h2 {
+  margin-top: 8px;
+}
+
+.card > p,
+.device > p {
+  line-height: 1.5;
+}
+
+.device {
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 809.98px) {
+  .card {
+    gap: 14px;
+  }
+}

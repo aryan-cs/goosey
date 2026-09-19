@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import styles from "./badge-link.module.css";
 
 type Device = { id: string; code: string; expiresAt: string };
 export function BadgeLink() {
@@ -49,7 +50,7 @@ export function BadgeLink() {
   }
 
   const next = encodeURIComponent(`/badge${challenge ? `#${challenge}` : ""}`);
-  return <section className="stacked-form">
+  return <section className={`stacked-form ${styles.card}`}>
     <h1>Link your badge</h1>
     {loading ? <p>Loading your account…</p> : !user ? <><p>Sign in once to use your Goosey balance on your badge.</p><Link className="button button-primary" href={`/login?next=${next}`}>Sign in</Link><Link href={`/signup?next=${next}`}>Create an account</Link></> : <>
       <p>Signed in as <strong>@{user.username}</strong>.</p>
@@ -58,7 +59,7 @@ export function BadgeLink() {
         <p>Linking lets this badge’s USB gateway read your balance and submit trades you confirm on the badge. Access expires in seven days and can be revoked here.</p>
         <button className="button button-primary" disabled={busy} onClick={() => void update("POST", { challenge })}>Link this badge</button>
       </> : !linked ? <p>Start the USB gateway and open the link it shows to connect a badge.</p> : null}
-      {devices.length > 0 && <><h2>Linked badges</h2>{devices.map((device) => <div key={device.id}><p>{device.code} · expires {new Date(device.expiresAt).toLocaleDateString()}</p><button className="button button-secondary" disabled={busy} onClick={() => void update("DELETE", { id: device.id })}>Revoke {device.code}</button></div>)}</>}
+      {devices.length > 0 && <><h2>Linked badges</h2>{devices.map((device) => <div className={styles.device} key={device.id}><p>{device.code} · expires {new Date(device.expiresAt).toLocaleDateString()}</p><button className="button button-secondary" disabled={busy} onClick={() => void update("DELETE", { id: device.id })}>Revoke {device.code}</button></div>)}</>}
     </>}
     {message && <p role="status">{message}</p>}
     <p>The badge needs its USB gateway running to trade. No password is stored in the shared badge app.</p>
