@@ -24,7 +24,7 @@ function MarketMenu() {
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLAnchorElement>(null);
   const selectedCategory = pathname === "/markets" ? searchParams.get("category") : null;
 
   useEffect(() => {
@@ -46,21 +46,34 @@ function MarketMenu() {
   }, []);
 
   return (
-    <div className={`market-menu${open ? " is-open" : ""}`} ref={menuRef} onBlur={(event) => {
+    <div className={`market-menu${open ? " is-open" : ""}`} ref={menuRef} onPointerEnter={(event) => {
+      if (event.pointerType !== "touch") setOpen(true);
+    }} onPointerLeave={() => {
+      if (!menuRef.current?.querySelector(".market-menu-panel")?.contains(document.activeElement)) setOpen(false);
+    }} onFocus={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(true);
+    }} onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
     }}>
-      <button
+      <Link
         ref={triggerRef}
         className="market-menu-trigger"
-        type="button"
+        href="/markets"
         aria-expanded={open}
         aria-controls="market-category-menu"
+        aria-current={pathname === "/markets" && !selectedCategory ? "page" : undefined}
         data-current={pathname.startsWith("/markets") ? "true" : undefined}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown") return;
+          event.preventDefault();
+          setOpen(true);
+          requestAnimationFrame(() => menuRef.current?.querySelector<HTMLAnchorElement>(".market-menu-panel a")?.focus());
+        }}
       >
         Markets <ChevronDown aria-hidden="true" />
-      </button>
-      <div className="market-menu-panel" id="market-category-menu" aria-hidden={!open}>
+      </Link>
+      <div className="market-menu-panel" id="market-category-menu" aria-hidden={!open} inert={!open}>
         <div className="market-menu-heading">
           <span>Browse markets</span>
           <Link href="/markets" aria-current={pathname === "/markets" && !selectedCategory ? "page" : undefined} onClick={() => setOpen(false)}>View all</Link>

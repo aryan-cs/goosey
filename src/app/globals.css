@@ -199,6 +199,7 @@ svg { flex: none; }
   .market-menu-panel { background: var(--panel-glass); -webkit-backdrop-filter: blur(48px); backdrop-filter: blur(48px); }
 }
 .market-menu.is-open .market-menu-panel { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); transition-delay: 0s; }
+.market-menu-panel::before { content: ""; position: absolute; top: -12px; left: 0; right: 0; height: 12px; }
 .market-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .market-menu-heading > span { font: 652 20px/1.1 var(--font-display); letter-spacing: -.02em; }
 .market-menu-heading > a { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-muted); font-size: 12px; font-weight: 600; transition: color var(--motion-fast) var(--ease-standard), transform var(--motion-base) var(--ease-emphasized); }
