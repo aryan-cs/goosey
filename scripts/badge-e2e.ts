@@ -1,0 +1,75 @@
+/** Real badge APIs and accounting in a disposable database; never production. */
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { NextRequest } from "next/server";
+const dir = await mkdtemp(join(tmpdir(), "goosey-badge-e2e-"));
+process.env.DATABASE_PROVIDER = "sqlite";
+process.env.DATABASE_URL = `file:${join(dir, "test.sqlite")}`;
+delete process.env.POSTGRES_DATABASE_URL;
+delete process.env.POSTGRES_DIRECT_DATABASE_URL;
+process.env.APP_URL = "http://localhost:8080";
+process.env.NEXT_PUBLIC_APP_URL = process.env.APP_URL;
+process.env.RATE_LIMIT_KEY_SECRET = randomBytes(32).toString("hex");
+process.env.EMAIL_VERIFICATION_REQUIRED = "false";
+let disconnect: (() => Promise<void>) | undefined;
+try {
+  await writeFile(join(dir, "test.sqlite"), "");
+  execFileSync("npx", ["prisma", "db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"], {env:process.env,stdio:"pipe"});
+  const { prisma:db } = await import("../src/lib/market-service");
+  disconnect = () => db.$disconnect();
+  const { registerUser, grantWelcomeFeathers } = await import("../src/lib/auth");
+  const { createAdminMarket } = await import("../src/lib/admin-service");
+  const link = await import("../src/app/api/badge/link/route");
+  const account = await import("../src/app/api/badge/account/route");
+  const quote = await import("../src/app/api/badge/markets/[slug]/quote/route");
+  const trade = await import("../src/app/api/badge/markets/[slug]/trades/route");
+  const token = randomBytes(32).toString("hex");
+  const challenge = createHash("sha256").update(token).digest("hex");
+  const participant = await registerUser({email:"badge@example.test",username:"badge_test",displayName:"Badge test",password:randomBytes(24).toString("hex")});
+  await db.$transaction(async tx => {
+    await tx.user.update({where:{id:participant.user.id},data:{emailVerifiedAt:new Date()}});
+    await grantWelcomeFeathers(tx,participant.user.id);
+  });
+  const admin = await db.user.create({data:{username:"badge_admin",email:"admin@example.test",displayName:"Admin",passwordHash:"not-a-password",role:"ADMIN",emailVerifiedAt:new Date()}});
+  const expires = new Date(Date.now()+3600000);
+  const {market} = await createAdminMarket({actorUserId:admin.id,idempotencyKey:"badge-test-market",market:{slug:"badge-test-market",title:"Badge test market",shortTitle:"Badge test",description:"Isolated badge test market",rules:"Isolated test result",resolutionSource:"Isolated test",category:"HACKATHON",featured:false,color:"green",icon:"sparkles",status:"OPEN",closesAt:expires,resolvesAt:expires,liquidityParameter:40,payoutMilli:100000n,feeBps:0}});
+  function req(path:string,method="GET",body?:unknown,auth="device",origin="http://localhost:8080") {
+    return new NextRequest(`http://localhost:8080/api/badge/${path}`,{method,headers:{"content-type":"application/json",origin,...(auth==="device"?{authorization:`Bearer ${token}`} : auth==="web"?{cookie:`goosey_session=${participant.session.token}`} : {})},...(body?{body:JSON.stringify(body)}:{})});
+  }
+  assert.equal((await account.GET(req("account"))).status,401);
+  assert.equal((await link.POST(req("link","POST",{challenge},"device"))).status,401);
+  assert.equal((await link.POST(req("link","POST",{challenge},"web","https://evil.example"))).status,403);
+  assert.equal((await link.POST(req("link","POST",{challenge},"web"))).status,200);
+  assert.equal((await link.POST(req("link","POST",{challenge},"web"))).status,200);
+  assert.equal(await db.accountToken.count({where:{purpose:"BADGE_DEVICE"}}),1);
+  assert.equal((await account.GET(req("account","GET",undefined,"web"))).status,401);
+  const profile = await (await account.GET(req("account"))).json();
+  assert.equal(profile.username,"badge_test");assert.equal(profile.email,undefined);
+  const context = {params:Promise.resolve({slug:market.slug})};
+  for(const action of ["BUY","SELL"] as const) {
+    const qr = await quote.POST(req("quote","POST",{side:"YES",action,quantity:1}),context);
+    assert.equal(qr.status,201,JSON.stringify(await qr.clone().json()));
+    const q=await qr.json();
+    const body={quoteId:q.quoteId,marketVersion:q.marketVersion,...(action==="BUY"?{maxDebitMilli:q.totalDebitMilli}:{minCreditMilli:q.netCreditMilli})};
+    function tr(){const r=req("trades","POST",body);r.headers.set("Idempotency-Key",`badge:${q.quoteId}`);return r;}
+    const first=await trade.POST(tr(),context);
+    assert.equal(first.status,201,JSON.stringify(await first.clone().json()));
+    const receipt=await first.json();
+    const repeated=await trade.POST(tr(),context);assert.equal(repeated.status,201);
+    assert.deepEqual(await repeated.json(),receipt);
+  }
+  assert.equal(await db.trade.count({where:{userId:participant.user.id}}),2);
+  assert.equal((await db.position.findFirstOrThrow({where:{userId:participant.user.id}})).yesShares,0);
+  const linked=await db.accountToken.findUniqueOrThrow({where:{tokenHash:challenge}});
+  await link.DELETE(req("link","DELETE",{id:linked.id},"web"));
+  assert.equal((await account.GET(req("account"))).status,401);
+  assert.equal((await quote.POST(req("quote","POST",{side:"YES",action:"BUY",quantity:1}),context)).status,401);
+  assert.equal((await link.POST(req("link","POST",{challenge},"web"))).status,409);
+  for(const journal of await db.journalEntry.findMany({include:{postings:true}})) assert.equal(journal.postings.reduce((s,p)=>s+p.amountMilli,0n),0n);
+  for(const a of await db.ledgerAccount.findMany({include:{postings:true}})) assert.equal(a.balanceMilli,a.postings.reduce((s,p)=>s+p.amountMilli,0n));
+  console.log("PASS badge linking, CSRF, token isolation, account data, real BUY/SELL, duplicate confirmations, revocation and ledger reconciliation.");
+} finally {await disconnect?.();await rm(dir,{recursive:true,force:true});}

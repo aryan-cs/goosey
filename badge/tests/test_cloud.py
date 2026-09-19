@@ -7,7 +7,7 @@ g.saved['paper_v2']='1,76543,2,1,0,0,0,0,0,0,0,0,0,0'
 g.saved['username_v1']='old_local'
 before = dict(g.saved.items())
 g.fresh()
-has('Markets'); has('Saved snapshot')
+has('Markets'); has('Account offline')
 assert '765.43' not in g.visible() and '@old_local' not in g.visible()
 snapshot('cloud-list')
 for market in source['markets']:
@@ -16,11 +16,11 @@ for market in source['markets']:
     has(market['closes'])
     snapshot('cloud-' + market['slug'])
     # A never creates a local ticket, debits money or writes private saves.
-    press('A');has('getgoosey.vercel.app');snapshot('cloud-account')
-    press('A');has('getgoosey.vercel.app')
-    press('B','DOWN')
-press('START','DOWN','A');has('getgoosey.vercel.app')
-g.on_exit();g.fresh();has('Saved snapshot')
+    press('A');has('getgoosey.vercel.app/badge');snapshot('cloud-account')
+    press('A');has('getgoosey.vercel.app/badge')
+    press('B','B','DOWN')
+press('START','DOWN','A');has('getgoosey.vercel.app/badge')
+g.on_exit();g.fresh();has('Account offline')
 assert dict(g.saved.items()) == before and g.writes == 0
 
 # USB responses are applied atomically; partial writes never replace data.
@@ -29,12 +29,12 @@ sys.path.insert(0, str(root / 'badge/scripts'))
 from cloud_snapshot import mailbox_frame
 newer = dict(source, generation=str(int(source.get('generation','1'))+1000))
 frame = mailbox_frame(newer).decode()
-g.clock=2000;g.mailbox=frame[:-10];g.on_tick();has('Saved snapshot')
-g.clock=4000;g.mailbox=frame;g.on_tick();has('USB updated')
-g.clock=6000;g.mailbox=frame.replace('END\t','BROKEN\t');g.on_tick();has('USB updated')
-g.clock=8000;g.mailbox=mailbox_frame(dict(newer,generation='1')).decode();g.on_tick();has('USB updated')
-g.clock=50000;g.on_tick();has('Saved snapshot')
-g.mailbox=frame;g.on_exit();g.fresh();has('Saved snapshot')
+g.clock=2000;g.mailbox=frame[:-10];g.on_tick();has('Account offline')
+g.clock=4000;g.mailbox=frame;g.on_tick();has('Account offline')
+g.clock=6000;g.mailbox=frame.replace('END\t','BROKEN\t');g.on_tick();has('Account offline')
+g.clock=8000;g.mailbox=mailbox_frame(dict(newer,generation='1')).decode();g.on_tick();has('Account offline')
+g.clock=50000;g.on_tick();has('Account offline')
+g.mailbox=frame;g.on_exit();g.fresh();has('Account offline')
 assert dict(g.saved.items()) == before and g.writes == 0
 g.mailbox=None
 

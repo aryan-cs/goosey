@@ -1,71 +1,64 @@
 # Goosey badge 0.10.0
 
-## Public markets over USB
+## Real accounts and trading over USB
 
-The cloud-only app displays actual public data from https://getgoosey.vercel.app:
-market titles, probabilities, volume, UTC closing times and database history.
-It preserves the green 320×240 layout and repository launcher icon. A opens a
-market, B returns, left/right selects an outcome, and Start opens settings.
-A on a detail screen currently opens website sign-in instructions, not an order.
-**Website account linking, balances, positions and badge trading are not wired.**
-The required zero-input sign-in flow and its issuer dependency are documented in
-[AUTHENTICATION.md](AUTHENTICATION.md); manual pairing is not the accepted final UX.
+The cloud app uses the website database for markets, history, balances and
+trades. It preserves the green 320×240 layout and repository launcher icon.
+One-time website approval links your own account; later launches restore access
+through the running gateway. See [AUTHENTICATION.md](AUTHENTICATION.md) for the
+protocol, credential lifetime, revocation and restart guarantees.
 
 ```sh
-python3 badge/scripts/build.py --cloud-url https://getgoosey.vercel.app --output badge/dist-cloud
+SSL_CERT_FILE=/etc/ssl/cert.pem python3 badge/scripts/build.py --cloud-url https://getgoosey.vercel.app --output badge/dist-cloud
+SSL_CERT_FILE=/etc/ssl/cert.pem python3 badge/scripts/usb_trading_gateway.py --port /dev/cu.usbmodem1101
+```
+
+Install **all three Lua files** (`main.lua`, `cloud_reader.lua`, `trade.lua`) and
+`manifest.cfg` together under `/littlefs/apps/goosey_base/`, retaining the
+repository-logo `icon.bin`. Importing only `goosey.lua` is insufficient for this
+modular release. Exit Goosey to the launcher before uploading, then reload and
+reopen it. Open the website link printed by the gateway and approve the code
+shown on the badge. Do not run two serial clients at once.
+
+Controls: up/down select markets, A opens, left/right chooses YES/NO, A opens a
+trade. Up/down changes quantity (1–20); left/right chooses BUY/SELL. A requests a
+live quote; a second A confirms the displayed amount including fees. B cancels
+an unconfirmed quote or returns. A confirmed trade waits for a server receipt;
+buttons cannot submit another while that result is uncertain. Start opens
+settings from the market screens. HOME is the firmware app-exit button.
+
+The header shows the linked username and authoritative balance. When offline,
+the badge can browse the saved public snapshot but cannot submit new trades.
+Keep the gateway running and USB connected. Restart the gateway after unplugging.
+Sharing an app does not provide its recipient an internet connection or account:
+each person must approve their own link and run their own USB gateway. Stock Lua
+has no HTTP client or Socials email API. Wireless relay support is not included.
+
+The gateway checks requests every two seconds, accounts every ten seconds and
+public markets/history every thirty seconds. Confirmations take priority over
+chart downloads. Data is private appdata, excluded from native sharing. History
+is bounded to 32 points per market and 96 total; no history is fabricated. More
+than 16 open markets fails visibly rather than silently truncating the catalog.
+All displayed dates/times are UTC. Polling is used because there is no supported
+badge event stream. The old `usb_market_sync.py` remains a public-only option.
+
+Checks (Python QA environment needs lupa and Pillow):
+
+```sh
+node --import tsx scripts/badge-e2e.ts
 BADGE_OUTPUT=badge/dist-cloud python3 badge/tests/test_cloud.py
+BADGE_OUTPUT=badge/dist-cloud python3 badge/tests/test_trade.py
+python3 badge/tests/test_gateway.py
 python3 badge/tests/test_snapshot.py
 python3 badge/tests/test_cloud_reader.py
 ```
 
-Import `badge/dist-cloud/goosey.lua` and use the accompanying repository logo.
-Keep slug `goosey_base` to preserve private app saves. This build never reads or
-writes the local practice wallet or username. It is a separate, smaller Lua
-program: the original combined build exhausted physical compile memory. Stock
-firmware supports font sizes 14–24, not 12; host mocks now enforce that boundary.
+## Legacy code below
 
-On a Mac with the badge's normal USB console available, run:
-
-```sh
-python3 badge/scripts/usb_market_sync.py --port /dev/cu.usbmodem1101
-# Add --once for a single update. Your USB device path may differ.
-```
-
-Close browser/other serial connections first. USB CDC access uses the existing
-console settings and paced 128-byte writes, matching the official uploader.
-Python.org macOS installations may need `SSL_CERT_FILE=/etc/ssl/cert.pem` to use
-the system's trusted CA bundle; never disable certificate verification.
-
-The gateway fetches public HTTPS data every 30 seconds and writes one bounded
-frame to `appdata/market_snapshot.txt`. The running app checks every two seconds,
-accepts only complete, validated, newer frames, and preserves selection by slug.
-It does not reload or reboot for updates. The header reads **USB updated** after
-a new frame, reverting to **Saved snapshot** after 45 seconds without one.
-Closing the app retains its last public snapshot; reopening starts conservatively
-as a saved snapshot until another update arrives. Restart the gateway after an
-unplug or transfer failure; an interrupted console upload may require a normal
-badge power cycle. The gateway is not a login service or unattended daemon.
-
-History is bounded to 32 samples per market and 96 across the catalog. The server
-performs downsampling. Empty histories stay empty; one sample is a dot. No prices
-are invented. Export fails rather than silently truncating more than 16 open
-markets. Dates and times are UTC. Public catalog/history requests are independent
-reads, not a transactional snapshot of the whole database. The gateway currently
-polls because the backend has no supported badge event stream.
-
-Native app sharing transfers the app, not the recipient's internet connection:
-a shared copy can browse its bundled public snapshot. Each USB-connected badge
-needs a gateway to refresh it. Stock Lua has no HTTP client or Socials email API.
-Wireless participants still require a separately tested relay and authenticated
-transport. Sharing this build does not log someone into a website account.
-
-Physical verification on September 19: Goosey opened successfully; a new public
-frame changed the visible header and timestamp without exiting the app; market
-probability, graph, volume and close time rendered on the physical display.
-Three consecutive app restarts and another update also passed. System free
-memory then settled at 35,028 bytes, largest block 10,240 bytes.
-A hardware screenshot was decoded with its CRC checked. This is a smoke test,
-not proof of full-capacity histories, radio scale or long-running flash endurance.
+The following sections describe the **older, separate offline practice app**,
+not the cloud client. Its indexed holdings are preserved and never reinterpreted.
+The legacy builder intentionally rejects a changed catalog until an explicit
+migration or pinned historical catalog is supplied.
 
 ## Legacy local build
 
