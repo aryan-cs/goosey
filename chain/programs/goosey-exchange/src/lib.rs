@@ -9,11 +9,13 @@ pub mod escrow;
 pub mod matching;
 pub mod exchange;
 pub mod cancellation;
+pub mod resolution;
 #[path = "book-bootstrap.rs"]
 pub mod book_bootstrap;
 use escrow::*;
 use exchange::*;
 use cancellation::*;
+use resolution::*;
 use book_bootstrap::*;
 
 declare_id!("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
@@ -24,6 +26,30 @@ pub const DEFAULT_PAYOUT_MILLI: u64 = 100_000;
 #[program]
 pub mod goosey_exchange {
     use super::*;
+
+    pub fn initialize_resolution(ctx: Context<InitializeResolution>) -> Result<()> {
+        resolution::initialize_resolution(ctx)
+    }
+    pub fn close_resolution(ctx: Context<CloseResolution>) -> Result<()> {
+        resolution::close_resolution(ctx)
+    }
+    pub fn propose_resolution(ctx: Context<ProposeResolution>, sequence: u64, outcome: resolution::Outcome,
+        reason_digest: [u8; 32], evidence_digest: [u8; 32]) -> Result<()> {
+        resolution::propose_resolution(ctx, sequence, outcome, reason_digest, evidence_digest)
+    }
+    pub fn approve_resolution(ctx: Context<ReviewResolution>, sequence: u64, expected: ProposalFingerprint) -> Result<()> {
+        resolution::approve_resolution(ctx, sequence, expected)
+    }
+    pub fn reject_resolution(ctx: Context<ReviewResolution>, sequence: u64, expected: ProposalFingerprint,
+        review_digest: [u8; 32]) -> Result<()> {
+        resolution::reject_resolution(ctx, sequence, expected, review_digest)
+    }
+    pub fn claim_resolution(ctx: Context<ClaimResolution>, seat_index: u32) -> Result<()> {
+        resolution::claim_resolution(ctx, seat_index)
+    }
+    pub fn finalize_resolution(ctx: Context<FinalizeResolution>) -> Result<()> {
+        resolution::finalize_resolution(ctx)
+    }
 
     pub fn create_book(ctx: Context<CreateBook>) -> Result<()> {
         book_bootstrap::create_book(ctx)

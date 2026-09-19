@@ -253,11 +253,16 @@ pub struct PlaceOrder<'info> {
     /// CHECK: canonical PDA/owner plus exact tag, size/alignment/domain below.
     #[account(mut, seeds = [b"order_book", market.key().as_ref()], bump, owner = crate::ID)]
     pub book: UncheckedAccount<'info>,
+    #[account(seeds = [crate::resolution::RESOLUTION_SEED, market.key().as_ref()], bump,
+        constraint = resolution.market == market.key().to_bytes())]
+    pub resolution: Account<'info, crate::resolution::ResolutionState>,
 }
 
 pub fn place_order(ctx: Context<PlaceOrder>, args: PlaceOrderArgs) -> Result<()> {
     let market_key = ctx.accounts.market.key();
     let now = Clock::get()?.unix_timestamp;
+    crate::resolution::require_anchor_order_admission(&ctx.accounts.resolution, market_key,
+        &mut ctx.accounts.market, now).map_err(|_| error!(ExchangeError::Closed))?;
     let mut data = ctx.accounts.book.try_borrow_mut_data()?;
     require!(data.len() == BOOK_BYTES && data[..8] == BOOK_TAG, ExchangeError::InvalidBook);
     let ptr = data[8..].as_mut_ptr();

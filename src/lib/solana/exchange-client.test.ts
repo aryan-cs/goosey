@@ -72,7 +72,7 @@ describe("exchange instruction ABI", () => {
     expect(bytes.readBigUInt64LE(24)).toBe(7n);
     expect([...bytes.subarray(32)]).toEqual([0, 0, 0, 0, 0, 0, 0]);
     expect(plan.instruction.accounts.map(m => [m.address, m.role])).toEqual([
-      [wallet.address, 2], [plan.config, 0], [plan.market, 1], [seats, 1], [plan.locator, 0], [plan.vault, 0], [plan.book, 1],
+      [wallet.address, 2], [plan.config, 0], [plan.market, 1], [seats, 1], [plan.locator, 0], [plan.vault, 0], [plan.book, 1], [plan.resolution, 0],
     ]);
     expect(getSignersFromInstruction(plan.instruction)).toEqual([wallet]);
   });
