@@ -23,7 +23,10 @@ minted and supply counters were independently observed as zero through the live
 application `/api/solana/status`. The status is `foundation_verified`, **not**
 on-chain web trading readiness. Following the backed-up additive SQLite upgrade,
 browser capability is enabled for the explicit loopback RPC origin; the CSP permits
-that exact origin. The wallet interface and economic web cutover remain unfinished.
+that exact origin. The wallet interface now has isolated funded-browser evidence
+for actual claims, transfers and lost-response recovery; see
+`wallet-browser-verification.md`. The main catalog economic cutover remains
+unfinished. This retained instance still has no participant funding or markets.
 Runtime bindings reside only in ignored
 local environment configuration; neither keys nor ledger files belong in Git.
 
