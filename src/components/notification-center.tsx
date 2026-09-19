@@ -14,7 +14,8 @@ export function NotificationCenter() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState<"all" | string | null>(null);
-  const unreadCount = items.filter((item) => !item.readAt).length;
+  // The API returns only the most recent page; older unread items still count.
+  const [unreadCount, setUnreadCount] = useState(0);
   async function load() {
     setLoading(true); setError(null);
     try {
@@ -22,6 +23,7 @@ export function NotificationCenter() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error?.message ?? "Notifications could not be loaded.");
       setItems(data.items ?? []);
+      setUnreadCount(data.unreadCount ?? 0);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Notifications could not be loaded."); }
     finally { setLoading(false); }
   }
@@ -32,6 +34,7 @@ export function NotificationCenter() {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data?.error?.message ?? "Notifications could not be loaded.");
         setItems(data.items ?? []);
+        setUnreadCount(data.unreadCount ?? 0);
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
@@ -45,8 +48,10 @@ export function NotificationCenter() {
     setStatus(null); setBusy("all");
     try {
       const response = await apiFetch("/api/notifications", { method: "PATCH", credentials: "same-origin" });
-      if (response.ok) { setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() }))); setStatus("All caught up."); }
+      if (response.ok) { setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() }))); setUnreadCount(0); setStatus("All caught up."); }
       else setStatus("Could not mark notifications as read. Try again.");
+    } catch {
+      setStatus("Could not mark notifications as read. Check your connection and try again.");
     } finally { setBusy(null); }
   }
   async function markOne(id: string) {
@@ -54,8 +59,13 @@ export function NotificationCenter() {
     setBusy(id); setStatus(null);
     try {
       const response = await apiFetch(`/api/notifications/${id}`, { method: "PATCH", credentials: "same-origin" });
-      if (response.ok) setItems((current) => current.map((entry) => entry.id === id ? { ...entry, readAt: new Date().toISOString() } : entry));
+      if (response.ok) {
+        setItems((current) => current.map((entry) => entry.id === id ? { ...entry, readAt: new Date().toISOString() } : entry));
+        setUnreadCount((current) => Math.max(0, current - 1));
+      }
       else setStatus("Could not update that notification. Try again.");
+    } catch {
+      setStatus("Could not update that notification. Check your connection and try again.");
     } finally { setBusy(null); }
   }
   if (loading) return <LoadingState rows={5} label="Loading notifications" />;
