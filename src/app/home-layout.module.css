@@ -1,0 +1,33 @@
+.home:global(.page-shell) { padding-top: 104px; }
+.home :global(.hero-intro) { min-height: 0; gap: 12px; padding-bottom: 16px; }
+.home :global(.hero-mark) { display: none; }
+.home :global(.hero-copy) { width: min(100%, 1060px); }
+.home :global(.hero-intro h1) { font-size: clamp(40px, 4.1vw, 56px); line-height: 1.04; }
+.home :global(.hero-intro > .hero-copy > p) { max-width: 1000px; margin-top: 12px; font-size: 16px; line-height: 23px; }
+.home :global(.hero-actions) { margin-top: 16px; }
+.home :global(.hero-actions .button) { min-height: 44px; }
+.home :global(.field-note) { min-height: 24px; }
+.home :global(.field-note p) { display: none; }
+.home :global(.market-canvas) { padding: 16px 24px; }
+.home :global(.market-canvas) > :first-child { min-height: 60px; margin-bottom: 12px; }
+.home :global(.market-canvas) > :first-child a { min-height: 44px; }
+.home :global(.market-canvas .section-heading) { margin-bottom: 8px; }
+.home :global(.market-canvas .section-heading h2) { font-size: 28px; }
+.home :global(.market-card) { padding: 16px; }
+.home :global(.market-card .market-title-link h3) { min-height: 44px; margin-block: 8px; }
+.home :global(.market-primary) { min-height: 66px; margin-block: 10px; padding-block: 8px; }
+.home :global(.outcome-actions a), .home :global(.market-card .icon-button) { min-height: 44px; }
+.home :global(.market-card .icon-button) { min-width: 44px; }
+.home :global(.home-main), .home :global(.home-layout) { gap: 32px; }
+.home :global(.dense-market-section) { margin-top: 32px; }
+
+@media (max-width: 809.98px) {
+  .home:global(.page-shell) { padding-top: 88px; }
+  .home :global(.hero-intro) { gap: 18px; padding: 0 20px 24px; }
+  .home :global(.hero-intro h1) { font-size: clamp(34px, 8.8vw, 44px); line-height: 1.05; }
+  .home :global(.hero-intro > .hero-copy > p) { font-size: 16px; line-height: 23px; }
+  .home :global(.hero-actions) { margin-top: 18px; }
+  .home :global(.field-note p) { font-size: 13px; line-height: 18px; }
+  .home :global(.market-canvas) { padding: 20px; }
+  .home :global(.home-main), .home :global(.home-layout) { gap: 28px; }
+}

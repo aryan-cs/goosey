@@ -1,4 +1,5 @@
 import Link from "next/link";
+import styles from "./home-layout.module.css";
 import { MarketCanvasToolbar } from "@/components/market-canvas-toolbar";
 import { ArrowRight, Radio, Sparkles, Trophy, Users } from "lucide-react";
 import { FeatherIcon, GooseMark } from "@/components/brand";
@@ -30,7 +31,7 @@ export default async function HomePage() {
   const rest = summaries.slice(3);
 
   return (
-    <div className="page-shell home-page">
+    <div className={`page-shell home-page ${styles.home}`}>
       <section className="hero-intro">
         <div className="hero-mark" aria-hidden="true"><GooseMark /></div>
         <div className="hero-copy">

@@ -721,3 +721,27 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .mobile-more-panel, .compact-plot .probability-tooltip { background: var(--panel-glass); -webkit-backdrop-filter: blur(48px); backdrop-filter: blur(48px); }
 }
+
+/* Shared single-line controls: pill silhouettes and balanced nested insets. */
+:root { --radius-control: 999px; --control-inset: 4px; }
+.button, .icon-button, .balance-chip, .yes-pill, .no-pill,
+.market-category-grid a, .mobile-more-panel nav a,
+.market-filters label, .search-hero-form, .quantity-input, .input-with-icon,
+.quick-values button, .side-grid button, .filter-chip,
+.segmented, .segmented button, .range-tabs, .range-tabs button,
+.outcome-actions, .outcome-actions a {
+  border-radius: var(--radius-control);
+}
+.segmented, .range-tabs, .outcome-actions {
+  padding: var(--control-inset);
+  gap: var(--control-inset);
+}
+.stacked-form input:not([type="checkbox"]):not([type="radio"]),
+.stacked-form select, .order-entry-form > input,
+.market-filters select { border-radius: var(--radius-control); }
+.input-with-icon > svg { margin-left: 16px; }
+.input-with-icon button { flex: none; width: 44px; margin-right: 2px; border-radius: 50%; }
+.search-hero-form { padding: 8px; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 4px; }
+.search-hero-form > svg { justify-self: center; }
+.search-hero-form { min-height: 62px; }
+.search-hero-form input { height: 44px; min-width: 0; }
