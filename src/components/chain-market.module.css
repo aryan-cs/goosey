@@ -1,0 +1,28 @@
+.page { max-width: 1240px; margin: 0 auto; display: grid; gap: 24px; }
+.header { display: grid; gap: 12px; }
+.header h1, .question { font-size: clamp(28px, 4vw, 44px); line-height: 1.15; margin: 0; overflow-wrap: anywhere; }
+.header p { color: var(--ink-muted); margin: 0; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
+.column { min-width: 0; display: grid; gap: 20px; }
+.metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.metrics > div { display: grid; gap: 6px; background: var(--surface-sunken); padding: 16px; border-radius: var(--radius-sm); min-width: 0; }
+.metrics span { color: var(--ink-muted); font-size: 13px; }
+.metrics strong { font-size: 22px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.toggle { display: flex; background: var(--surface-sunken); padding: 4px; border-radius: var(--radius-control); gap: 4px; }
+.toggle button { flex: 1; border: 0; background: transparent; color: var(--ink-muted); min-height: 44px; padding: 8px 16px; border-radius: var(--radius-control); font: inherit; font-weight: 650; }
+.toggle button[aria-pressed=true] { background: var(--surface-raised); color: var(--ink); }
+.book { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.book th { font-size: 12px; color: var(--ink-muted); font-weight: 500; }
+.book th, .book td { padding: 12px 0; text-align: right; }
+.book th:first-child, .book td:first-child { text-align: left; }
+.book tr + tr td { border-top: 1px solid var(--border-subtle); }
+.book caption { text-align: left; font-weight: 650; padding-bottom: 8px; }
+.orders { display: grid; gap: 12px; padding: 0; margin: 0; list-style: none; }
+.orders li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px; background: var(--surface-sunken); border-radius: var(--radius-sm); }
+.orders li > div { display: grid; gap: 6px; }
+.orders small { color: var(--ink-muted); }
+.rules { display: grid; gap: 16px; }
+.rules p { white-space: pre-line; overflow-wrap: anywhere; }
+.rules a { overflow-wrap: anywhere; }
+.review { scroll-margin-top: 110px; }
+@media(max-width:800px) { .layout { grid-template-columns: minmax(0,1fr); } .page { gap: 20px; } }
