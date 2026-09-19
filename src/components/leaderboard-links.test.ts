@@ -17,6 +17,13 @@ describe("leaderboard profile navigation", () => {
       expect(html).toContain("1,000");
     }
   });
+  it("shows the leaderboard total only once when an available balance is supplied", () => {
+    const html = renderToStaticMarkup(React.createElement(LeaderboardRow, {
+      user: { ...user, score: 1_426, availableBalance: 1_426 },
+    }));
+    expect(html).toContain("1,426");
+    expect(html).not.toContain("available");
+  });
   it("gives every podium place a stable leaderboard anchor regardless of profile visibility", () => {
     const users = [
       { ...user, id: "first", rank: 1, profilePublic: true },
