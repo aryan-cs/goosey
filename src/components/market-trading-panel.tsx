@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, X } from "lucide-react";
 import { TradeTicket, type TradeTicketProps } from "./trade-ticket";
 
 type Outcome = "YES" | "NO";
 type TradeEntryDetail = { outcome: Outcome; trigger: HTMLElement };
 
-export function MarketTradeLink({ outcome, probability, className }: { outcome: Outcome; probability: number; className: string }) {
+export function MarketTradeLink({ outcome, probability, className, children }: { outcome: Outcome; probability: number; className: string; children?: ReactNode }) {
   const label = outcome === "YES" ? "Yes" : "No";
   return (
     <a
@@ -19,7 +19,7 @@ export function MarketTradeLink({ outcome, probability, className }: { outcome: 
         window.dispatchEvent(new CustomEvent<TradeEntryDetail>("goosey:open-trade", { detail: { outcome, trigger: event.currentTarget } }));
       }}
     >
-      Trade {outcome}
+      {children ?? `Trade ${outcome}`}
     </a>
   );
 }

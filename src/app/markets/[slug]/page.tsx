@@ -1,3 +1,4 @@
+import { ForecastChoices } from "@/components/forecast-choices";
 import { TradeActivityDetails } from "@/components/trade-activity-details";
 import Link from "next/link";
 import { z } from "zod";
@@ -8,7 +9,7 @@ import { Bookmark, CalendarClock, ChevronRight, Share2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { formatFeathers, marketProbabilityBps } from "@/lib/view-models";
 import { ProbabilityChart } from "@/components/market";
-import { MarketTradeLink, MarketTradingPanel } from "@/components/market-trading-panel";
+import { MarketTradingPanel } from "@/components/market-trading-panel";
 import { CommentSection } from "@/components/comments";
 import { WatchlistButton } from "@/components/watchlist-button";
 import { ShareButton } from "@/components/share-button";
@@ -47,7 +48,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
         </header>
 
         <ProbabilityChart points={points} marketSlug={market.slug} label="YES probability" height={330} />
-        <section className="chance-panel" aria-labelledby="chance-heading"><div className="section-heading"><div><span className="eyebrow">YES or NO</span><h2 id="chance-heading">Current forecast</h2></div></div><div className="chance-row"><span>YES</span><strong>{(yesBps / 100).toFixed(0)}%</strong>{orderBookMarket ? <a className="yes-pill" href="#order-book">Trade YES</a> : <MarketTradeLink className="yes-pill" outcome="YES" probability={Math.round(yesBps / 100)} />}<span className="muted-copy">Pays 100 feathers</span></div><div className="chance-row"><span>NO</span><strong>{((10_000 - yesBps) / 100).toFixed(0)}%</strong>{orderBookMarket ? <a className="no-pill" href="#order-book">Trade NO</a> : <MarketTradeLink className="no-pill" outcome="NO" probability={Math.round((10_000 - yesBps) / 100)} />}<span className="muted-copy">Pays 100 feathers</span></div></section>
+        <ForecastChoices yesBps={yesBps} orderHrefs={orderBookMarket ? { YES: "#order-book", NO: "#order-book" } : undefined} />
 
         <section className="market-copy"><span className="eyebrow">About this market</span><h2>What to know</h2><p>{market.description}</p></section>
         <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow">How it is decided</span><h2 id="rules-heading">Market rules</h2></div></div><p>{market.rules}</p><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>100 feathers</dd></div></dl></section>
