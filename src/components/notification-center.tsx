@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import { EmptyState, LoadingState } from "./states";
 import { apiFetch } from "@/lib/client-api";
 import {
@@ -177,8 +177,8 @@ export function NotificationCenter() {
   return <section className="notification-panel" aria-busy={Boolean(busy)}>
     <div className={styles.header}><h2>Recent updates</h2>
       <div className={styles.actions}>
-      <button type="button" className="button button-secondary" disabled={Boolean(busy)} onClick={() => void refresh("replace")}>{busy === "replace" ? "Refreshing…" : "Refresh updates"}</button>
-      {!feed.signedOut && <button type="button" className="button button-secondary" disabled={!feed.unreadCount || Boolean(busy)} onClick={() => void mark()}><CheckCheck /> {feed.unreadCount ? "Mark all read" : "All read"}</button>}
+      <button type="button" className={styles.iconButton} disabled={Boolean(busy)} onClick={() => void refresh("replace")} aria-label={busy === "replace" ? "Refreshing notifications" : "Refresh notifications"} title="Refresh notifications"><RefreshCw className={busy === "replace" ? styles.spinning : undefined} aria-hidden="true" /></button>
+      {!feed.signedOut && <button type="button" className={styles.iconButton} disabled={!feed.unreadCount || Boolean(busy)} onClick={() => void mark()} aria-label={feed.unreadCount ? "Mark all notifications as read" : "All notifications are read"} title={feed.unreadCount ? "Mark all as read" : "All notifications are read"}><CheckCheck aria-hidden="true" /></button>}
       </div>
     </div>
     {error && <p className="form-error" role="alert">{error} <button type="button" className="button button-ghost" disabled={Boolean(busy)} onClick={() => void refresh("replace")}>Retry refresh</button></p>}
