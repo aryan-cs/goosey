@@ -27,7 +27,7 @@ vi.mock("@/lib/serializable-transaction", () => ({
   ),
 }));
 
-import { getLeaderboardRows, getLeaderboardPage } from "./leaderboard";
+import { getLeaderboardRows, getLeaderboardPage, searchLeaderboardPlayers } from "./leaderboard";
 
 function user(id: string, username: string) {
   return {
@@ -232,6 +232,22 @@ describe("leaderboard reserved cash", () => {
     expect(last.rows.at(-1)?.rank).toBe(123);
     expect(new Set([...first.rows,...second.rows,...last.rows].map(p => p.userId)).size).toBe(123);
     expect((await getLeaderboardPage(9999,50)).page).toBe(3);
+  });
+
+  it("searches every ranked page and prioritizes exact usernames", async () => {
+    const players = Array.from({ length: 120 }, (_, index) => ({
+      ...user(`id_${index}`, index === 87 ? "bubbly" : `player_${String(index).padStart(3, "0")}`),
+      displayName: index === 12 ? "Bubbly Forecasts" : `Player ${index}`,
+    }));
+    mocks.users.mockResolvedValue(players);
+    mocks.wallets.mockResolvedValue(players.map((player, index) => ({ ownerId: player.id, balanceMilli: BigInt(1_000_000 - index) })));
+    mocks.grants.mockResolvedValue([]);
+    mocks.activity.mockResolvedValue(new Map(players.map(player => [player.id, { trades: 0, marketsTraded: 0 }])));
+
+    const matches = await searchLeaderboardPlayers("@BUBBLY", 8, 50);
+
+    expect(matches[0]).toMatchObject({ userId: "id_87", username: "bubbly", rank: 88, page: 2 });
+    expect(matches[1]).toMatchObject({ userId: "id_12", displayName: "Bubbly Forecasts", rank: 13, page: 1 });
   });
 
 });

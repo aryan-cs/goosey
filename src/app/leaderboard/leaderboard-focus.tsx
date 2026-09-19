@@ -17,14 +17,14 @@ export function LeaderboardFocus({ focusKey }: { focusKey: string }) {
     let frame = 0;
 
     const locate = () => {
-      const id = decodeURIComponent(window.location.hash.slice(1));
+      let id = "";
+      try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
       if (!id.startsWith("player-")) return;
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         const target = document.getElementById(id);
         if (!target) return;
-        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        centerLeaderboardTarget(target, reduceMotion);
+        centerLeaderboardTarget(target, window.matchMedia("(prefers-reduced-motion: reduce)").matches);
         window.clearTimeout(highlightTimer);
         highlightTimer = window.setTimeout(() => target.classList.remove(styles.highlighted), 1_800);
       });

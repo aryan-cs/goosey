@@ -50,6 +50,36 @@ export async function getLeaderboardRows(limit = 50) {
   return (await loadRankedPlayers()).slice(0, limit);
 }
 
+export async function searchLeaderboardPlayers(query: string, limit = 8, pageSize = 50) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new RangeError("Invalid leaderboard search.");
+  }
+  const needle = query.trim().replace(/^@/, "").toLocaleLowerCase("en-CA");
+  if (!needle || needle.length > 64) throw new RangeError("Invalid leaderboard search.");
+
+  const matchRank = (username: string, displayName: string) => {
+    const normalizedUsername = username.toLocaleLowerCase("en-CA");
+    const normalizedDisplayName = displayName.toLocaleLowerCase("en-CA");
+    if (normalizedUsername === needle) return 0;
+    if (normalizedDisplayName === needle) return 1;
+    if (normalizedUsername.startsWith(needle)) return 2;
+    if (normalizedDisplayName.startsWith(needle)) return 3;
+    return 4;
+  };
+
+  return (await loadRankedPlayers())
+    .filter((player) => player.username.toLocaleLowerCase("en-CA").includes(needle) || player.displayName.toLocaleLowerCase("en-CA").includes(needle))
+    .sort((left, right) => matchRank(left.username, left.displayName) - matchRank(right.username, right.displayName) || left.rank - right.rank)
+    .slice(0, limit)
+    .map((player) => ({
+      userId: player.userId,
+      username: player.username,
+      displayName: player.displayName,
+      rank: player.rank,
+      page: Math.ceil(player.rank / pageSize),
+    }));
+}
+
 /** One consistent valuation snapshot, ranked before slicing across pages. */
 export async function getLeaderboardPage(requestedPage = 1, pageSize = 50, viewerId?: string, focusViewer = false) {
   if (!Number.isSafeInteger(requestedPage) || requestedPage < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {

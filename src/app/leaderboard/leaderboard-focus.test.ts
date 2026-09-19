@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { centerLeaderboardTarget } from "./leaderboard-focus";
 
-describe("leaderboard viewer locator", () => {
+describe("leaderboard player locator", () => {
   it("centers, focuses, and highlights the target", () => {
     const scrollIntoView = vi.fn();
     const focus = vi.fn();

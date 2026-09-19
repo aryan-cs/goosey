@@ -23,6 +23,10 @@ vi.mock("@/components/live-page-refresh", () => ({
   LivePageRefresh: () => null,
 }));
 
+vi.mock("./leaderboard-search", () => ({
+  LeaderboardSearch: () => React.createElement("input", { placeholder: "Search people" }),
+}));
+
 vi.mock("@/components/data-primitives", () => ({
   LeaderboardPodium: ({ users }: { users: Array<{ id: string; rank: number }> }) => React.createElement(
     "div",
@@ -107,7 +111,7 @@ describe("leaderboard podium and paginated standings", () => {
     expect(html).not.toContain('aria-label="Leaderboard standings"');
   });
 
-  it("makes the whole ranking card the only control for locating the viewer", async () => {
+  it("makes the ranking summary locate the viewer and puts search in the old button position", async () => {
     mocks.getServerUser.mockResolvedValueOnce({ id: "player-53" });
     mocks.getLeaderboardPage.mockResolvedValueOnce({
       rows: Array.from({ length: 50 }, (_, index) => row(index + 1)),
@@ -118,11 +122,12 @@ describe("leaderboard podium and paginated standings", () => {
     });
 
     const html = await render(1);
-    const card = html.match(/<a[^>]*href="\/leaderboard\?focus=me#player-player-53"[^>]*>([\s\S]*?)<\/a>/);
+    const card = html.match(/<a[^>]*href="\/leaderboard\?page=2&amp;focus=player-53#player-player-53"[^>]*>([\s\S]*?)<\/a>/);
 
     expect(card).not.toBeNull();
     expect(card![1]).toContain("Your ranking");
     expect(card![1]).toContain("#53");
+    expect(html).toContain('placeholder="Search people"');
     expect(html).not.toContain("Find me in the list");
   });
 
@@ -136,7 +141,7 @@ describe("leaderboard podium and paginated standings", () => {
       viewer: row(2),
     });
     const podiumPage = await render(1);
-    expect(podiumPage).toContain('href="/leaderboard?focus=me#player-player-2"');
+    expect(podiumPage).toContain('href="/leaderboard?page=1&amp;focus=player-2#player-player-2"');
     expect(podiumPage).toContain('id="player-player-2"');
 
     mocks.getLeaderboardPage.mockResolvedValueOnce({
@@ -147,7 +152,7 @@ describe("leaderboard podium and paginated standings", () => {
       viewer: row(53),
     });
     const secondPage = await render(2);
-    expect(secondPage).toContain('href="/leaderboard?focus=me#player-player-53"');
+    expect(secondPage).toContain('href="/leaderboard?page=2&amp;focus=player-53#player-player-53"');
     expect(secondPage).toContain('id="player-player-53"');
   });
 });
