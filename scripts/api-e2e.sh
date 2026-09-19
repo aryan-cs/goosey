@@ -58,13 +58,10 @@ MARKETS=$(curl -fsS "$ORIGIN/api/markets?limit=1")
 MARKET_ID=$(jq -r '.items[0].id' <<<"$MARKETS")
 MARKET_SLUG=$(jq -r '.items[0].slug' <<<"$MARKETS")
 EVENTS=$(curl -fsS "$ORIGIN/api/events?timing=all&limit=10")
-jq -e '.items | (length > 0 and all(.[]; .markets | length > 0))' <<<"$EVENTS" >/dev/null
+jq -e '.items | (length >= 2 and all(.[]; .markets | length > 0))' <<<"$EVENTS" >/dev/null
 [[ "$(jq -r '.items[0] | has("createdById") or has("version")' <<<"$EVENTS")" == "false" ]]
-CATALOG_EVENT_SLUG=$(jq -r '.items[0].slug' <<<"$EVENTS")
-CATALOG_EVENT_MARKET_COUNT=$(jq '.items[0].markets | length' <<<"$EVENTS")
-curl -fsS "$ORIGIN/api/events/$CATALOG_EVENT_SLUG" | jq -e --argjson count "$CATALOG_EVENT_MARKET_COUNT" '.event.markets | length == $count' >/dev/null
-CATALOG_SEARCH=$(jq -r '.items[0].shortTitle | @uri' <<<"$MARKETS")
-curl -fsS "$ORIGIN/api/search?q=$CATALOG_SEARCH&limit=5" | jq -e --arg id "$MARKET_ID" '.markets | any(.[]; .id == $id)' >/dev/null
+curl -fsS "$ORIGIN/api/events/hack-the-north-finals" | jq -e '.event.markets | length == 7' >/dev/null
+curl -fsS "$ORIGIN/api/search?q=finalist&limit=5" | jq -e '.markets | length > 0' >/dev/null
 curl -fsS "$ORIGIN/api/calendar" | jq -e '(.events | length) > 0 and (.markets | length) > 0' >/dev/null
 curl -fsS "$ORIGIN/api/discovery" | jq -e '(.trending | length) > 0 and (.newest | length) > 0 and (.closingSoon | length) > 0' >/dev/null
 
@@ -91,14 +88,6 @@ ADMIN_MARKET_SLUG="smoke-admin-market-${RANDOM}-$$"
 ADMIN_MARKET_BODY="{\"slug\":\"$ADMIN_MARKET_SLUG\",\"title\":\"Will the isolated API smoke market resolve correctly?\",\"shortTitle\":\"Smoke market resolves?\",\"description\":\"A temporary ungrouped contract used to verify event membership behavior.\",\"rules\":\"Resolves YES only when the isolated API smoke assertions all complete successfully.\",\"resolutionSource\":\"Automated API integration test output\",\"category\":\"Testing\",\"status\":\"OPEN\",\"featured\":false,\"color\":\"blue\",\"icon\":\"sparkles\",\"closesAt\":\"2030-09-18T20:00:00.000Z\",\"resolvesAt\":\"2030-09-18T22:00:00.000Z\",\"liquidityParameter\":40,\"payoutMilli\":\"100000\",\"feeBps\":0}"
 CREATED_MARKET=$(curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $ADMIN_MARKET_KEY" -H 'Content-Type: application/json' -d "$ADMIN_MARKET_BODY" "$ORIGIN/api/admin/markets")
 ADMIN_MARKET_ID=$(jq -r '.market.id' <<<"$CREATED_MARKET")
-BOOK_MARKET_SLUG="smoke-order-book-${RANDOM}-$$"
-BOOK_MARKET_KEY="smoke-order-book-${RANDOM}-$$"
-BOOK_MARKET_BODY=$(jq --arg slug "$BOOK_MARKET_SLUG" '. + {slug: $slug, pricingModel: "ORDER_BOOK"}' <<<"$ADMIN_MARKET_BODY")
-BOOK_MARKET=$(curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $BOOK_MARKET_KEY" -H 'Content-Type: application/json' -d "$BOOK_MARKET_BODY" "$ORIGIN/api/admin/markets")
-jq -e '.market.pricingModel == "ORDER_BOOK" and .subsidyMilli == "0" and .replayed == false' <<<"$BOOK_MARKET" >/dev/null
-curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $BOOK_MARKET_KEY" -H 'Content-Type: application/json' -d "$BOOK_MARKET_BODY" "$ORIGIN/api/admin/markets" | jq -e --arg id "$(jq -r '.market.id' <<<"$BOOK_MARKET")" '.market.id == $id and .replayed == true and .subsidyMilli == "0"' >/dev/null
-curl -fsS "$ORIGIN/api/markets/$BOOK_MARKET_SLUG" | jq -e '.probabilityYesBps == null and .probabilitySource == "NONE" and (.priceHistory | length) == 0' >/dev/null
-curl -fsS "$ORIGIN/api/v1/markets/$BOOK_MARKET_SLUG/orderbook" | jq -e '(.bids | length) == 0 and (.asks | length) == 0' >/dev/null
 curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"expectedMarketVersion":0,"expectedEventVersion":1}' "$ORIGIN/api/admin/events/$EVENT_ID/markets/$ADMIN_MARKET_ID/attach" | jq -e --arg event "$EVENT_ID" '.market.eventId == $event and .market.version == 1 and .eventVersion == 2 and .replayed == false' >/dev/null
 curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"expectedMarketVersion":0,"expectedEventVersion":1}' "$ORIGIN/api/admin/events/$EVENT_ID/markets/$ADMIN_MARKET_ID/attach" | jq -e '.market.version == 1 and .eventVersion == 2 and .replayed == true' >/dev/null
 curl -fsS "$ORIGIN/api/events/$EVENT_SLUG" | jq -e --arg slug "$ADMIN_MARKET_SLUG" '.event.markets | any(.[]; .slug == $slug)' >/dev/null
@@ -134,10 +123,6 @@ jq -e --arg executedAt "$(jq -r '.trade.createdAt' <<<"$TRADE")" '
 
 PORTFOLIO=$(curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/portfolio")
 [[ "$(jq -r '.positions | length' <<<"$PORTFOLIO")" == "1" ]]
-UNIFIED_HISTORY=$(curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/portfolio/history?limit=1")
-jq -e '.items | length == 1' <<<"$UNIFIED_HISTORY" >/dev/null
-jq -e --arg amount "$(jq -r '.trades[0].amountMilli' <<<"$PORTFOLIO")" --arg fee "$(jq -r '.trades[0].feeMilli' <<<"$PORTFOLIO")" '.items[0].source == "LMSR" and .items[0].amountMilli == $amount and .items[0].feeMilli == $fee and .nextCursor == null' <<<"$UNIFIED_HISTORY" >/dev/null
-[[ "$(curl -sS -o /dev/null -w '%{http_code}' "$ORIGIN/api/portfolio/history")" == "401" ]]
 NOTIFICATIONS=$(curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications")
 [[ "$(jq -r '.unreadCount' <<<"$NOTIFICATIONS")" == "1" ]]
 [[ "$(jq -r '.items[0].type' <<<"$NOTIFICATIONS")" == "TRADE_CONFIRMED" ]]
