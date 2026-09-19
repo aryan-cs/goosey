@@ -95,7 +95,6 @@ export function SearchExperience({ initialQuery = "", syncUrl = true }: { initia
 
     <div className="search-feedback" aria-live="polite">
       {query.trim().length === 1 && <p>Type one more letter to search.</p>}
-      {!query.trim() && <p>Try a market topic, an event, or someone&apos;s name.</p>}
       {status === "loading" && <><span className="sr-only">Searching</span><SearchSkeleton /></>}
       {status === "error" && <div className="search-error" role="alert"><p>Search did not load. Give it another try.</p><button className="button button-secondary" type="button" onClick={() => { setStatus("loading"); setRetry((value) => value + 1); }}>Try again</button></div>}
       {status === "ready" && count === 0 && <div className="search-empty"><Search /><h2>No matches for “{results?.query}”</h2><p>Try a shorter phrase or a different spelling.</p></div>}

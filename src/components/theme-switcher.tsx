@@ -20,9 +20,8 @@ export function ThemeSwitcher() {
   }
 
   return (
-    <fieldset className={styles.fieldset} aria-describedby={`${id}-help ${id}-status`}>
+    <fieldset className={styles.fieldset} aria-describedby={`${id}-status`}>
       <legend className={styles.legend}>Theme</legend>
-      <p id={`${id}-help`} className={styles.help}>Changes apply immediately.</p>
       <div className={styles.choices}>
         {choices.map(({ value, label }) => (
           <label key={value} className={styles.choice}>

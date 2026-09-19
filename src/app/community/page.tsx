@@ -20,7 +20,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
   }
   const comments = feed.items;
   return <div className="page-shell community-page">
-    <header className="page-header"><span className="eyebrow">Community</span><h1>What people are saying</h1><p>See what people think about current markets and why.</p></header>
+    <header className="page-header"><span className="eyebrow">Community</span><h1>What people are saying</h1></header>
     {cursor && <p><Link className="button button-secondary" href="/community">Latest discussions</Link></p>}
     {comments.length ? <div className="community-feed">{comments.map((comment) => <article className="community-post" key={comment.id}>
       <header><span className="leader-avatar" aria-hidden="true">{initials(comment.user.displayName)}</span><div><strong><Link href={`/users/${encodeURIComponent(comment.user.username)}`}>{comment.user.displayName}</Link></strong><small>@{comment.user.username} · <time dateTime={comment.createdAt.toISOString()}>{comment.createdAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Toronto" })}</time></small></div></header>

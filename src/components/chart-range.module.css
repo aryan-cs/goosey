@@ -1,5 +1,6 @@
 .ranges {
   position: relative;
+  margin-left: auto;
   isolation: isolate;
   display: grid;
   grid-template-columns: repeat(4, minmax(42px, 1fr));

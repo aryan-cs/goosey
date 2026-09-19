@@ -57,8 +57,8 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
     <section className={`auth-card${register ? ` ${styles.registration}` : ""}`} aria-labelledby="auth-heading">
       <div className="auth-brand"><GooseMark /><span>Goosey</span></div>
       <span className="eyebrow">{register ? "Join Goosey" : "Welcome back"}</span>
-      <h1 id="auth-heading">{register ? "Create your account" : "Pick up where you left off"}</h1>
-      <p>{register ? "Start with 1,000 play-money feathers." : "Sign in to trade, comment, and check your picks."}</p>
+      <h1 id="auth-heading">{register ? "Create your account" : "Sign in"}</h1>
+      {register && <p>Start with 1,000 play-money feathers.</p>}
       <form onSubmit={submit}>
         {register && <label><span>Username</span><div className="input-with-icon"><UserRound /><input autoComplete="username" name="username" required minLength={3} maxLength={24} pattern="[a-zA-Z0-9][a-zA-Z0-9_]{1,22}[a-zA-Z0-9]" title="Use 3–24 letters, numbers, or underscores. Start and end with a letter or number." aria-describedby="username-hint" /></div><small id="username-hint" className="field-hint">3–24 letters, numbers, or underscores. Start and end with a letter or number.</small></label>}
         <label><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" name="email" type="email" required /></div></label>

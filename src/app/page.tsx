@@ -49,7 +49,7 @@ export default async function HomePage() {
         </div>
         <aside className="field-note">
           <Sparkles />
-          <div><strong>Join now and get 1,000 free feathers on us</strong><p>Create an account, make some predictions, and move up the leaderboard.</p></div>
+          <div><strong>Join now and get 1,000 free feathers on us</strong></div>
         </aside>
       </section>
 
@@ -59,7 +59,7 @@ export default async function HomePage() {
           <div className="home-main">
             <section aria-labelledby="featured-heading">
               <div className="section-heading"><div><span className="eyebrow eyebrow-with-icon"><Radio /> Live now</span><h2 id="featured-heading">Featured markets</h2></div></div>
-              {featured.length ? <div className="featured-grid">{featured.map((market, index) => <MarketCard market={market} priority={index === 0} key={market.id} />)}</div> : <EmptyState title="No markets are live yet" description="Check back soon." />}
+              {featured.length ? <div className="featured-grid">{featured.map((market, index) => <MarketCard market={market} priority={index === 0} key={market.id} />)}</div> : <EmptyState title="No markets are live yet" />}
             </section>
 
             <aside className="home-sidebar">
@@ -69,7 +69,7 @@ export default async function HomePage() {
               </section>
               <section className="sidebar-panel" aria-labelledby="activity-preview">
                 <div className="section-heading compact"><h2 id="activity-preview"><Users /> Live activity</h2></div>
-                {recentTrades.length ? <HomeActivity trades={recentTrades} /> : <p className="muted-copy">New trades will show up here.</p>}
+                {recentTrades.length ? <HomeActivity trades={recentTrades} /> : <p className="muted-copy">No trades yet.</p>}
               </section>
             </aside>
 

@@ -55,7 +55,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   return <div className="page-shell portfolio-page">
     <header className="page-header"><span className="eyebrow">Your account</span><h1>Portfolio</h1><p>Estimates include reserved cash, complete-set collateral, and sale proceeds after fees. Order-book estimates assume you cancel your own resting orders first; liquidity can change.</p><Link className="button button-secondary" href="/portfolio/activity">Orders and fills</Link></header>
     <section className="metric-grid"><MetricCard label="Total value" value={<><FeatherIcon /> {formatFeathers(totalValue, 2)}</>} detail="Available + reserved + positions" /><MetricCard label="Available" value={<><FeatherIcon /> {formatFeathers(availableCash, 2)}</>} detail={`Ready to trade · ${formatFeathers(reservedCash, 2)} feathers reserved in orders`} /><MetricCard label="Position value" value={<><FeatherIcon /> {formatFeathers(positionValue, 2)}</>} detail={`${positions.length} open market${positions.length === 1 ? "" : "s"}`} /><MetricCard label="Open profit/loss" value={<><FeatherIcon /> {formatFeathers(unrealized, 2)}</>} trend={cost > 0n ? Number(unrealized * 10_000n / cost) / 100 : 0} /></section>
-    <section><SectionHeader eyebrow="Open positions" title="Positions" description="These values include price changes and fees." />{values.length ? <div className="position-list">{values.map(({ position }) => {
+    <section><SectionHeader eyebrow="Open positions" title="Positions" />{values.length ? <div className="position-list">{values.map(({ position }) => {
       const sideValues = valuations.get(position.id)!;
       const probability = sideValues.probabilityYesBps === null ? null : sideValues.probabilityYesBps / 100;
       const completeSets = Math.min(position.yesShares - position.reservedYesShares, position.noShares - position.reservedNoShares);
@@ -70,7 +70,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
       const redeemable = completeSets > 0 && position.market.resolution === null && (position.market.status === "OPEN" || position.market.status === "CLOSED");
       const unfilled = sideValues.unfilledYes + sideValues.unfilledNo;
       return <Fragment key={position.id}>{sides}{unfilled > 0 && <p className="muted-copy">{position.market.shortTitle}: {unfilled} contracts are not currently executable and contribute no sale proceeds to this estimate.</p>}{redeemable ? <RedemptionForm marketSlug={position.market.slug} marketVersion={position.market.version} maxQuantity={completeSets} payoutMilli={position.market.payoutMilli.toString()} /> : null}</Fragment>;
-    })}</div> : <EmptyState title="No open positions" description="Your positions will show up here after your first trade." action={<Link className="button button-primary" href="/markets">Find a market</Link>} />}</section>
+    })}</div> : <EmptyState title="No open positions" action={<Link className="button button-primary" href="/markets">Find a market</Link>} />}</section>
     <section><SectionHeader eyebrow="Activity" title="Trade history" description="Your market-maker trades and order-book fills, newest first. Amounts exclude the separately shown fee; times are Eastern." /><TradeHistory history={history} olderPage={Boolean(cursor)} invalidCursor={invalidCursor} /></section>
   </div>;
 }

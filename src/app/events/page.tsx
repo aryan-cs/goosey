@@ -25,7 +25,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   if (query.category) next.set("category", query.category);
   if (result.nextCursor) next.set("cursor", result.nextCursor);
   return <div className={`page-shell ${styles.page}`}>
-    <header><p className={styles.eyebrow}>THE BIGGER PICTURE</p><h1>Events</h1><p>One weekend. Many outcomes. Explore the questions behind each Waterloo moment.</p></header>
+    <header><h1>Events</h1></header>
     <form action="/events" className={styles.filters}>
       <label>Event timing<select name="timing" defaultValue={query.timing}><option value="all">All events</option><option value="live">Live</option><option value="upcoming">Upcoming</option><option value="past">Past</option></select></label>
       <label>Category<select name="category" defaultValue={query.category ?? ""}><option value="">All categories</option>{[...new Set([...categories.map((item) => item.category), ...(query.category ? [query.category] : [])])].sort().map((category) => <option key={category}>{category}</option>)}</select></label>

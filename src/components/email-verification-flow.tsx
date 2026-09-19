@@ -163,7 +163,7 @@ export function EmailVerificationFlow() {
   return (
     <section className="auth-card verification-card" aria-labelledby="verification-heading">
       <div className="auth-brand"><GooseMark /><span>Goosey</span></div>
-      {phase === "loading" || phase === "confirming" ? <div className="verification-state" role="status"><LoaderCircle className="spin" /><span className="eyebrow">One moment</span><h1 id="verification-heading">{phase === "confirming" ? "Checking your link" : "Checking your account"}</h1><p>This should only take a second.</p></div>
+      {phase === "loading" || phase === "confirming" ? <div className="verification-state" role="status"><LoaderCircle className="spin" /><span className="eyebrow">One moment</span><h1 id="verification-heading">{phase === "confirming" ? "Checking your link" : "Checking your account"}</h1></div>
       : phase === "success" ? <div className="verification-state" role="status"><CheckCircle2 className="verification-success-icon" /><span className="eyebrow">All set</span><h1 id="verification-heading">You are verified</h1><p>{message}</p></div>
       : <>
         <span className="eyebrow">Almost there</span>

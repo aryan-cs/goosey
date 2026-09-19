@@ -127,7 +127,7 @@ export function TradeTicket({
       <div className="trade-ticket-header"><div><span className="eyebrow">Trade</span><h2 id="trade-ticket-title">Choose YES or NO</h2></div><ShieldCheck aria-label="Trade protected" /></div>
       <p className="trade-market-title">{marketTitle}</p>
       {state === "success" ? (
-        <div className="trade-success" role="status"><CheckCircle2 /><h3>Trade placed</h3><p>Your portfolio is up to date.</p><button className="button button-secondary" onClick={() => edit()}><RotateCcw /> Make another trade</button></div>
+        <div className="trade-success" role="status"><CheckCircle2 /><h3>Trade placed</h3><button className="button button-secondary" onClick={() => edit()}><RotateCcw /> Make another trade</button></div>
       ) : <>
         <div className="segmented" aria-label="Trade action">{(["BUY", "SELL"] as Action[]).map((value) => <button aria-pressed={action === value} className={action === value ? "active" : ""} onClick={() => edit({ action: value })} key={value}>{value === "BUY" ? "Buy" : "Sell"}</button>)}</div>
         <div className="side-grid" aria-label="Contract side">
