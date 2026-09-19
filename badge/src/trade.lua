@@ -114,13 +114,13 @@ end
 function T.pairing_challenge() return T.phase=="account" and accountState=="LINK" and lastRx and badge.sys.ms()-lastRx<35000 and challenge or nil end
 function T.draw(text,wrap,hasQR)
   if T.phase=="account" and fresh() then
-    text(1,"Account linked",10,55,300,22)
+    text(1,"Account Linked",10,55,300,22)
     text(2,"@"..T.name,10,100,300,20)
     text(3,"Balance "..money(T.balance),10,138,300,18)
     text(4,"A: continue   B: markets",10,205,300,14)
   elseif T.phase=="account" then
     if hasQR then
-      text(1,"Scan to sign in",10,47,300,18,"center")
+      text(1,"Scan to Sign In",10,47,300,18,"center")
       text(2,"Use your phone to link Goosey",10,195,300,14,"center")
     else
       text(1,"Reconnecting...",10,110,300,20,"center")
@@ -138,7 +138,7 @@ function T.draw(text,wrap,hasQR)
       text(5,"Confirm trade",10,207,300,18)
     end
   else
-    text(1,T.phase=="pending" and "Trade submitted" or T.phase=="wait" and "Live quote" or "Trade",10,48,300,22)
+    text(1,T.phase=="pending" and "Trade Submitted" or T.phase=="wait" and "Live Quote" or "Trade",10,48,300,22)
     text(2,wrap(T.message,32),10,95,300,18)
     if T.phase=="pending" then text(3,wrap("Keep USB connected. Your balance updates after confirmation.",36),10,165,300,14) end
   end
