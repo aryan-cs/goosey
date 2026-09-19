@@ -1,3 +1,5 @@
+import type { NextRequest } from "next/server";
+import { assertMutationSession } from "@/lib/mutation-session";
 import { createHash } from "node:crypto";
 import { Prisma, type Market, type Position } from "@prisma/client";
 import { z } from "zod";
@@ -12,9 +14,11 @@ import {
   probabilityYesBps,
   quoteTrade,
   requiredCollateralMilli,
+  sellLiquidationValueMilli,
 } from "@/lib/market-maker";
 import { jsonStringify } from "@/lib/serializers";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
+import { notificationFeathers } from "@/lib/order-fill-notification";
 
 export const sideSchema = z.enum(["YES", "NO"]);
 export const actionSchema = z.enum(["BUY", "SELL"]);
@@ -159,6 +163,7 @@ export function isLmsrMarketOpen(
 
 export async function createTradeQuote(input: {
   userId: string;
+  authRequest?: NextRequest;
   marketId: string;
   side: Side;
   action: Action;
@@ -166,7 +171,8 @@ export async function createTradeQuote(input: {
   marketVersion?: number;
 }) {
   await consumeRateLimit(prisma, `quote:${input.userId}`, 60, 60_000);
-  return prisma.$transaction(async (tx) => {
+  return runSerializableTransaction(prisma, async (tx) => {
+    if (input.authRequest) await assertMutationSession(tx, input.authRequest, input.userId);
     await tx.tradeQuote.deleteMany({ where: { expiresAt: { lt: new Date() } } });
     const user = await tx.user.findUnique({ where: { id: input.userId }, select: { role: true, status: true, emailVerifiedAt: true } });
     if (!user || user.status !== "ACTIVE") throw new ApiError(403, "ACCOUNT_INACTIVE", "Account is not active.");
@@ -281,6 +287,7 @@ function positionMutation(
 
 export async function executeTrade(input: {
   userId: string;
+  authRequest?: NextRequest;
   marketId: string;
   quoteId: string;
   marketVersion?: number;
@@ -307,6 +314,7 @@ export async function executeTrade(input: {
   return runSerializableTransaction(
     prisma,
     async (tx) => {
+      if (input.authRequest) await assertMutationSession(tx, input.authRequest, input.userId);
       const existingRequest = await tx.idempotencyRequest.findUnique({
         where: { userId_route_key: { userId: input.userId, route, key: input.idempotencyKey } },
       });
@@ -587,7 +595,7 @@ export async function executeTrade(input: {
           userId: user.id,
           type: "TRADE_CONFIRMED",
           title: `${action === "BUY" ? "Bought" : "Sold"} ${quote.quantity} ${side}`,
-          body: `Your ${market.shortTitle} trade was confirmed at an average of ${quote.averagePriceMilli} milli-feathers per contract.`,
+          body: `Your ${market.shortTitle} trade was confirmed at an average of ${notificationFeathers(quote.averagePriceMilli)} feathers per contract.`,
           href: `/markets/${market.slug}`,
         },
       });
@@ -615,9 +623,10 @@ export async function executeTrade(input: {
 }
 
 export function executablePositionValue(
-  market: Pick<Market, "yesShares" | "noShares" | "liquidityParameter" | "payoutMilli" | "feeBps" | "status" | "resolution">,
+  market: Pick<Market, "yesShares" | "noShares" | "liquidityParameter" | "payoutMilli" | "feeBps" | "status" | "resolution"> & Partial<Pick<Market, "pricingModel">>,
   position: Pick<Position, "yesShares" | "noShares">,
 ): bigint {
+  if (market.pricingModel === "ORDER_BOOK") throw new Error("Order-book holdings require a live-book valuation snapshot.");
   const pairs = Math.min(position.yesShares, position.noShares);
   let value = BigInt(pairs) * market.payoutMilli;
   const remainingYes = position.yesShares - pairs;
@@ -630,7 +639,20 @@ export function executablePositionValue(
   if (market.status === "VOID") {
     return value + (BigInt(remainingYes + remainingNo) * market.payoutMilli) / 2n;
   }
-  if (remainingYes > 0) value += computeQuote(market, "YES", "SELL", remainingYes).netCreditMilli!;
-  if (remainingNo > 0) value += computeQuote(market, "NO", "SELL", remainingNo).netCreditMilli!;
+  if (remainingYes > 0) value += positionSideLiquidationValueMilli(market, "YES", remainingYes);
+  if (remainingNo > 0) value += positionSideLiquidationValueMilli(market, "NO", remainingNo);
   return value;
+}
+
+export function positionSideLiquidationValueMilli(
+  market: Pick<Market, "yesShares" | "noShares" | "liquidityParameter" | "payoutMilli" | "feeBps">,
+  side: Side,
+  quantity: number,
+): bigint {
+  return sellLiquidationValueMilli({
+    yesQuantity: market.yesShares,
+    noQuantity: market.noShares,
+    liquidity: market.liquidityParameter,
+    payoutMilli: market.payoutMilli,
+  }, side, quantity, market.feeBps);
 }

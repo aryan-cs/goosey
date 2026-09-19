@@ -1,3 +1,5 @@
+import type { NextRequest } from "next/server";
+import { assertMutationSession } from "@/lib/mutation-session";
 import { createHash } from "node:crypto";
 
 import { Prisma, type Market, type Position } from "@prisma/client";
@@ -137,6 +139,7 @@ function assertRedeemableMarket(market: Pick<Market, "status" | "resolution">): 
 
 export async function redeemCompleteSet(input: {
   userId: string;
+  authRequest?: NextRequest;
   marketId: string;
   quantity: number;
   marketVersion: number;
@@ -157,6 +160,7 @@ export async function redeemCompleteSet(input: {
   return runSerializableTransaction(
     prisma,
     async (tx) => {
+      if (input.authRequest) await assertMutationSession(tx, input.authRequest, input.userId);
       const existingRequest = await tx.idempotencyRequest.findUnique({
         where: { userId_route_key: { userId: input.userId, route, key: input.idempotencyKey } },
       });

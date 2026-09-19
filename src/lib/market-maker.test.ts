@@ -12,6 +12,7 @@ import {
   quoteSell,
   requiredCollateralMilli,
   settlementPayoutMilli,
+  sellLiquidationValueMilli,
   voidPayoutMilli,
   type MarketMakerState,
   type Outcome,
@@ -62,6 +63,20 @@ describe("LMSR probabilities and cost", () => {
 });
 
 describe("quotes", () => {
+  it("values a legitimately purchased negligible-probability holding at zero without allowing a zero-proceeds sale", () => {
+    const buy = quoteBuy({ yesQuantity: 1_000, noQuantity: 0, liquidity: 40 }, "NO", 1, 100);
+    expect(buy.grossMilli).toBe(1n);
+    expect(sellLiquidationValueMilli(buy.stateAfter, "NO", 1, 100)).toBe(0n);
+    expect(() => quoteSell(buy.stateAfter, "NO", 1, 100)).toThrow("sell proceeds do not exceed the fee");
+  });
+
+  it("values fee-exhausted holdings at zero and preserves state validation", () => {
+    const state = { yesQuantity: 10, noQuantity: 10, liquidity: 40 };
+    expect(sellLiquidationValueMilli(state, "YES", 1, 10_000)).toBe(0n);
+    expect(() => sellLiquidationValueMilli(state, "YES", 11)).toThrow();
+    expect(() => sellLiquidationValueMilli(state, "YES", -1)).toThrow();
+  });
+
   it("moves probability in the selected direction for buys and reverses it for sells", () => {
     for (const outcome of ["YES", "NO"] as const) {
       const buy = quoteBuy(base, outcome, 40);

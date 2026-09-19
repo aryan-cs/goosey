@@ -12,12 +12,12 @@ export async function POST(
   context: { params: Promise<{ slug: string }> },
 ): Promise<NextResponse> {
   try {
+    const body = quoteRequestSchema.parse(await readJsonObject(request));
     const user = await requireUser(request, true);
     const { slug } = paramsSchema.parse(await context.params);
     const market = await db.market.findUnique({ where: { slug }, select: { id: true } });
     if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
-    const body = quoteRequestSchema.parse(await readJsonObject(request));
-    const quote = await createTradeQuote({ userId: user.id, marketId: market.id, ...body });
+    const quote = await createTradeQuote({ userId: user.id, authRequest: request, marketId: market.id, ...body });
     return jsonResponse(quote, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return apiErrorResponse(error);

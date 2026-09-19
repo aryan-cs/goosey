@@ -73,7 +73,8 @@ export function parsePublicTradesQuery(
   if (!parsed.cursor) return { limit: parsed.limit };
   const decoded = z.object({
     marketSlug: z.string(),
-    tradeSequence: z.string().regex(/^[1-9][0-9]*$/),
+    tradeSequence: z.string().regex(/^[1-9][0-9]{0,18}$/)
+      .pipe(z.string().refine((value) => BigInt(value) <= 9_223_372_036_854_775_807n)),
   }).strict().safeParse(decodeCursor(parsed.cursor));
   if (!decoded.success || decoded.data.marketSlug !== marketSlug) {
     throw new ApiError(400, "INVALID_CURSOR", "The trade cursor is invalid for this market.");
@@ -172,7 +173,12 @@ export async function listPublicTrades(input: {
   const rows = await prisma.orderFill.findMany({
     where: {
       marketId: market.id,
-      ...(input.cursor ? { tradeSequence: { lt: input.cursor.tradeSequence } } : {}),
+      // Fills are immutable. Bound this read to the captured market watermark
+      // so a concurrent match cannot appear ahead of the reported sequence.
+      tradeSequence: {
+        lte: market.tradeSequence,
+        ...(input.cursor ? { lt: input.cursor.tradeSequence } : {}),
+      },
     },
     take: input.limit + 1,
     orderBy: { tradeSequence: "desc" },

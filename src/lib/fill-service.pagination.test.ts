@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ findMany: vi.fn() }));
+const mocks = vi.hoisted(() => ({ findMany: vi.fn(), findMarket: vi.fn() }));
 
 vi.mock("@/lib/market-service", () => ({
   ApiError: class ApiError extends Error {
@@ -8,10 +8,10 @@ vi.mock("@/lib/market-service", () => ({
       super(message);
     }
   },
-  prisma: { orderFill: { findMany: mocks.findMany } },
+  prisma: { orderFill: { findMany: mocks.findMany }, market: { findUnique: mocks.findMarket } },
 }));
 
-import { listUserFills } from "./fill-service";
+import { listPublicTrades, listUserFills } from "./fill-service";
 import { decodeCursor } from "./serializers";
 
 function fill(id: string, createdAt: string) {
@@ -74,5 +74,32 @@ describe("private fill history pagination", () => {
       take: 3,
     }));
     expect(result.nextCursor).toBeNull();
+  });
+});
+
+describe("public tape watermark", () => {
+  it("excludes fills committed after the captured sequence and keeps the pagination boundary", async () => {
+    mocks.findMarket.mockResolvedValue({
+      id: "market_fixture", slug: "fixture", status: "OPEN",
+      pricingModel: "ORDER_BOOK", payoutMilli: 100_000n, tradeSequence: 10n,
+    });
+    mocks.findMany.mockImplementation(async ({ where }) => {
+      // Sequence 11 became visible after the market read. It belongs to the
+      // next refresh, not a response advertising sequence 10.
+      return [11n, 10n, 9n].filter((sequence) =>
+        sequence <= where.tradeSequence.lte && sequence < where.tradeSequence.lt,
+      ).map((tradeSequence) => ({
+        tradeSequence, canonicalYesPriceMilli: 55_000n, quantity: 2,
+        matchType: "TRANSFER", createdAt: new Date("2026-09-19T12:00:00Z"),
+        takerOrder: { bookSide: "BUY" },
+      }));
+    });
+    const result = await listPublicTrades({
+      marketSlug: "fixture", limit: 1,
+      cursor: { marketSlug: "fixture", tradeSequence: 12n },
+    });
+    expect(result.sequence).toBe(10n);
+    expect(result.trades.map((trade) => trade.tradeSequence)).toEqual([10n]);
+    expect(decodeCursor(result.nextCursor)).toEqual({ marketSlug: "fixture", tradeSequence: "10" });
   });
 });

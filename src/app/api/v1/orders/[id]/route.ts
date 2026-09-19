@@ -48,6 +48,7 @@ export async function DELETE(
     const version = expectedVersion(request);
     const result = await cancelOrder({
       userId: user.id,
+      authRequest: request,
       idempotencyKey,
       request: { orderId: id, ...(version === undefined ? {} : { expectedVersion: version }) },
     });
@@ -62,7 +63,6 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   try {
-    const user = await requireUser(request, true);
     const idempotencyKey = parseIdempotencyKey(request);
     const { id } = paramsSchema.parse(await context.params);
     const version = expectedVersion(request);
@@ -70,8 +70,10 @@ export async function PATCH(
       throw new ApiError(428, "PRECONDITION_REQUIRED", "Order replacement requires an If-Match order version.");
     }
     const body = replaceSchema.parse(await readJsonObject(request));
+    const user = await requireUser(request, true);
     const result = await replaceOrder({
       userId: user.id,
+      authRequest: request,
       idempotencyKey,
       request: { orderId: id, expectedVersion: version, ...body },
     });

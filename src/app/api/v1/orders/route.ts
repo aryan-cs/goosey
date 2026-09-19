@@ -45,9 +45,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const user = await requireUser(request, true);
     const idempotencyKey = parseIdempotencyKey(request);
     const body = placeSchema.parse(await readJsonObject(request));
+    const user = await requireUser(request, true);
     const market = await prisma.market.findUnique({
       where: { slug: body.marketSlug },
       select: { id: true },
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     void _marketSlug;
     const result = await placeOrder({
       userId: user.id,
+      authRequest: request,
       idempotencyKey,
       request: { ...order, marketId: market.id },
     });
@@ -73,10 +74,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
-    const user = await requireUser(request, true);
     const idempotencyKey = parseIdempotencyKey(request);
     const body = await readJsonObject(request);
-    const result = await cancelAllOrders({ userId: user.id, idempotencyKey, request: body });
+    const user = await requireUser(request, true);
+    const result = await cancelAllOrders({ userId: user.id, authRequest: request, idempotencyKey, request: body });
     return privateNoStore(jsonResponse(result));
   } catch (error) {
     return privateNoStore(apiErrorResponse(error));

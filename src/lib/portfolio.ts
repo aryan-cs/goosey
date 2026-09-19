@@ -1,5 +1,5 @@
 import type { Market, Position } from "@prisma/client";
-import { computeQuote, executablePositionValue, yesProbabilityBps } from "@/lib/trading";
+import { executablePositionValue, positionSideLiquidationValueMilli, yesProbabilityBps } from "@/lib/trading";
 
 type PositionWithMarket = Position & { market: Market };
 
@@ -26,7 +26,7 @@ export function sideLiquidationValuesMilli(position: PositionWithMarket): { yes:
   const pairedYesValue = pairValue * yesBps / 10_000n;
   yes = pairedYesValue;
   no = pairValue - pairedYesValue;
-  if (remainingYes > 0) yes += computeQuote(position.market, "YES", "SELL", remainingYes).netCreditMilli!;
-  if (remainingNo > 0) no += computeQuote(position.market, "NO", "SELL", remainingNo).netCreditMilli!;
+  if (remainingYes > 0) yes += positionSideLiquidationValueMilli(position.market, "YES", remainingYes);
+  if (remainingNo > 0) no += positionSideLiquidationValueMilli(position.market, "NO", remainingNo);
   return { yes, no };
 }

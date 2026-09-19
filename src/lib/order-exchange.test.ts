@@ -21,6 +21,7 @@ vi.mock("@/lib/market-service", () => {
     consumeRateLimit: vi.fn().mockResolvedValue(undefined),
     prisma: {
       orderCommand: { findUnique: vi.fn().mockResolvedValue(null) },
+      idempotencyRequest: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: (...args: unknown[]) => {
         mocks.transaction(...args);
         if (!mocks.runner) throw new TypeError("transaction runner missing");
@@ -32,8 +33,10 @@ vi.mock("@/lib/market-service", () => {
 
 import {
   appendAuthoritativeFillSnapshot,
+  cancelAllOrders,
   cancelOrder,
   cancelOrderRequestSchema,
+  MAX_BULK_CANCEL_ORDERS,
   expireOrders,
   placeOrder,
   placeOrderRequestSchema,
@@ -578,8 +581,36 @@ describe("transactional cancellation", () => {
   });
 });
 
+describe("bounded bulk cancellation", () => {
+  beforeEach(() => mocks.transaction.mockReset());
+
+  it("fails atomically before releasing anything when the bounded batch is exceeded", async () => {
+    const findMany = vi.fn().mockResolvedValue(
+      Array.from({ length: MAX_BULK_CANCEL_ORDERS + 1 }, (_, index) => ({ id: `order-${index}` })),
+    );
+    const tx = {
+      idempotencyRequest: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "bulk-replay" }),
+      },
+      user: { findUnique: vi.fn().mockResolvedValue(activeUser()) },
+      marketOrder: { findMany },
+    };
+    runTransactionWith(tx);
+
+    await expect(cancelAllOrders({
+      userId: USER_ID,
+      idempotencyKey: "bulk-cancel-key-123456",
+      request: {},
+    })).rejects.toMatchObject({ code: "BULK_CANCEL_LIMIT_EXCEEDED", status: 422 });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ take: MAX_BULK_CANCEL_ORDERS + 1 }));
+  });
+});
+
 describe("sequenced order expiration", () => {
-  it("atomically releases backing and records a terminal private event", async () => {
+  it.each([false, true])("atomically releases backing and records a terminal private event (stop during first order: %s)", async (stopDuringFirst) => {
+    let stopping = false;
     const operationAt = new Date("2026-09-19T12:00:00.000Z");
     const reservation = {
       orderId: ORDER_ID,
@@ -611,7 +642,10 @@ describe("sequenced order expiration", () => {
     };
     const tx = {
       marketOrder: {
-        findUnique: vi.fn().mockResolvedValue(order),
+        findUnique: vi.fn().mockImplementation(async () => {
+          if (stopDuringFirst) stopping = true;
+          return order;
+        }),
         update: vi.fn().mockResolvedValue({}),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
@@ -633,12 +667,14 @@ describe("sequenced order expiration", () => {
     };
     const beforeEach = vi.fn().mockResolvedValue(undefined);
     const client = {
-      marketOrder: { findMany: vi.fn().mockResolvedValue([{ id: ORDER_ID }]) },
+      marketOrder: { findMany: vi.fn().mockResolvedValue(stopDuringFirst ? [{ id: ORDER_ID }, { id: "queued_order" }] : [{ id: ORDER_ID }]) },
       $transaction: vi.fn().mockImplementation(async (callback: (value: typeof tx) => unknown) => callback(tx)),
     };
 
-    await expect(expireOrders(client as never, operationAt, beforeEach)).resolves.toEqual({ expired: 1, failures: [] });
+    await expect(expireOrders(client as never, operationAt, beforeEach, stopDuringFirst ? () => stopping : undefined)).resolves.toEqual({ expired: 1, failures: [] });
     expect(beforeEach).toHaveBeenCalledOnce();
+    expect(client.$transaction).toHaveBeenCalledOnce();
+    expect(tx.marketOrder.findUnique).toHaveBeenCalledOnce();
     expect(tx.marketOrder.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: "CANCELED",
@@ -657,5 +693,16 @@ describe("sequenced order expiration", () => {
     expect(tx.user.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: { balanceMilli: { increment: 40_000n } },
     }));
+  });
+
+  it("does not begin an expiration transaction if stop arrives during its heartbeat", async () => {
+    let stopping = false;
+    const client = {
+      marketOrder: { findMany: vi.fn().mockResolvedValue([{ id: ORDER_ID }, { id: "queued_order" }]) },
+      $transaction: vi.fn(),
+    };
+    await expect(expireOrders(client as never, new Date(), async () => { stopping = true; }, () => stopping))
+      .resolves.toEqual({ expired: 0, failures: [] });
+    expect(client.$transaction).not.toHaveBeenCalled();
   });
 });

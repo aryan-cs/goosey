@@ -18,14 +18,15 @@ export async function POST(
   context: { params: Promise<{ slug: string }> },
 ): Promise<NextResponse> {
   try {
+    const body = executeTradeSchema.parse(await readJsonObject(request));
     const user = await requireUser(request, true);
     const idempotencyKey = parseIdempotencyKey(request);
     const { slug } = paramsSchema.parse(await context.params);
     const market = await db.market.findUnique({ where: { slug }, select: { id: true } });
     if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
-    const body = executeTradeSchema.parse(await readJsonObject(request));
     const result = await executeTrade({
       userId: user.id,
+      authRequest: request,
       marketId: market.id,
       idempotencyKey,
       ...body,

@@ -1,3 +1,5 @@
+import type { NextRequest } from "next/server";
+import { assertMutationSession } from "@/lib/mutation-session";
 import { createHash, randomUUID } from "node:crypto";
 
 import { Prisma, type MarketOrder, type OrderReservation, type Position, type PrismaClient } from "@prisma/client";
@@ -21,6 +23,7 @@ import {
   type RestingOrder,
 } from "@/lib/order-book";
 import { impliedProbabilityBps } from "@/lib/order-book-pricing";
+import { orderFillNotification } from "@/lib/order-fill-notification";
 import { jsonStringify } from "@/lib/serializers";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
@@ -95,6 +98,7 @@ type Tx = Prisma.TransactionClient;
 type StoredOrder = MarketOrder & { reservation: OrderReservation | null };
 
 const ACTIVE_ORDER_STATUSES = ["OPEN", "PARTIALLY_FILLED"] as const;
+export const MAX_BULK_CANCEL_ORDERS = ORDER_BOOK_LIMITS.maxActiveOrdersPerUserMarket;
 const EXPIRATION_BATCH_SIZE = 100;
 function requestHash(value: unknown): string {
   return createHash("sha256").update(jsonStringify(value)).digest("hex");
@@ -951,6 +955,24 @@ async function applyFill(
       journalEntryId: journal.id,
     },
   });
+  // Persist both notices inside the fill transaction: failed/retried commands
+  // cannot publish a notification without its matching trade and ledger entries.
+  await tx.notification.createMany({
+    data: [
+      { order: input.maker, intent: makerIntent, fee: makerFee },
+      { order: input.taker, intent: takerIntent, fee: takerFee },
+    ].map(({ order, intent, fee }) => orderFillNotification({
+      userId: order.userId,
+      intent,
+      quantity: input.quantity,
+      canonicalYesPriceMilli: input.canonicalYesPriceMilli,
+      payoutMilli: input.market.payoutMilli,
+      feeMilli: fee,
+      marketSlug: input.market.slug,
+      marketTitle: input.market.shortTitle,
+      executedAt: input.executedAt,
+    })),
+  });
   return { maker, taker, kind: plan.economicKind, fillId };
 }
 
@@ -1094,6 +1116,7 @@ export async function expireOrders(
  */
 export async function placeOrder(raw: {
   userId: string;
+  authRequest?: NextRequest;
   idempotencyKey: string;
   request: unknown;
 }): Promise<unknown> {
@@ -1101,13 +1124,14 @@ export async function placeOrder(raw: {
   const request = placeOrderRequestSchema.parse(raw.request);
   const scope = "ORDER_PLACE";
   const hash = requestHash(request);
-  const preflight = await preflightCommandReplay(envelope.userId, scope, envelope.idempotencyKey, hash);
+  const preflight = raw.authRequest ? undefined : await preflightCommandReplay(envelope.userId, scope, envelope.idempotencyKey, hash);
   if (preflight !== undefined) return preflight;
   await consumeRateLimit(prisma, `order-place:${envelope.userId}`, 60, 60_000);
   const operationAt = new Date();
   const orderId = randomUUID();
   const fillIds: string[] = [];
   return runSerializableTransaction(prisma, async (tx) => {
+    if (raw.authRequest) await assertMutationSession(tx, raw.authRequest, raw.userId);
     const replay = await replayCommand(tx, envelope.userId, scope, envelope.idempotencyKey, hash);
     if (replay !== undefined) return replay;
     if (request.expiresAt && request.expiresAt <= operationAt) {
@@ -1139,6 +1163,8 @@ export async function placeOrder(raw: {
         status: { in: [...ACTIVE_ORDER_STATUSES] },
         remainingQuantity: { gt: 0 },
         bookSide: normalized.side === "BUY" ? "SELL" : "BUY",
+        user: { status: "ACTIVE", role: "USER" },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: operationAt } }],
       },
       include: { reservation: true },
       orderBy: [
@@ -1347,6 +1373,7 @@ export async function placeOrder(raw: {
 /** Cancels only an authenticated owner's live remainder and releases it once. */
 export async function cancelOrder(raw: {
   userId: string;
+  authRequest?: NextRequest;
   idempotencyKey: string;
   request: unknown;
 }): Promise<unknown> {
@@ -1354,11 +1381,12 @@ export async function cancelOrder(raw: {
   const request = cancelOrderRequestSchema.parse(raw.request);
   const scope = "ORDER_CANCEL";
   const hash = requestHash(request);
-  const preflight = await preflightCommandReplay(envelope.userId, scope, envelope.idempotencyKey, hash);
+  const preflight = raw.authRequest ? undefined : await preflightCommandReplay(envelope.userId, scope, envelope.idempotencyKey, hash);
   if (preflight !== undefined) return preflight;
   await consumeRateLimit(prisma, `order-cancel:${envelope.userId}`, 120, 60_000);
   const operationAt = new Date();
   return runSerializableTransaction(prisma, async (tx) => {
+    if (raw.authRequest) await assertMutationSession(tx, raw.authRequest, raw.userId);
     const replay = await replayCommand(tx, envelope.userId, scope, envelope.idempotencyKey, hash);
     if (replay !== undefined) return replay;
     const order = await tx.marketOrder.findFirst({
@@ -1434,6 +1462,7 @@ export async function cancelOrder(raw: {
  */
 export async function cancelAllOrders(raw: {
   userId: string;
+  authRequest?: NextRequest;
   idempotencyKey: string;
   request: unknown;
 }): Promise<unknown> {
@@ -1441,10 +1470,23 @@ export async function cancelAllOrders(raw: {
   const request = cancelAllOrdersRequestSchema.parse(raw.request);
   const route = "/api/v1/orders:bulk-cancel";
   const hash = requestHash(request);
+  const preflight = raw.authRequest ? undefined : await prisma.idempotencyRequest.findUnique({
+    where: { userId_route_key: { userId: envelope.userId, route, key: envelope.idempotencyKey } },
+  });
+  if (preflight) {
+    if (preflight.requestHash !== hash) {
+      throw new ApiError(409, "IDEMPOTENCY_CONFLICT", "This idempotency key was used for a different bulk cancellation.");
+    }
+    if (preflight.status === "COMPLETED" && preflight.responseBody) {
+      return parseStoredResponse(preflight.responseBody);
+    }
+    throw new ApiError(409, "REQUEST_IN_PROGRESS", "This bulk cancellation is already being processed.");
+  }
   await consumeRateLimit(prisma, `order-bulk-cancel:${envelope.userId}`, 10, 60_000);
   const operationAt = new Date();
 
   return runSerializableTransaction(prisma, async (tx) => {
+    if (raw.authRequest) await assertMutationSession(tx, raw.authRequest, raw.userId);
     const existing = await tx.idempotencyRequest.findUnique({
       where: { userId_route_key: { userId: envelope.userId, route, key: envelope.idempotencyKey } },
     });
@@ -1481,54 +1523,73 @@ export async function cancelAllOrders(raw: {
       },
       include: { reservation: true, market: { include: { collateralAccount: true } } },
       orderBy: [{ marketId: "asc" }, { prioritySequence: "asc" }, { id: "asc" }],
+      take: MAX_BULK_CANCEL_ORDERS + 1,
     });
-    const sequenceState = new Map<string, { command: bigint; book: bigint }>();
+    if (orders.length > MAX_BULK_CANCEL_ORDERS) {
+      throw new ApiError(
+        422,
+        "BULK_CANCEL_LIMIT_EXCEEDED",
+        `A bulk cancellation can contain at most ${MAX_BULK_CANCEL_ORDERS} live orders. Cancel by market and retry.`,
+        { maximum: MAX_BULK_CANCEL_ORDERS },
+      );
+    }
+
+    const ordersByMarket = new Map<string, typeof orders>();
+    for (const order of orders) {
+      const marketOrders = ordersByMarket.get(order.marketId) ?? [];
+      marketOrders.push(order);
+      ordersByMarket.set(order.marketId, marketOrders);
+    }
     const canceled: Array<{ orderId: string; canceledQuantity: number; commandSequence: bigint }> = [];
+    const marketCommands: Array<{ marketId: string; commandSequence: bigint }> = [];
     let totalCanceledQuantity = 0;
 
-    for (const order of orders) {
-      if (!order.reservation) throw new Error("Live bulk-canceled order has no reservation.");
-      const state = sequenceState.get(order.marketId) ?? {
-        command: order.market.commandSequence,
-        book: order.market.bookSequence,
-      };
-      const commandSequence = await acquireCommandSequence(tx, order.marketId, state.command, false, operationAt);
-      await releaseReservation(tx, order, order.reservation, "USER_BULK_CANCELED");
-      const changed = await tx.marketOrder.updateMany({
-        where: {
-          id: order.id,
+    for (const [marketId, marketOrders] of ordersByMarket) {
+      const market = marketOrders[0]!.market;
+      const commandSequence = await acquireCommandSequence(tx, marketId, market.commandSequence, false, operationAt);
+      for (const [effectIndex, order] of marketOrders.entries()) {
+        if (!order.reservation) {
+          throw new ApiError(409, "ORDER_RESERVATION_MISSING", "A live bulk-canceled order has no backing reservation.");
+        }
+        await releaseReservation(tx, order, order.reservation, "USER_BULK_CANCELED");
+        const changed = await tx.marketOrder.updateMany({
+          where: {
+            id: order.id,
+            userId: envelope.userId,
+            version: order.version,
+            remainingQuantity: order.remainingQuantity,
+            status: { in: [...ACTIVE_ORDER_STATUSES] },
+          },
+          data: {
+            canceledQuantity: { increment: order.remainingQuantity },
+            remainingQuantity: 0,
+            status: "CANCELED",
+            terminalSequence: commandSequence,
+            terminalReason: "USER_BULK_CANCELED",
+            terminalAt: operationAt,
+            canceledAt: operationAt,
+            version: { increment: 1 },
+          },
+        });
+        if (changed.count !== 1) throw new ApiError(409, "RETRYABLE_CONFLICT", "An order changed during bulk cancellation.");
+        await createEvent(tx, {
+          marketId,
           userId: envelope.userId,
-          version: order.version,
-          remainingQuantity: order.remainingQuantity,
-          status: { in: [...ACTIVE_ORDER_STATUSES] },
-        },
-        data: {
-          canceledQuantity: { increment: order.remainingQuantity },
-          remainingQuantity: 0,
-          status: "CANCELED",
-          terminalSequence: commandSequence,
-          terminalReason: "USER_BULK_CANCELED",
-          terminalAt: operationAt,
-          canceledAt: operationAt,
-          version: { increment: 1 },
-        },
+          commandSequence,
+          eventSequence: market.bookSequence + BigInt(effectIndex + 1),
+          effectIndex,
+          type: "ORDER_CANCELED",
+          visibility: "PRIVATE",
+          payload: { orderId: order.id, canceledQuantity: order.remainingQuantity, reason: "USER_BULK_CANCELED" },
+        });
+        totalCanceledQuantity += order.remainingQuantity;
+        canceled.push({ orderId: order.id, canceledQuantity: order.remainingQuantity, commandSequence });
+      }
+      await tx.market.update({
+        where: { id: marketId },
+        data: { bookSequence: { increment: BigInt(marketOrders.length) } },
       });
-      if (changed.count !== 1) throw new ApiError(409, "RETRYABLE_CONFLICT", "An order changed during bulk cancellation.");
-      const eventSequence = state.book + 1n;
-      await tx.market.update({ where: { id: order.marketId }, data: { bookSequence: { increment: 1n } } });
-      await createEvent(tx, {
-        marketId: order.marketId,
-        userId: envelope.userId,
-        commandSequence,
-        eventSequence,
-        effectIndex: 0,
-        type: "ORDER_CANCELED",
-        visibility: "PRIVATE",
-        payload: { orderId: order.id, canceledQuantity: order.remainingQuantity, reason: "USER_BULK_CANCELED" },
-      });
-      sequenceState.set(order.marketId, { command: commandSequence, book: eventSequence });
-      totalCanceledQuantity += order.remainingQuantity;
-      canceled.push({ orderId: order.id, canceledQuantity: order.remainingQuantity, commandSequence });
+      marketCommands.push({ marketId, commandSequence });
     }
 
     const result = {
@@ -1538,6 +1599,23 @@ export async function cancelAllOrders(raw: {
       orders: canceled,
     };
     const responseBody = jsonStringify(result);
+    for (const command of marketCommands) {
+      await tx.orderCommand.create({
+        data: {
+          marketId: command.marketId,
+          actorUserId: envelope.userId,
+          scope: `ORDER_BULK_CANCEL:${command.marketId}`,
+          idempotencyKey: envelope.idempotencyKey,
+          requestHash: hash,
+          commandType: "BULK_CANCEL",
+          commandSequence: command.commandSequence,
+          status: "COMPLETED",
+          responseCode: 200,
+          responseBody,
+          completedAt: operationAt,
+        },
+      });
+    }
     await tx.idempotencyRequest.update({
       where: { id: replay.id },
       data: { status: "COMPLETED", responseCode: 200, responseBody },
@@ -1554,6 +1632,7 @@ export async function cancelAllOrders(raw: {
  */
 export async function replaceOrder(raw: {
   userId: string;
+  authRequest?: NextRequest;
   idempotencyKey: string;
   request: unknown;
 }): Promise<unknown> {
@@ -1561,7 +1640,7 @@ export async function replaceOrder(raw: {
   const request = replaceOrderRequestSchema.parse(raw.request);
   const scope = "ORDER_REPLACE";
   const hash = requestHash(request);
-  const preflight = await preflightCommandReplay(envelope.userId, scope, envelope.idempotencyKey, hash);
+  const preflight = raw.authRequest ? undefined : await preflightCommandReplay(envelope.userId, scope, envelope.idempotencyKey, hash);
   if (preflight !== undefined) return preflight;
   await consumeRateLimit(prisma, `order-replace:${envelope.userId}`, 120, 60_000);
   const operationAt = new Date();
@@ -1569,6 +1648,7 @@ export async function replaceOrder(raw: {
   const fillIds: string[] = [];
 
   return runSerializableTransaction(prisma, async (tx) => {
+    if (raw.authRequest) await assertMutationSession(tx, raw.authRequest, raw.userId);
     const replay = await replayCommand(tx, envelope.userId, scope, envelope.idempotencyKey, hash);
     if (replay !== undefined) return replay;
 
@@ -1582,6 +1662,9 @@ export async function replaceOrder(raw: {
     }
     if (original.timeInForce !== "GTC") {
       throw new ApiError(409, "ORDER_NOT_REPLACEABLE", "Only resting GTC orders can be replaced.");
+    }
+    if (original.expiresAt && original.expiresAt <= operationAt) {
+      throw new ApiError(409, "ORDER_EXPIRED", "This order has expired and cannot be replaced.");
     }
     if (request.expectedVersion !== original.version) {
       throw new ApiError(409, "STALE_ORDER_VERSION", "The order changed before replacement.", { currentVersion: original.version });
@@ -1610,6 +1693,8 @@ export async function replaceOrder(raw: {
         status: { in: [...ACTIVE_ORDER_STATUSES] },
         remainingQuantity: { gt: 0 },
         bookSide: normalized.side === "BUY" ? "SELL" : "BUY",
+        user: { status: "ACTIVE", role: "USER" },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: operationAt } }],
       },
       include: { reservation: true },
       orderBy: [

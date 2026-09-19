@@ -158,6 +158,7 @@ export function aggregateOrderLevels(
 export async function getPublicOrderBook(slug: string, depth: number) {
   return prisma.$transaction(
     async (tx) => {
+      const now = new Date();
       const market = await tx.market.findUnique({
         where: { slug },
         select: {
@@ -167,6 +168,8 @@ export async function getPublicOrderBook(slug: string, depth: number) {
           pricingModel: true,
           payoutMilli: true,
           bookSequence: true,
+          acceptingOrders: true,
+          closesAt: true,
         },
       });
       if (!market || market.status === "DRAFT") {
@@ -175,11 +178,16 @@ export async function getPublicOrderBook(slug: string, depth: number) {
       if (market.pricingModel !== "ORDER_BOOK") {
         throw new ApiError(422, "ORDER_BOOK_UNAVAILABLE", "This market uses the legacy market maker.");
       }
+      if (market.status !== "OPEN" || !market.acceptingOrders || market.closesAt <= now) {
+        return { marketSlug: market.slug, marketStatus: market.status, sequence: market.bookSequence, payoutMilli: market.payoutMilli, bids: [], asks: [] };
+      }
 
       const active = {
         marketId: market.id,
+        user: { status: "ACTIVE", role: "USER" },
         status: { in: ["OPEN", "PARTIALLY_FILLED"] },
         remainingQuantity: { gt: 0 },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       } satisfies Prisma.MarketOrderWhereInput;
       const bidRows = await tx.marketOrder.groupBy({
         by: ["limitPriceMilli"],

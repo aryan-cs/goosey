@@ -57,5 +57,7 @@ describe("public order-book trade tape", () => {
     expect(() => parsePublicTradesQuery(new URLSearchParams({ cursor }), "other-market")).toThrow();
     expect(() => parsePublicTradesQuery(new URLSearchParams("limit=1&limit=2"), "venue-wifi")).toThrow();
     expect(() => parsePublicTradesQuery(new URLSearchParams("unknown=x"), "venue-wifi")).toThrow();
+    const oversized = encodeCursor({ marketSlug: "venue-wifi", tradeSequence: "9223372036854775808" });
+    expect(() => parsePublicTradesQuery(new URLSearchParams({ cursor: oversized }), "venue-wifi")).toThrow();
   });
 });

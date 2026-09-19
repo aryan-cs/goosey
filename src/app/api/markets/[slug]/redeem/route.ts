@@ -19,6 +19,7 @@ export async function POST(
   context: { params: Promise<{ slug: string }> },
 ): Promise<NextResponse> {
   try {
+    const body = redemptionRequestSchema.parse(await readJsonObject(request));
     const user = await requireUser(request, true);
     const idempotencyKey = parseIdempotencyKey(request);
     const { slug } = paramsSchema.parse(await context.params);
@@ -27,9 +28,9 @@ export async function POST(
       select: { id: true },
     });
     if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
-    const body = redemptionRequestSchema.parse(await readJsonObject(request));
     const result = await redeemCompleteSet({
       userId: user.id,
+      authRequest: request,
       marketId: market.id,
       idempotencyKey,
       ...body,

@@ -199,7 +199,7 @@ function rawTradeValueMilli(
   return contractsAtUnitPayout * toSafeNumber(state.payoutMilli, "payoutMilli");
 }
 
-export function quoteTrade(
+function calculateTradeQuote(
   input: MarketMakerState,
   outcome: Outcome,
   action: TradeAction,
@@ -225,9 +225,6 @@ export function quoteTrade(
   const feeMilli = ceilRatio(grossMilli * BigInt(feeBps), BigInt(BASIS_POINTS));
   const totalDebitMilli = action === "BUY" ? grossMilli + feeMilli : 0n;
   const netCreditMilli = action === "SELL" ? grossMilli - feeMilli : 0n;
-  if (action === "SELL" && netCreditMilli <= 0n) {
-    throw new RangeError("sell proceeds do not exceed the fee");
-  }
 
   const direction = action === "BUY" ? quantity : -quantity;
   const stateAfter: Required<MarketMakerState> = {
@@ -252,6 +249,30 @@ export function quoteTrade(
     probabilityYesAfterBps: probabilityYesBps(stateAfter),
     stateAfter,
   };
+}
+
+export function quoteTrade(
+  input: MarketMakerState,
+  outcome: Outcome,
+  action: TradeAction,
+  quantity: number,
+  feeBps = 0,
+): TradeQuote {
+  const quote = calculateTradeQuote(input, outcome, action, quantity, feeBps);
+  if (action === "SELL" && quote.netCreditMilli <= 0n) {
+    throw new RangeError("sell proceeds do not exceed the fee");
+  }
+  return quote;
+}
+
+/** Valid holdings can be worth zero even when no sell can be executed. */
+export function sellLiquidationValueMilli(
+  input: MarketMakerState,
+  outcome: Outcome,
+  quantity: number,
+  feeBps = 0,
+): bigint {
+  return calculateTradeQuote(input, outcome, "SELL", quantity, feeBps).netCreditMilli;
 }
 
 export function quoteBuy(
