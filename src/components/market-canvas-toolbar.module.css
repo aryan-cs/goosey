@@ -7,7 +7,7 @@
   margin-bottom: 24px;
   padding: 10px 20px;
   background: var(--surface);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
 }
 
 .search {
@@ -19,7 +19,7 @@
   padding: 0 14px;
   color: var(--ink-muted);
   background: var(--surface-sunken);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
 }
 
