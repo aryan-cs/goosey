@@ -31,7 +31,7 @@ env -u POSTGRES_DATABASE_URL -u POSTGRES_DIRECT_DATABASE_URL \
   ADMIN_PASSWORD="$ADMIN_PASSWORD" \
   npx tsx prisma/seed.ts >/dev/null
 
-DATABASE_PROVIDER="sqlite" DATABASE_URL="file:${DB_FILE}" APP_URL="$ORIGIN" NEXT_PUBLIC_APP_URL="$ORIGIN" RATE_LIMIT_KEY_SECRET="$(openssl rand -hex 32)" npm start -- --hostname 127.0.0.1 --port "$PORT" >"$SERVER_LOG" 2>&1 &
+DATABASE_PROVIDER="sqlite" DATABASE_URL="file:${DB_FILE}" APP_URL="$ORIGIN" NEXT_PUBLIC_APP_URL="$ORIGIN" GOOSEY_TOKEN_SECRET="$(openssl rand -hex 32)" RATE_LIMIT_KEY_SECRET="$(openssl rand -hex 32)" npm start -- --hostname 127.0.0.1 --port "$PORT" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 cleanup() {
   local exit_code=$?
@@ -87,6 +87,28 @@ curl -fsS "$ORIGIN/api/discovery" | jq -e '(.trending | length) > 0 and (.newest
 curl -fsS -c "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" "$ORIGIN/api/auth/login" | jq -e '.user.role == "ADMIN"' >/dev/null
 [[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" "$ORIGIN/api/admin/audit-logs")" == "403" ]]
 curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/audit-logs?limit=10" | jq -e '.items | type == "array"' >/dev/null
+# Invite management is independent of the existing public registration policy.
+# No redemption is attempted: this checks issuance and revocation only.
+INVITE_KEY="smoke-admin-invite-${RANDOM}-$$"
+INVITE_BODY='{"label":"Isolated integration invitation","maxUses":1,"expiresAt":null}'
+[[ "$(curl -sS -o "${RUN_DIR}/invite-created.json" -w '%{http_code}' -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $INVITE_KEY" -H 'Content-Type: application/json' -d "$INVITE_BODY" "$ORIGIN/api/admin/invites")" == "201" ]]
+jq -e '.replayed == false and .invite.status == "ACTIVE" and .invite.maxUses == 1 and .invite.useCount == 0 and (.code | type == "string" and length > 0)' "${RUN_DIR}/invite-created.json" >/dev/null
+INVITE_ID=$(jq -er '.invite.id' "${RUN_DIR}/invite-created.json")
+[[ "$(curl -sS -o "${RUN_DIR}/invite-replayed.json" -w '%{http_code}' -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $INVITE_KEY" -H 'Content-Type: application/json' -d "$INVITE_BODY" "$ORIGIN/api/admin/invites")" == "200" ]]
+jq -e --slurpfile original "${RUN_DIR}/invite-created.json" '.replayed == true and .invite.id == $original[0].invite.id and .code == $original[0].code' "${RUN_DIR}/invite-replayed.json" >/dev/null
+INVITE_CHANGED_BODY=$(jq -c '.maxUses = 2' <<<"$INVITE_BODY")
+[[ "$(curl -sS -o "${RUN_DIR}/invite-conflict.json" -w '%{http_code}' -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $INVITE_KEY" -H 'Content-Type: application/json' -d "$INVITE_CHANGED_BODY" "$ORIGIN/api/admin/invites")" == "409" ]]
+jq -e '.error.code == "IDEMPOTENCY_CONFLICT"' "${RUN_DIR}/invite-conflict.json" >/dev/null
+curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/invites" | jq -e --arg id "$INVITE_ID" '
+  ([.items[] | select(.id == $id)] | length == 1) and
+  any(.items[]; .id == $id and .status == "ACTIVE" and .maxUses == 1 and .useCount == 0) and
+  all(.items[]; (has("code") or has("codeHash") or has("requestHash") or has("issuanceKey")) | not)
+' >/dev/null
+for invite_revoke_attempt in 1 2; do
+  curl -fsS -b "$COOKIE_JAR_ADMIN" -X DELETE -H "Origin: $ORIGIN" "$ORIGIN/api/admin/invites/$INVITE_ID" | jq -e --arg id "$INVITE_ID" '.invite == {id: $id, status: "REVOKED"}' >/dev/null
+  # Read persisted state after both the first revoke and its retry.
+  curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/invites" | jq -e --arg id "$INVITE_ID" 'any(.items[]; .id == $id and .status == "REVOKED" and .useCount == 0 and .maxUses == 1)' >/dev/null
+done
 EVENT_KEY="smoke-event-${RANDOM}-$$"
 EVENT_SLUG="smoke-event-${RANDOM}-$$"
 EVENT_BODY="{\"slug\":\"$EVENT_SLUG\",\"title\":\"API smoke test forecast collection\",\"shortTitle\":\"Smoke collection\",\"description\":\"A temporary event created in the isolated API integration database.\",\"category\":\"Testing\",\"featured\":false,\"color\":\"gold\",\"icon\":\"sparkles\",\"startsAt\":\"2030-09-18T10:00:00.000Z\",\"endsAt\":\"2030-09-19T10:00:00.000Z\"}"
@@ -179,15 +201,49 @@ curl -fsS -b "$COOKIE_JAR" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: appli
 REPLY_KEY="smoke-reply-${RANDOM}-$$"
 curl -fsS -b "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H "Idempotency-Key: $REPLY_KEY" -H 'Content-Type: application/json' -d "{\"body\":\"The stage timestamp is a strong source; I would also preserve the published schedule snapshot.\",\"parentId\":\"$COMMENT_ID\"}" "$ORIGIN/api/markets/$MARKET_SLUG/comments" | jq -e '.comment.id != null' >/dev/null
 curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications" | jq -e '.items | any(.[]; .type == "COMMENT_REPLY")' >/dev/null
-curl -fsS -b "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"reason":"OTHER","details":"Authorized moderation workflow smoke test."}' "$ORIGIN/api/comments/$COMMENT_ID/report" | jq -e '.report.status == "PENDING"' >/dev/null
+REPORT=$(curl -fsS -b "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"reason":"OTHER","details":"Authorized moderation workflow smoke test."}' "$ORIGIN/api/comments/$COMMENT_ID/report")
+jq -e '.report.status == "PENDING"' <<<"$REPORT" >/dev/null
+REPORT_ID=$(jq -er '.report.id' <<<"$REPORT")
 ADMIN_DENIED=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR_TWO" "$ORIGIN/api/admin/reports")
 [[ "$ADMIN_DENIED" == "403" ]]
+
+# Review a real participant report, observing public state before and after.
+curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/reports" | jq -e --arg id "$REPORT_ID" --arg comment "$COMMENT_ID" '.items | any(.[]; .id == $id and .comment.id == $comment and .status == "PENDING")' >/dev/null
+curl -fsS "$ORIGIN/api/markets/$MARKET_SLUG/comments?comment=$COMMENT_ID" | jq -e --arg id "$COMMENT_ID" '.items | any(.[]; .id == $id and .status == "VISIBLE")' >/dev/null
+COMMENT_COUNT_BEFORE_HIDE=$(curl -fsS "$ORIGIN/api/markets/$MARKET_SLUG" | jq -er '.commentCount | select(type == "number" and . > 0)')
+HIDE_BODY='{"action":"HIDE","note":"Hidden after reviewing the participant report in the isolated integration journey."}'
+curl -fsS -b "$COOKIE_JAR_ADMIN" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "$HIDE_BODY" "$ORIGIN/api/admin/reports/$REPORT_ID" | jq -e --arg id "$REPORT_ID" '.report.id == $id and .report.status == "ACTIONED" and .report.resolvedAt != null and .report.resolvedById != null' >/dev/null
+COMMENT_COUNT_AFTER_HIDE=$(( COMMENT_COUNT_BEFORE_HIDE - 1 ))
+curl -fsS "$ORIGIN/api/markets/$MARKET_SLUG" | jq -e --argjson count "$COMMENT_COUNT_AFTER_HIDE" '.commentCount == $count' >/dev/null
+curl -fsS "$ORIGIN/api/markets/$MARKET_SLUG/comments?limit=100" | jq -e --arg id "$COMMENT_ID" 'all(.items[]; .id != $id)' >/dev/null
+[[ "$(curl -sS -o "${RUN_DIR}/hidden-comment.json" -w '%{http_code}' "$ORIGIN/api/markets/$MARKET_SLUG/comments?comment=$COMMENT_ID")" == "404" ]]
+jq -e '.error.code == "COMMENT_NOT_FOUND"' "${RUN_DIR}/hidden-comment.json" >/dev/null
+curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/reports" | jq -e --arg id "$REPORT_ID" 'all(.items[]; .id != $id)' >/dev/null
+curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications" | jq -e '[.items[] | select(.type == "COMMENT_MODERATED")] | length == 1' >/dev/null
+# Review is a one-way transition, not a replay-success API: retry must be 409
+# and must neither decrement the counter again nor notify the author twice.
+[[ "$(curl -sS -o "${RUN_DIR}/report-replay.json" -w '%{http_code}' -b "$COOKIE_JAR_ADMIN" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "$HIDE_BODY" "$ORIGIN/api/admin/reports/$REPORT_ID")" == "409" ]]
+jq -e '.error.code == "REPORT_ALREADY_REVIEWED"' "${RUN_DIR}/report-replay.json" >/dev/null
+curl -fsS "$ORIGIN/api/markets/$MARKET_SLUG" | jq -e --argjson count "$COMMENT_COUNT_AFTER_HIDE" '.commentCount == $count' >/dev/null
+curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications" | jq -e '[.items[] | select(.type == "COMMENT_MODERATED")] | length == 1' >/dev/null
 
 curl -fsS -b "$COOKIE_JAR" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"displayName":"Smoke Forecaster","bio":"Forecasting with public evidence.","profilePublic":true,"leaderboardVisible":true}' "$ORIGIN/api/profile" | jq -e '.profile.profilePublic == true and .profile.leaderboardVisible == true' >/dev/null
 
 curl -fsS -b "$COOKIE_JAR" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"marketId\":\"$MARKET_ID\"}" "$ORIGIN/api/watchlist" | jq -e '.saved == true' >/dev/null
 curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/watchlist" | jq -e --arg id "$MARKET_ID" '.items | any(.[]; .marketId == $id)' >/dev/null
-curl -fsS -b "$COOKIE_JAR" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"title":"Will the main stage open by its published start time?","description":"Resolve against the organizer schedule and the timestamp of the first official main-stage announcement.","category":"Hack the North"}' "$ORIGIN/api/suggestions" | jq -e '.suggestion.status == "PENDING"' >/dev/null
+SUGGESTION=$(curl -fsS -b "$COOKIE_JAR" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"title":"Will the main stage open by its published start time?","description":"Resolve against the organizer schedule and the timestamp of the first official main-stage announcement.","category":"Hack the North"}' "$ORIGIN/api/suggestions")
+jq -e '.suggestion.status == "PENDING"' <<<"$SUGGESTION" >/dev/null
+SUGGESTION_ID=$(jq -er '.suggestion.id' <<<"$SUGGESTION")
+curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/suggestions" | jq -e --arg id "$SUGGESTION_ID" '.items | any(.[]; .id == $id and .status == "PENDING")' >/dev/null
+SUGGESTION_NOTE="Approved after reviewing the proposed public resolution source."
+SUGGESTION_REVIEW_BODY=$(jq -nc --arg note "$SUGGESTION_NOTE" '{action:"APPROVE",note:$note}')
+curl -fsS -b "$COOKIE_JAR_ADMIN" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "$SUGGESTION_REVIEW_BODY" "$ORIGIN/api/admin/suggestions/$SUGGESTION_ID" | jq -e --arg id "$SUGGESTION_ID" --arg note "$SUGGESTION_NOTE" '.suggestion.id == $id and .suggestion.status == "APPROVED" and .suggestion.reviewNote == $note and .suggestion.reviewedAt != null and .suggestion.reviewedById != null' >/dev/null
+curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/suggestions" | jq -e --arg id "$SUGGESTION_ID" --arg note "$SUGGESTION_NOTE" '.items | any(.[]; .id == $id and .status == "APPROVED" and .reviewNote == $note)' >/dev/null
+curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/suggestions" | jq -e --arg id "$SUGGESTION_ID" 'all(.items[]; .id != $id)' >/dev/null
+curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications" | jq -e --arg note "$SUGGESTION_NOTE" '[.items[] | select(.type == "SUGGESTION_REVIEWED" and .body == $note)] | length == 1' >/dev/null
+[[ "$(curl -sS -o "${RUN_DIR}/suggestion-replay.json" -w '%{http_code}' -b "$COOKIE_JAR_ADMIN" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "$SUGGESTION_REVIEW_BODY" "$ORIGIN/api/admin/suggestions/$SUGGESTION_ID")" == "409" ]]
+jq -e '.error.code == "SUGGESTION_ALREADY_REVIEWED"' "${RUN_DIR}/suggestion-replay.json" >/dev/null
+curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications" | jq -e --arg note "$SUGGESTION_NOTE" '[.items[] | select(.type == "SUGGESTION_REVIEWED" and .body == $note)] | length == 1' >/dev/null
 
 BAD_ORIGIN=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -H 'Origin: https://attacker.invalid' -H 'Content-Type: application/json' -d "{\"marketId\":\"$MARKET_ID\"}" "$ORIGIN/api/watchlist")
 [[ "$BAD_ORIGIN" == "403" ]]
@@ -213,4 +269,4 @@ env -u POSTGRES_DATABASE_URL -u POSTGRES_DIRECT_DATABASE_URL \
   DATABASE_PROVIDER=sqlite DATABASE_URL="file:$RUN_DIR/restored.db" \
   node --import tsx scripts/reconcile.ts
 
-echo "Goosey API E2E passed: discovery rails, grouped events, admin events and audit export, recovery-route failure handling, one-time invitations, two-account registration, session isolation, authz, quote, atomic trade, idempotent replay, portfolio, notifications, comment ownership and reporting, privacy controls, watchlist, suggestions, origin defense, request IDs, malformed-body handling, and live SQLite backup/restore reconciliation."
+echo "Goosey API E2E passed: discovery rails, grouped events, admin events and audit export, recovery-route failure handling, invite issuance/replay/conflict/redaction/revocation, two-account registration, session isolation, authz, quote, atomic trade, idempotent replay, portfolio, notifications, comment ownership and report moderation with replay-safe counters, privacy controls, watchlist, participant suggestion review, origin defense, request IDs, malformed-body handling, and live SQLite backup/restore reconciliation."
