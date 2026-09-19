@@ -4,6 +4,7 @@ src/generated/
 .next-dev/
 output/
 coverage/
+backups/
 .env
 .env.local
 prisma/dev.db

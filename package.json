@@ -42,6 +42,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "db:backup:sqlite": "node --import tsx scripts/backup-sqlite.ts",
+    "db:verify-restore:sqlite": "node --import tsx scripts/verify-sqlite-restore.ts",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
