@@ -48,6 +48,8 @@ function settlementTx(liveOrders: number, liveReservations: number) {
         leaseExpiresAt: new Date(Date.now() + 60_000),
         market: {
           id: "market_orderbook_123",
+          executionBackend: "DATABASE",
+          collateralAccountId: "collateral_settlement",
           status: "RESOLVING",
           resolution: "YES",
           pricingModel: "ORDER_BOOK",

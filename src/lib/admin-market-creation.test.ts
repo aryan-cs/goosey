@@ -61,6 +61,7 @@ function input(pricingModel?: "LMSR" | "ORDER_BOOK") {
 function market(pricingModel: "LMSR" | "ORDER_BOOK") {
   return {
     id: `market_${pricingModel.toLowerCase()}`,
+    executionBackend: "DATABASE",
     slug: "admin-created-market",
     status: "DRAFT",
     pricingModel,

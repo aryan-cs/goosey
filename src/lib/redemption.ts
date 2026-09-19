@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 import { assertMutationSession } from "@/lib/mutation-session";
 import { createHash } from "node:crypto";
 
@@ -205,6 +206,7 @@ export async function redeemCompleteSet(input: {
         throw new ApiError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before redeeming positions.");
       }
       if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+      assertDatabaseFinancialMarket(market);
       assertRedeemableMarket(market);
       if (market.version !== request.marketVersion) {
         throw new ApiError(409, "STALE_MARKET", "The market changed. Refresh before redeeming.", {
@@ -273,6 +275,7 @@ export async function redeemCompleteSet(input: {
         where: {
           id: market.id,
           version: request.marketVersion,
+          ...DATABASE_MARKET_FILTER,
           status: { in: ["OPEN", "CLOSED"] },
           resolution: null,
           yesShares: market.yesShares,

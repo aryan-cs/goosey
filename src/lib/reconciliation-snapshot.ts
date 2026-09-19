@@ -8,6 +8,9 @@ export async function readReconciliationSnapshot(client: TransactionRunner) {
       tx.ledgerAccount.findMany({ include: { postings: { include: { journalEntry: { select: { status: true } } } } } }),
       tx.user.findMany({ where: { role: "USER" } }),
       tx.market.findMany({
+        // Chain balances are never SQL financial projections. Keep malformed
+        // DATABASE rows visible so reconciliation fails instead of hiding them.
+        where: { executionBackend: "DATABASE" },
         include: {
           collateralAccount: true,
           positions: true,

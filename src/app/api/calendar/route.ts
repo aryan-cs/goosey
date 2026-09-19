@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -26,13 +27,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return await runSerializableTransaction(prisma, async (tx) => {
       const [markets, events] = await Promise.all([
         tx.market.findMany({
-          where: { status: { not: "DRAFT" }, closesAt: { gte: from, lt: to }, ...(query.category ? { category: query.category } : {}) },
+          where: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" }, closesAt: { gte: from, lt: to }, ...(query.category ? { category: query.category } : {}) },
           orderBy: [{ closesAt: "asc" }, { id: "asc" }],
           take: 500,
-          select: { id: true, slug: true, title: true, shortTitle: true, category: true, status: true, pricingModel: true, acceptingOrders: true, resolution: true, payoutMilli: true, closesAt: true, resolvesAt: true, yesShares: true, noShares: true, liquidityParameter: true, event: { select: { slug: true, shortTitle: true } } },
+          select: { id: true, slug: true, title: true, shortTitle: true, category: true, status: true, executionBackend: true, collateralAccountId: true, pricingModel: true, acceptingOrders: true, resolution: true, payoutMilli: true, closesAt: true, resolvesAt: true, yesShares: true, noShares: true, liquidityParameter: true, event: { select: { slug: true, shortTitle: true } } },
         }),
         tx.marketEvent.findMany({
-          where: { startsAt: { lt: to }, endsAt: { gte: from }, markets: { some: { status: { not: "DRAFT" } } }, ...(query.category ? { category: query.category } : {}) },
+          where: { startsAt: { lt: to }, endsAt: { gte: from }, markets: { some: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } } }, ...(query.category ? { category: query.category } : {}) },
           orderBy: [{ startsAt: "asc" }, { id: "asc" }],
           take: 100,
           select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true },
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         events,
         markets: markets.map((market) => {
           const mark = marks.get(market.id)!;
-          return { ...market, probabilityYesBps: mark.probabilityYesBps, probabilitySource: mark.source, probabilityStale: mark.stale };
+          return { ...market, collateralAccountId: undefined, probabilityYesBps: mark.probabilityYesBps, probabilitySource: mark.source, probabilityStale: mark.stale };
         }),
       }, { headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=45" } });
     });

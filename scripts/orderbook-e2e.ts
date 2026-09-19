@@ -1,3 +1,4 @@
+import { requireDatabaseFinancialMarket } from "../src/lib/market-backend";
 import { randomUUID } from "node:crypto";
 
 import { db, databaseRuntime } from "../src/lib/db";
@@ -279,7 +280,7 @@ async function main() {
       marketAfterAbortedFill.commandSequence === marketBeforeAbortedFill.commandSequence &&
       marketAfterAbortedFill.bookSequence === marketBeforeAbortedFill.bookSequence &&
       marketAfterAbortedFill.tradeSequence === marketBeforeAbortedFill.tradeSequence &&
-      marketAfterAbortedFill.collateralAccount.balanceMilli === marketBeforeAbortedFill.collateralAccount.balanceMilli &&
+      requireDatabaseFinancialMarket(marketAfterAbortedFill).collateralAccount.balanceMilli === requireDatabaseFinancialMarket(marketBeforeAbortedFill).collateralAccount.balanceMilli &&
       ordersAfterAbortedFill === ordersBeforeAbortedFill &&
       fillsAfterAbortedFill === fillsBeforeAbortedFill &&
       failedCommandCount === 0,
@@ -316,7 +317,7 @@ async function main() {
     db.marketPriceSnapshot.findMany({ where: { marketId: market.id }, orderBy: { createdAt: "asc" } }),
   ]);
   assert(state.yesShares === 10 && state.noShares === 10, "Complete-set issuance is not equal");
-  assert(state.collateralAccount.balanceMilli === 1_000_000n, "Mint collateral is not exact");
+  assert(requireDatabaseFinancialMarket(state).collateralAccount.balanceMilli === 1_000_000n, "Mint collateral is not exact");
   assert(alicePosition.yesShares === 10 && bobPosition.noShares === 10, "Mint positions are incorrect");
   assert(fills.length === 1, "Expected one immutable fill");
   assert(fills[0]!.journalEntry.postings.reduce((sum, posting) => sum + posting.amountMilli, 0n) === 0n, "Fill journal is unbalanced");
@@ -808,7 +809,7 @@ async function verifyAdminOrderBookCreation(creatorId: string) {
   assert(created.subsidyMilli === 0n && replay.subsidyMilli === 0n, "Admin order-book creation issued an invented subsidy");
   await expectApiError(() => createAdminMarket({ ...input, market: { ...definition, pricingModel: "LMSR" } }), "IDEMPOTENCY_CONFLICT");
   const row = await db.market.findUniqueOrThrow({ where: { id: created.market.id }, include: { collateralAccount: true, _count: { select: { priceHistory: true, orders: true } } } });
-  assert(row.pricingModel === "ORDER_BOOK" && row.collateralAccount?.balanceMilli === 0n && row._count.priceHistory === 0 && row._count.orders === 0, "New order book contains fabricated liquidity or price history");
+  assert(row.pricingModel === "ORDER_BOOK" && requireDatabaseFinancialMarket(row).collateralAccount?.balanceMilli === 0n && row._count.priceHistory === 0 && row._count.orders === 0, "New order book contains fabricated liquidity or price history");
   assert(await db.journalEntry.count({ where: { referenceId: row.id } }) === 0, "Empty order book created a financial journal without a transfer");
   assert(await db.auditLog.count({ where: { entityId: row.id, action: "MARKET_CREATED" } }) === 1, "Creation replay duplicated the audit record");
   const treasuryAfter = await db.ledgerAccount.findMany({ where: { purpose: "TREASURY" } });
@@ -817,7 +818,7 @@ async function verifyAdminOrderBookCreation(creatorId: string) {
   for (const [user, outcome, limitPriceMilli] of [[yesBuyer, "YES", "40000"], [noBuyer, "NO", "60000"]] as const) {
     await placeOrder({ userId: user.id, idempotencyKey: randomUUID(), request: { marketId: row.id, clientOrderId: randomUUID(), outcome, action: "BUY", limitPriceMilli, quantity: 2, timeInForce: "GTC" } });
   }
-  const collateral = await db.ledgerAccount.findUniqueOrThrow({ where: { id: row.collateralAccountId! } });
+  const collateral = await db.ledgerAccount.findUniqueOrThrow({ where: { id: requireDatabaseFinancialMarket(row).collateralAccountId! } });
   assert(collateral.balanceMilli === 200_000n && await db.orderFill.count({ where: { marketId: row.id } }) === 1, "Admin-created book could not mint fully participant-backed contracts");
 }
 

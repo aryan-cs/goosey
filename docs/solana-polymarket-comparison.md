@@ -51,12 +51,25 @@ neither can trade that market.
 The actual local-validator suites exercise SPL grants/transfers, escrow,
 order-book trading/cancellation, terms acceptance and YES/NO/VOID settlement.
 This is not a claim that the public website is fully on-chain: its current
-financial backend remains the database. Browser wallet flows, durable finalized
-indexing/recovery, manifest availability and verification, devnet deployment,
-fee funding and the deliberate single-authority backend cutover remain gates.
+main catalog financial backend remains the database. The `/wallet` browser flow
+has now claimed and transferred real SPL feathers on an isolated local validator,
+including recovery after a lost submission response without duplicate sending
+(see `wallet-browser-verification.md`). A separate chain-market interface is
+implemented; its complete browser trading rehearsal is still in progress.
+Durable finalized indexing/recovery and retained manifest verification have
+isolated runtime coverage. Main catalog integration, a running deployment
+indexer, devnet deployment, participant fee funding and the deliberate
+single-authority backend cutover remain release gates.
 Do not enable dual financial writes or silently translate database feathers
 into minted tokens. Production identity/enrollment policy must explicitly
 authorize issuance; client input must never become mint authority.
+
+Immutable per-market execution backends now separate SQL and Solana markets.
+SQL trading, cancellation, settlement and administrative lifecycle operations
+reject Solana entries, and SQL workers exclude them. Verified chain registrations
+create hidden draft metadata and a canonical network/program/market binding,
+without creating SQL collateral or balances. This does not migrate existing
+database markets or make draft chain entries publicly tradeable.
 
 ## Network identity correction
 

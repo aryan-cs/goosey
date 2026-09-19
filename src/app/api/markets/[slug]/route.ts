@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiErrorResponse, prisma } from "@/lib/market-service";
@@ -19,7 +20,7 @@ export async function GET(
     const user = await getAuthenticatedUser(request);
     return await runSerializableTransaction(prisma, async (tx) => {
       const market = await tx.market.findUnique({
-        where: { slug },
+        where: { slug, AND: [DATABASE_MARKET_FILTER] },
         include: {
           createdBy: { select: { username: true, displayName: true } },
           priceHistory: { orderBy: { createdAt: "desc" }, take: 1 },

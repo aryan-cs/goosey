@@ -1,3 +1,4 @@
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -166,6 +167,8 @@ export async function getPublicOrderBook(slug: string, depth: number) {
           slug: true,
           status: true,
           pricingModel: true,
+          executionBackend: true,
+          collateralAccountId: true,
           payoutMilli: true,
           bookSequence: true,
           acceptingOrders: true,
@@ -175,6 +178,7 @@ export async function getPublicOrderBook(slug: string, depth: number) {
       if (!market || market.status === "DRAFT") {
         throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
       }
+      assertDatabaseFinancialMarket(market);
       if (market.pricingModel !== "ORDER_BOOK") {
         throw new ApiError(422, "ORDER_BOOK_UNAVAILABLE", "This market uses the legacy market maker.");
       }
@@ -295,6 +299,7 @@ export async function listUserOrders(input: {
       userId: input.userId,
       status: { in: input.statuses ?? [...ORDER_STATUSES] },
       market: {
+        ...DATABASE_MARKET_FILTER,
         pricingModel: "ORDER_BOOK",
         ...(input.marketSlug ? { slug: input.marketSlug } : {}),
       },

@@ -180,6 +180,6 @@ describe("forecast API batch mark contract", () => {
     await searchGet(new NextRequest("http://localhost/api/search?q=campus"));
     expect(mocks.tx.user.findMany.mock.calls[0][0].where).toMatchObject({ role: "USER", status: "ACTIVE", profilePublic: true });
     expect(mocks.tx.market.findMany.mock.calls[0][0].where.status).toEqual({ not: "DRAFT" });
-    expect(mocks.tx.marketEvent.findMany.mock.calls[0][0].where.markets).toEqual({ some: { status: { not: "DRAFT" } } });
+    expect(mocks.tx.marketEvent.findMany.mock.calls[0][0].where.markets).toEqual({ some: { ...{ executionBackend: "DATABASE", collateralAccountId: { not: null } }, status: { not: "DRAFT" } } });
   });
 });

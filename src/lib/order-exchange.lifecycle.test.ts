@@ -50,6 +50,8 @@ function drainingTx() {
     market: {
       findUnique: vi.fn().mockResolvedValue({
         id: MARKET_ID,
+        executionBackend: "DATABASE",
+        collateralAccountId: "collateral_lifecycle",
         pricingModel: "ORDER_BOOK",
         commandSequence: 12n,
         bookSequence: 30n,

@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "./market-backend";
 import type { Prisma } from "@prisma/client";
 
 export interface PublicTradeActivity {
@@ -11,14 +12,14 @@ export interface PublicTradeActivity {
   feeMilli: bigint;
   createdAt: Date;
   market: { slug: string; shortTitle: string };
-  user: { profilePublic: boolean; username: string | null };
+  user: { profilePublic: boolean; username: string };
 }
 
 const userSelect = { username: true, profilePublic: true } as const;
 const marketSelect = { slug: true, shortTitle: true } as const;
 
 function publicUser(user: { username: string; profilePublic: boolean }): PublicTradeActivity["user"] {
-  return { profilePublic: user.profilePublic, username: user.profilePublic ? user.username : null };
+  return { profilePublic: user.profilePublic, username: user.username };
 }
 
 /** Call within a read transaction to merge both sources from one snapshot.
@@ -33,7 +34,7 @@ export async function loadPublicTradeActivity(
   }
   const [trades, fills] = await Promise.all([
     tx.trade.findMany({
-      where: { market: { status: { not: "DRAFT" } } },
+      where: { market: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit,
       select: {
@@ -43,7 +44,7 @@ export async function loadPublicTradeActivity(
       },
     }),
     tx.orderFill.findMany({
-      where: { market: { status: { not: "DRAFT" } } },
+      where: { market: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit,
       select: {

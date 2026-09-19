@@ -9,9 +9,11 @@ import { getAddressDecoder } from "@solana/kit";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { sha256 } from "@/lib/security";
+import { hashPassword } from "@/lib/auth";
+import type { TransactionRunner } from "@/lib/serializable-transaction";
 import {
   consumeWalletLinkChallenge,
-  issueWalletLinkChallenge,
+  issueWalletLinkChallenge as issueWithPassword,
   resolveWalletLinkConfiguration,
   WalletLinkError,
   type IssuedWalletLinkChallenge,
@@ -25,6 +27,9 @@ const CONFIGURATION: WalletLinkConfiguration = {
   chainId: "solana:devnet",
   genesisHash: GENESIS,
 };
+const PASSWORD = "Wallet-link-test-password-42!";
+const issueWalletLinkChallenge = (input: Omit<Parameters<typeof issueWithPassword>[0], "password"> & { password?: string }, client: Parameters<typeof issueWithPassword>[1]) =>
+  issueWithPassword({ password: PASSWORD, ...input }, client);
 
 function wallet() {
   const pair = generateKeyPairSync("ed25519");
@@ -61,6 +66,7 @@ describe("durable Solana wallet links", () => {
   const databaseUrl = `file:${databasePath}`;
   const database = new PrismaClient({ datasourceUrl: databaseUrl });
   let sequence = 0;
+  let passwordHash: string;
 
   async function account(now = new Date()) {
     sequence += 1;
@@ -70,7 +76,7 @@ describe("durable Solana wallet links", () => {
         email: `wallet-link-${sequence}@example.com`,
         username: `wallet_link_${sequence}`,
         displayName: `Wallet Link ${sequence}`,
-        passwordHash: "wallet-link-test-only",
+        passwordHash,
         emailVerifiedAt: now,
       },
       select: { id: true },
@@ -92,6 +98,7 @@ describe("durable Solana wallet links", () => {
   }
 
   beforeAll(async () => {
+    passwordHash = await hashPassword(PASSWORD);
     const schemaSql = execFileSync(
       join(process.cwd(), "node_modules/.bin/prisma"),
       ["migrate", "diff", "--from-empty", "--to-schema-datamodel", "prisma/schema.prisma", "--script"],
@@ -151,7 +158,7 @@ describe("durable Solana wallet links", () => {
     expect(stored).toMatchObject({
       userId: actor.userId,
       sessionId: actor.sessionId,
-      purpose: "LINK_WALLET",
+      purpose: "LINK_WALLET_REAUTH_V1",
       origin: CONFIGURATION.origin,
       chainId: CONFIGURATION.chainId,
       genesisHash: CONFIGURATION.genesisHash,
@@ -179,7 +186,7 @@ describe("durable Solana wallet links", () => {
       database,
     );
 
-    expect(linked).toMatchObject({
+    expect(linked.wallet).toMatchObject({
       userId: actor.userId,
       chainId: CONFIGURATION.chainId,
       genesisHash: CONFIGURATION.genesisHash,
@@ -190,7 +197,8 @@ describe("durable Solana wallet links", () => {
       .toEqual(new Date(now.getTime() + 1_000));
     expect(await database.journalEntry.count({ where: { actorUserId: actor.userId } })).toBe(0);
     expect((await database.user.findUniqueOrThrow({ where: { id: actor.userId } })).balanceMilli).toBe(0n);
-    await database.session.delete({ where: { id: actor.sessionId } });
+    expect(await database.session.findUnique({ where: { id: actor.sessionId } })).toBeNull();
+    expect(await database.session.findUnique({ where: { tokenHash: sha256(linked.session.token) } })).toMatchObject({ userId: actor.userId });
     expect((await database.solanaWalletLinkChallenge.findUniqueOrThrow({ where: { id: issued.id } })).consumedAt)
       .toEqual(new Date(now.getTime() + 1_000));
   });
@@ -246,11 +254,11 @@ describe("durable Solana wallet links", () => {
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
     expect(rejected?.reason).toBeInstanceOf(WalletLinkError);
-    expect((rejected?.reason as WalletLinkError).code).toBe("CHALLENGE_ALREADY_USED");
+    expect(["CHALLENGE_ALREADY_USED", "AUTHENTICATION_REQUIRED"]).toContain((rejected?.reason as WalletLinkError).code);
     expect(await database.solanaWalletLink.count({ where: { userId: actor.userId } })).toBe(1);
 
     await expect(consumeWalletLinkChallenge(request, database)).rejects.toMatchObject({
-      code: "CHALLENGE_ALREADY_USED",
+      code: "AUTHENTICATION_REQUIRED",
     });
   });
 
@@ -284,6 +292,8 @@ describe("durable Solana wallet links", () => {
     expect((await database.solanaWalletLinkChallenge.findUniqueOrThrow({ where: { id: secondChallenge.id } })).consumedAt)
       .toBeNull();
     expect(await database.solanaWalletLink.count({ where: { walletAddress: signer.address } })).toBe(1);
+    expect(await database.session.findUnique({where:{id:second.sessionId}})).not.toBeNull();
+    expect(await database.session.count({where:{userId:second.userId}})).toBe(1);
   });
 
   it("rejects changed deployment configuration, signatures, and expiration without consuming", async () => {
@@ -311,5 +321,58 @@ describe("durable Solana wallet links", () => {
     )).rejects.toMatchObject({ code: "CHALLENGE_EXPIRED" });
 
     expect((await database.solanaWalletLinkChallenge.findUniqueOrThrow({ where: { id: issued.id } })).consumedAt).toBeNull();
+  });
+  it("requires the current password even for a newly issued session and stores no password", async () => {
+    const actor=await account(), signer=wallet();
+    const input={authentication:actor.authentication,configuration:CONFIGURATION,walletAddress:signer.address};
+    for(const password of ["wrong-password-123!", "", undefined]) {
+      await expect(issueWithPassword({...input,password:password as string},database)).rejects.toMatchObject({code:"REAUTHENTICATION_REQUIRED"});
+    }
+    expect(await database.solanaWalletLinkChallenge.count({where:{userId:actor.userId}})).toBe(0);
+    const issued=await issueWalletLinkChallenge(input,database);
+    expect(JSON.stringify(issued)).not.toContain(PASSWORD);
+    expect(JSON.stringify(await database.solanaWalletLinkChallenge.findUnique({where:{id:issued.id}}))).not.toContain(PASSWORD);
+  });
+  it.each(["password-change","session-revocation"])("rejects %s between password snapshot and challenge transaction",async race=>{
+    const actor=await account(),signer=wallet();let calls=0;
+    const racing:TransactionRunner={$transaction:async(operation,options)=>{
+      if(++calls===2) {
+        if(race==="password-change") await database.user.update({where:{id:actor.userId},data:{passwordHash:await hashPassword("Changed-password-456!")}});
+        else await database.session.delete({where:{id:actor.sessionId}});
+      }
+      return database.$transaction(operation,options);
+    }};
+    await expect(issueWalletLinkChallenge({authentication:actor.authentication,configuration:CONFIGURATION,walletAddress:signer.address},racing)).rejects.toMatchObject({code:race==="password-change"?"REAUTHENTICATION_REQUIRED":"AUTHENTICATION_REQUIRED"});
+    expect(await database.solanaWalletLinkChallenge.count({where:{userId:actor.userId}})).toBe(0);
+  });
+  it("does not accept legacy non-reauthenticated challenges",async()=>{
+    const actor=await account(),signer=wallet(),now=new Date();
+    const issued=await issueWalletLinkChallenge({authentication:actor.authentication,configuration:CONFIGURATION,walletAddress:signer.address,now},database);
+    await database.solanaWalletLinkChallenge.update({where:{id:issued.id},data:{purpose:"LINK_WALLET"}});
+    await expect(consumeWalletLinkChallenge(completion(actor.authentication,issued,signer,now),database)).rejects.toMatchObject({code:"INVALID_CHALLENGE"});
+    expect(await database.session.findUnique({where:{id:actor.sessionId}})).not.toBeNull();
+  });
+  it("rotation invalidates sibling challenges and never replaces password reauthentication",async()=>{
+    const actor=await account(),signer=wallet(),now=new Date();
+    const input={authentication:actor.authentication,configuration:CONFIGURATION,walletAddress:signer.address,now};
+    const first=await issueWalletLinkChallenge(input,database),sibling=await issueWalletLinkChallenge(input,database);
+    const linked=await consumeWalletLinkChallenge(completion(actor.authentication,first,signer,now),database);
+    const rotated={userId:actor.userId,sessionToken:linked.session.token};
+    await expect(consumeWalletLinkChallenge(completion(rotated,sibling,signer,now),database)).rejects.toMatchObject({code:"INVALID_CHALLENGE"});
+    await expect(consumeWalletLinkChallenge(completion(actor.authentication,sibling,signer,now),database)).rejects.toMatchObject({code:"AUTHENTICATION_REQUIRED"});
+    await expect(issueWithPassword({...input,authentication:rotated,password:"wrong-password-123!"},database)).rejects.toMatchObject({code:"REAUTHENTICATION_REQUIRED"});
+    expect(await database.solanaWalletLinkChallenge.findUnique({where:{id:first.id}})).toMatchObject({sessionId:actor.sessionId,consumedAt:now});
+  });
+  it("rolls back link, nonce, and replacement session if old-session revocation fails",async()=>{
+    const actor=await account(),signer=wallet(),now=new Date();
+    const issued=await issueWalletLinkChallenge({authentication:actor.authentication,configuration:CONFIGURATION,walletAddress:signer.address,now},database);
+    // Failure injection only into this test's isolated SQLite database.
+    await database.$executeRawUnsafe('CREATE TRIGGER fail_wallet_rotation BEFORE DELETE ON "Session" BEGIN SELECT RAISE(ABORT, \'rotation failure\'); END');
+    try {await expect(consumeWalletLinkChallenge(completion(actor.authentication,issued,signer,now),database)).rejects.toThrow();}
+    finally {await database.$executeRawUnsafe('DROP TRIGGER fail_wallet_rotation');}
+    expect(await database.solanaWalletLink.count({where:{userId:actor.userId}})).toBe(0);
+    expect(await database.session.count({where:{userId:actor.userId}})).toBe(1);
+    expect(await database.session.findUnique({where:{id:actor.sessionId}})).not.toBeNull();
+    expect(await database.solanaWalletLinkChallenge.findUnique({where:{id:issued.id}})).toMatchObject({consumedAt:null});
   });
 });

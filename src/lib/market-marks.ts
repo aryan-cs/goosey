@@ -1,4 +1,5 @@
 import type { Market, Prisma } from "@prisma/client";
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 
 import { probabilityYesBps } from "./market-maker";
 import { selectMarketMark, type PriceLevel } from "./order-book-pricing";
@@ -6,6 +7,8 @@ import { selectMarketMark, type PriceLevel } from "./order-book-pricing";
 export type MarketMarkInput = Pick<
   Market,
   | "id"
+  | "executionBackend"
+  | "collateralAccountId"
   | "pricingModel"
   | "status"
   | "resolution"
@@ -47,6 +50,8 @@ export async function loadMarketMarks(
   markets: readonly MarketMarkInput[],
   now = new Date(),
 ): Promise<Map<string, LoadedMarketMark>> {
+  // Validate every input before deduplication (including duplicate IDs) or SQL.
+  for (const market of markets) assertDatabaseFinancialMarket(market);
   const uniqueMarkets = [...new Map(markets.map((market) => [market.id, market])).values()];
   const orderBookMarkets = uniqueMarkets.filter((market) =>
     market.pricingModel === "ORDER_BOOK" && settlementMark(market) === null
@@ -62,6 +67,7 @@ export async function loadMarketMarks(
           by: ["marketId", "bookSide", "limitPriceMilli"],
           where: {
             marketId: { in: liveIds },
+            market: DATABASE_MARKET_FILTER,
             user: { status: "ACTIVE", role: "USER" },
             status: { in: ["OPEN", "PARTIALLY_FILLED"] },
             remainingQuantity: { gt: 0 },
@@ -72,7 +78,7 @@ export async function loadMarketMarks(
       : Promise.resolve([] as DepthRow[]),
     orderBookIds.length
       ? tx.market.findMany({
-          where: { id: { in: orderBookIds } },
+          where: { ...DATABASE_MARKET_FILTER, id: { in: orderBookIds } },
           select: {
             id: true,
             orderFills: {

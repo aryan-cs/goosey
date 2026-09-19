@@ -57,12 +57,12 @@ describe("unified private trade history", () => {
     const page = await loadTradeHistory(tx as never, "user", { limit: 10 });
 
     expect(tx.trade.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId: "user" },
+      where: { market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: "user" },
       take: 11,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     }));
     expect(tx.orderFill.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { OR: [{ makerOrder: { userId: "user" } }, { takerOrder: { userId: "user" } }] },
+      where: { market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, OR: [{ makerOrder: { userId: "user" } }, { takerOrder: { userId: "user" } }] },
       take: 11,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     }));
@@ -146,6 +146,7 @@ describe("unified private trade history", () => {
     expect(new Set([...first.items, ...second.items].map((item) => item.id)).size).toBe(4);
     expect(second.nextCursor).toBeNull();
     expect(tx.trade.findMany.mock.calls[1]![0].where).toEqual({
+      market: { executionBackend: "DATABASE", collateralAccountId: { not: null } },
       userId: "user",
       AND: [{ OR: [
         { createdAt: { lt: T0 } },
@@ -155,6 +156,7 @@ describe("unified private trade history", () => {
     // ORDER_BOOK sorts above LMSR at equal timestamps, so after an LMSR
     // cursor it must not re-query any equal-time order-book ids.
     expect(tx.orderFill.findMany.mock.calls[1]![0].where).toEqual({
+      market: { executionBackend: "DATABASE", collateralAccountId: { not: null } },
       OR: [{ makerOrder: { userId: "user" } }, { takerOrder: { userId: "user" } }],
       AND: [{ OR: [{ createdAt: { lt: T0 } }] }],
     });
@@ -165,6 +167,7 @@ describe("unified private trade history", () => {
     await loadTradeHistory(tx as never, "user", { limit: 2, cursor });
 
     expect(tx.trade.findMany.mock.calls[0]![0].where).toEqual({
+      market: { executionBackend: "DATABASE", collateralAccountId: { not: null } },
       userId: "user",
       AND: [{ OR: [
         { createdAt: { lt: T0 } },
@@ -172,6 +175,7 @@ describe("unified private trade history", () => {
       ] }],
     });
     expect(tx.orderFill.findMany.mock.calls[0]![0].where).toEqual({
+      market: { executionBackend: "DATABASE", collateralAccountId: { not: null } },
       OR: [{ makerOrder: { userId: "user" } }, { takerOrder: { userId: "user" } }],
       AND: [{ OR: [
         { createdAt: { lt: T0 } },

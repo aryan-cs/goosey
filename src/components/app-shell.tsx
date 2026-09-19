@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SearchLauncher } from "./search-launcher";
 import { Suspense, type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, ChartNoAxesColumnIncreasing, ChevronDown, CircleHelp, Menu, Search, UserRound, X } from "lucide-react";
+import { Bell, ChartNoAxesColumnIncreasing, ChevronDown, CircleHelp, Menu, Search, UserRound, Wallet, X } from "lucide-react";
 import { FeatherIcon, GooseMark } from "./brand";
 import { MARKET_CATEGORIES } from "@/lib/market-categories";
 import { EmailVerificationGuard } from "./email-verification-guard";
@@ -162,6 +162,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
                 <Link className="balance-chip" href="/portfolio" aria-label={`Portfolio, ${balance ?? 0} feathers available`}>
                   <FeatherIcon /> <span>{balance ?? 0}</span>
                 </Link>
+                <Link className="icon-button" href="/wallet" aria-label="Solana wallet" title="Wallet" aria-current={isCurrentPath(pathname, "/wallet") ? "page" : undefined}><Wallet size={19} /></Link>
                 <Link className="icon-button notification-trigger" href="/notifications" aria-label={`${notificationCount} unread notification${notificationCount === 1 ? "" : "s"}`}><Bell size={19} />{notificationCount > 0 && <span>{notificationCount > 9 ? "9+" : notificationCount}</span>}</Link>
                 <Link className="avatar-button" href="/settings/profile" aria-label="Settings"><UserRound size={18} /></Link>
               </>
@@ -195,6 +196,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
             <Link className="mobile-more-primary" href="/verify-email" onClick={() => setMoreOpen(false)}>Verify email</Link>
           </> : <>
             <Link href="/portfolio" aria-current={isCurrentPath(pathname, "/portfolio") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Portfolio</Link>
+            <Link href="/wallet" aria-current={isCurrentPath(pathname, "/wallet") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Wallet</Link>
             <Link href="/watchlist" onClick={() => setMoreOpen(false)}>Watchlist</Link>
             <Link href="/notifications" onClick={() => setMoreOpen(false)}>Notifications{notificationCount > 0 ? ` (${notificationCount})` : ""}</Link>
             <Link href="/settings/profile" onClick={() => setMoreOpen(false)}>Account</Link>

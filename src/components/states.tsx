@@ -7,7 +7,7 @@ export function LoadingState({ rows = 3, label = "Loading" }: { rows?: number; l
 }
 
 export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
-  return <div className="empty-state"><span className="empty-icon"><FeatherIcon width={22} height={22} /></span><h3>{title}</h3>{description && <p>{description}</p>}{action}</div>;
+  return <div className="empty-state"><span className="empty-icon" aria-hidden="true"><FeatherIcon width={22} height={22} /></span><div className="empty-state-copy"><h3>{title}</h3>{description && <p>{description}</p>}</div>{action && <div className="empty-state-action">{action}</div>}</div>;
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {

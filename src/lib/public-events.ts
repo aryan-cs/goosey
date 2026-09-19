@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "./market-backend";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import type { db } from "./db";
@@ -49,11 +50,11 @@ const eventSelect = {
   category: true, featured: true, color: true, icon: true,
   startsAt: true, endsAt: true, createdAt: true, updatedAt: true,
   markets: {
-    where: { status: { not: "DRAFT" } },
+    where: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } },
     orderBy: [{ featured: "desc" }, { closesAt: "asc" }, { id: "asc" }],
     select: {
       id: true, slug: true, title: true, shortTitle: true, description: true,
-      status: true, pricingModel: true, acceptingOrders: true, resolution: true,
+      executionBackend: true, collateralAccountId: true, status: true, pricingModel: true, acceptingOrders: true, resolution: true,
       closesAt: true, resolvesAt: true, yesShares: true, noShares: true,
       liquidityParameter: true, payoutMilli: true, volumeMilli: true,
       traderCount: true, commentCount: true,
@@ -62,7 +63,7 @@ const eventSelect = {
 } as const satisfies Prisma.MarketEventSelect;
 type SelectedEvent = Prisma.MarketEventGetPayload<{ select: typeof eventSelect }>;
 export type PublicEvent = Omit<SelectedEvent, "markets"> & {
-  markets: Array<SelectedEvent["markets"][number] & {
+  markets: Array<Omit<SelectedEvent["markets"][number], "collateralAccountId"> & {
     probabilityYesBps: number | null;
     probabilitySource: LoadedMarketMark["source"];
     probabilityStale: boolean;
@@ -76,7 +77,7 @@ async function markedEvents(tx: Prisma.TransactionClient, events: SelectedEvent[
     markets: event.markets.map((market) => {
       const mark = marks.get(market.id);
       if (!mark) throw new Error("Market mark missing from batch.");
-      return { ...market, probabilityYesBps: mark.probabilityYesBps, probabilitySource: mark.source, probabilityStale: mark.stale };
+      return { ...market, collateralAccountId: undefined, probabilityYesBps: mark.probabilityYesBps, probabilitySource: mark.source, probabilityStale: mark.stale };
     }),
   }));
 }
@@ -94,7 +95,7 @@ export async function listPublicEvents(database: typeof db, input: EventListQuer
         ...(query.timing === "live" ? { startsAt: { lte: asOf }, endsAt: { gt: asOf } } : {}),
         ...(query.timing === "upcoming" ? { startsAt: { gt: asOf } } : {}),
         ...(query.timing === "past" ? { endsAt: { lte: asOf } } : {}),
-        markets: { some: { status: { not: "DRAFT" } } },
+        markets: { some: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } } },
         ...(cursor ? { AND: [{ OR: [
           ...(cursor.featured ? [{ featured: false }] : []),
           { featured: cursor.featured, startsAt: { gt: new Date(cursor.startsAt) } },

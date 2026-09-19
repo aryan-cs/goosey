@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -27,14 +28,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return await runSerializableTransaction(prisma, async (tx) => {
       const [markets, events, profiles] = await Promise.all([
         tx.market.findMany({
-          where: { status: { not: "DRAFT" }, OR: [{ title: { contains: query.q } }, { shortTitle: { contains: query.q } }, { description: { contains: query.q } }, { category: { contains: query.q } }] },
+          where: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" }, OR: [{ title: { contains: query.q } }, { shortTitle: { contains: query.q } }, { description: { contains: query.q } }, { category: { contains: query.q } }] },
           take: 50,
-          select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, status: true, pricingModel: true, acceptingOrders: true, resolution: true, payoutMilli: true, closesAt: true, yesShares: true, noShares: true, liquidityParameter: true, volumeMilli: true },
+          select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, status: true, executionBackend: true, collateralAccountId: true, pricingModel: true, acceptingOrders: true, resolution: true, payoutMilli: true, closesAt: true, yesShares: true, noShares: true, liquidityParameter: true, volumeMilli: true },
         }),
         tx.marketEvent.findMany({
-          where: { markets: { some: { status: { not: "DRAFT" } } }, OR: [{ title: { contains: query.q } }, { shortTitle: { contains: query.q } }, { description: { contains: query.q } }, { category: { contains: query.q } }] },
+          where: { markets: { some: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } } }, OR: [{ title: { contains: query.q } }, { shortTitle: { contains: query.q } }, { description: { contains: query.q } }, { category: { contains: query.q } }] },
           take: 30,
-          select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true, _count: { select: { markets: { where: { status: { not: "DRAFT" } } } } } },
+          select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true, _count: { select: { markets: { where: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } } } } } },
         }),
         tx.user.findMany({
           where: { role: "USER", status: "ACTIVE", profilePublic: true, OR: [{ username: { contains: query.q } }, { displayName: { contains: query.q } }, { bio: { contains: query.q } }] },
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         .slice(0, query.limit)
         .map((market) => {
           const mark = marks.get(market.id)!;
-          return { ...market, resultType: "market" as const, probabilityYesBps: mark.probabilityYesBps, probabilitySource: mark.source, probabilityStale: mark.stale };
+          return { ...market, collateralAccountId: undefined, resultType: "market" as const, probabilityYesBps: mark.probabilityYesBps, probabilitySource: mark.source, probabilityStale: mark.stale };
         });
       const rankedEvents = events
         .sort((left, right) => textRank(query.q, [left.title, left.shortTitle, left.category]) - textRank(query.q, [right.title, right.shortTitle, right.category]) || left.title.localeCompare(right.title))

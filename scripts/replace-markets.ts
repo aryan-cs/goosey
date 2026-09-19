@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { assertDatabaseFinancialMarket } from "../src/lib/market-backend";
 import { chmod, mkdir, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +31,7 @@ async function inspect(tx: Prisma.TransactionClient) {
     },
   });
   for (const market of markets) {
+    assertDatabaseFinancialMarket(market);
     const fail = (reason: string): never => { throw new Error(`Refusing to remove ${market.slug}: ${reason}`); };
     if (market.createdBy.role !== "SYSTEM" || market.createdBy.email !== "system@goosey.local") fail("not created by the seed system account");
     const activity = Object.entries(market._count).filter(([, count]) => count > 0);
@@ -49,7 +51,7 @@ async function inspect(tx: Prisma.TransactionClient) {
     const unexpectedJournals = await tx.journalEntry.count({ where: { referenceType: "MARKET", referenceId: market.id, NOT: { type: "MARKET_SUBSIDY", idempotencyScope: "seed-market" } } });
     if (unexpectedJournals) fail("market has journal activity beyond initial seed funding");
   }
-  return markets;
+  return markets.map((market) => { assertDatabaseFinancialMarket(market); return market; });
 }
 
 async function main() {

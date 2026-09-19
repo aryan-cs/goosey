@@ -4,6 +4,44 @@ Research date: 2026-09-19. Design contract for the main integration. The user co
 
 ## Responsibility boundary
 
+### Browser configuration and balance contract (implemented)
+
+`GET /api/solana/status` remains uncached and reports `financialBackend: database`
+and `exchangeVerified: false`. After server-side foundation verification it adds
+`browserRuntime`, built by `buildPublicBrowserRuntime` from **explicit** settings:
+
+```text
+GOOSEY_SOLANA_BROWSER_ENABLED=true
+GOOSEY_SOLANA_PUBLIC_RPC_URL=<intentionally public RPC endpoint>
+```
+
+Neither setting is enabled by this implementation. The server's private
+`GOOSEY_SOLANA_RPC_URL` is never a fallback. Public URLs cannot contain userinfo,
+queries or fragments. Localnet requires loopback; devnet requires HTTPS. A path
+may contain an explicitly public routing identifier, so operators must never
+copy a private provider key into it. Invalid enabled configuration fails closed.
+The Next.js `connect-src` policy admits only this configured public origin,
+including its explicit port; private RPC origins and wildcard hosts are never
+added. These headers are config/build-time values: restart development or rebuild
+the deployment when changing browser RPC configuration. This does not configure
+CORS on the RPC provider, which must separately allow the application's origin.
+
+The wallet UI should parse the whole same-origin status response using
+`parsePublicBrowserRuntime`. It returns null when unavailable/disabled and a
+frozen runtime only for consistent explicit configuration. `endpointVerified`
+is always false: server verification concerns the server endpoint. Probe the
+browser endpoint and use verified readers before requesting wallet signatures.
+
+`readGooseyWalletBalance({ runtime, wallet, signal? })` returns exact bigint
+`featherAmount` and `solLamports`, canonical mint/ATA, separate present/absent
+statuses, and configuration/observation slots. Wallet and ATA are read together
+at finalized commitment after mint/configuration verification. Missing accounts
+can legitimately mean zero; RPC errors, malformed accounts and wrong bindings
+must never be displayed as zero. `ordinaryFeePayerAccount` distinguishes an
+ordinary System wallet from arbitrary program-owned SOL accounts. This is not
+a fee quote, an airdrop or a claim of signing capability. Do not combine these
+balances with the legacy database balance.
+
 The wallet signs user-authorized transactions. SPL Token owns wallet token balances and user-to-user transfers; the exchange program owns escrow-backed balances, reservations, positions, matching, order lifecycle, grants, resolution, and claims. A relayer/keeper may submit already authorized operations or permissionless cleanup, but cannot choose arbitrary fills or move another user's available feathers. SIWS proves control for an application account link; it does not authorize trading, transfers, or grant signing custody.
 
 The database remains suitable for email accounts, profiles, comments, metadata, wallet-link challenges, and rebuildable chain projections. It must never create a spendable balance after a chain transaction, execute a parallel match, or settle a chain market independently. Existing source points requiring explicit routing in the main implementation are:
@@ -67,9 +105,43 @@ The current feature types expose optional offchain message formats, but the insp
 
 Keep link identity separate from chain authority. A valid cookie or linked address cannot sign a program instruction. Unlinking affects the application association; it does not transfer positions, cancel orders, or revoke previously signed transactions. Account switches invalidate unsigned drafts and pending link challenges; previously broadcast transactions remain tracked under their original wallet.
 
+Current challenge requests require `{ walletAddress, password }`. The server
+reverifies the current password, checks its hash again transactionally, and marks
+the short-lived challenge `LINK_WALLET_REAUTH_V1`. Verification atomically consumes
+that original-session challenge, inserts the wallet link and rotates/revokes the
+session. The new token is cookie-only; the consumed nonce tombstone remains.
+Legacy challenges cannot satisfy this purpose. A lost success response requires
+sign-in and reading the existing link, not replaying the old challenge.
+
+The explicit-env `test:chain:wallet-api` runner passed with real Ed25519 signatures,
+cookie authentication, password reauthentication, replacement-cookie checks and
+temporary SQLite against the retained validator at finalized slot 484. It verified
+conflict rollback, stale-session rejection and unchanged database economics. This
+is direct route-handler integration, not a browser signing or HTTP end-to-end proof.
+
 ### Existing SQLite database upgrade
 
-Fresh databases receive the wallet-link tables from the Prisma schema. An existing SQLite database must receive the additive `prisma/sqlite-upgrades/20260919210000_solana_wallet_links.sql` upgrade exactly once before wallet-link routes are enabled. Stop the web process and workers first so no writer can race the schema change. Do not run `prisma db push` against a participant database as a substitute for this reviewed upgrade.
+Fresh databases receive the wallet-link tables from the Prisma schema. An existing SQLite database must receive the additive `prisma/sqlite-upgrades/20260919210000_solana_wallet_links.sql` upgrade before wallet-link routes are enabled. Do not run `prisma db push` against a participant database as a substitute for this reviewed upgrade.
+
+The reviewed `npm run db:upgrade:solana:sqlite -- --source /absolute/app.db
+--backup /absolute/new-backup.db` runner handles all three Solana migrations
+(wallet links, event journal and ingestion visits). It requires existing WAL mode,
+creates a verified private backup, rejects partial/drifted schema, and rechecks
+the entire schema under one bounded immediate transaction before applying pending
+DDL. Readers remain available; writers may briefly encounter busy errors. It
+performs no financial DML. The backup precedes concurrent writes and must never be
+automatically restored over the live database. Twelve real SQLite tests cover
+rollback, schema mismatch, contention and an existing writer connection.
+
+The local development database received these three upgrades on 2026-09-19.
+Backup: `/Users/aryan/.local/share/goosey-db-upgrade-7wATB3/before-solana.sqlite`,
+SHA-256 `1e2a2b739a08d13d7ec3246f70d61d1ba663451639408c367ca1f60bffcce176`.
+Post-upgrade integrity/FK checks passed; bidirectional comparisons of user
+balances and every ledger-account row against that backup showed no changes.
+This is not a PostgreSQL deployment migration.
+
+For the manual alternative below, stop web/worker writers first; the runner's
+schema race checks do not apply to arbitrary manual commands.
 
 Create a verified online snapshot at a new absolute path before changing the database:
 
@@ -95,6 +167,16 @@ SQL
 `PRAGMA foreign_key_check` must print no rows and `PRAGMA integrity_check` must print exactly `ok`. The upgrade deliberately fails if it is applied twice; record its application in the deployment change log rather than rerunning it. Regenerate both Prisma clients with `npm run db:generate`, then start the application with the same database. PostgreSQL deployments use `npm run db:migrate:deploy:postgres`, which applies the corresponding timestamped migration through Prisma's migration ledger.
 
 ## Transaction intent and wallet failures
+
+The isolated exchange run `/tmp/goosey-solana-runner-hFxIzv` verified the shipping
+wallet-balance reader against actual canonical token accounts and SOL balances.
+An existing 2,000-unit transfer moved sender 996,778 → 994,778 and recipient
+0 → 2,000, with unchanged participant SOL (the test admin paid fees). A fresh
+unsent wallet and its ATA were genuinely absent and reported zero. All 153
+transaction cases and the 151-receipt/108-event ingestion scan remained intact.
+Genesis: `HK2YvCh4TRFPPoaptHQyiFL9M97URm7SL1kTZKunwy17`; artifact SHA-256:
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
+This is actual reader/transfer integration, not browser transaction approval proof.
 
 Create an immutable semantic intent before asking for a signature: operation, wallet, deployment domain, market, outcome, side, limit, quantity, time-in-force, post-only, expiry, expected order version, fee schedule version, deadline, and unique command ID. Hash a canonical integer encoding. Derive its receipt/nonce scope onchain from the wallet and deployment; include market/operation in the payload. An HTTP idempotency key alone is insufficient.
 
@@ -129,6 +211,61 @@ External wallet token balances become exchange credit only through an atomic dep
 For a user-to-user send, derive both ATAs using the pinned mint and classic Token Program, create the recipient ATA idempotently, and execute `TransferChecked` with exactly three decimals. Parse decimal display amounts into bigint units without floating point. Authenticate the source owner through the actual transaction signature. Creating an ATA may require additional SOL rent even when the recipient has no SOL; the explicit payer sponsors that cost. Feathers cannot pay Solana network fees. Verify mint/program, source ownership, amount, destination, and fee/rent estimate in the review screen; a valid-looking recipient address alone is insufficient. Sending wallet tokens must never debit exchange escrow or database balances.
 
 Free issuance still needs an onchain claim receipt, authorized mint authority, immutable grant cap/policy, and concurrency/replay protection. Transferring all tokens away, closing an empty ATA, unlinking/relinking, or receiving tokens back cannot reset eligibility. Wallet-based limits alone cannot prevent Sybil identities; do not describe them as one grant per human. SPL Token rejects unauthorized mint authorities, but application grant caps require separate exchange/grant-program tests.
+
+The operator-only `prepareEnrollment` helper now builds the unsigned authorization
+from explicit issuer, wallet, identity digest, allowance and expiry inputs. It
+reads configuration, mint, both association PDAs and Clock in one finalized batch;
+rejects existing wallet/identity associations; checks lifetime authorized allowance
+against campaign/per-wallet caps; and requires expiry after that chain Clock.
+Burning feathers cannot replenish enrollment allowance. The configured issuer is
+the sole signer and fee payer. Preparation neither establishes human eligibility
+nor signs, sends, funds SOL, claims tokens or changes database balances. Its 55
+mocked tests prove preparation validation, not actual execution of this helper.
+Runtime proof and the explicit enrollment operator are separate integration gates.
+
+### Read-only chain market API
+
+`GET /api/solana/markets/{marketId}?wallet={address}` reads a complete finalized
+market/book/resolution/terms/escrow snapshot on the server-pinned deployment.
+Market IDs are canonical decimal u64 strings, not database slugs. The selected
+wallet is public chain data, not authenticated ownership. Requests cannot select
+an RPC or override network/program identity. Missing or unverifiable accounts
+return 503, never a database-market fallback. The route rate-limits reads, bounds
+RPC time, rechecks genesis, and returns decimal-string quantities with no-store.
+Terms contain a digest commitment, not proof that manifest contents are available
+or understood; `manifestVerified` and `exchangeVerified` remain false.
+
+Twenty-two route tests cover malformed inputs, u64 precision, throttling, network
+change, incomplete snapshots and sanitized failures. Actual local HTTP checks
+confirmed invalid-ID 400 and absent-chain-market 503. Successful market snapshot
+runtime behavior is covered by the underlying exchange reader suite, but a
+successful HTTP market response still requires a published market on that network.
+
+Append `&format=terms` to retrieve exact canonical UTF-8 manifest bytes. The server
+uses `GOOSEY_SOLANA_TERMS_DIRECTORY` (an existing private directory) and verifies
+retained bytes against digest, length, deployment, market identity, economics and
+reviewer addresses from that same finalized account batch. No arbitrary file path
+or source URL is accepted. Missing/corrupt retention returns `TERMS_UNAVAILABLE`,
+not reconstructed text. `X-Goosey-Terms-Digest` uses the codec's domain-separated
+hash (not raw SHA-256); clients must independently use `verifyMarketTerms` before
+signing. Headers also state the observed slot and whether terms were sealed.
+
+`retainMarketTerms` validates before exclusive staging, fsyncs bytes, publishes
+with an atomic no-overwrite link, and fsyncs the directory. Identical concurrent
+writes are idempotent; changed rules for the same market/deployment conflict.
+The private filesystem and ancestors remain operator-trusted. Every read verifies
+content again; this is not replication or a guarantee against disk loss. Twenty-
+three filesystem tests plus 28 route tests cover retention and delivery boundaries.
+
+The isolated compiled-program terms suite also retained/retrieved its actual
+manifest against the finalized sealed commitment at slot 70, preserving all 72
+transaction cases. Exact bytes/digest and idempotent replay passed; altered rules
+and a self-consistent conflicting digest were rejected without replacing the
+retained file. Evidence: `/tmp/goosey-solana-runner-BVsl8s/program-e2e.log`, genesis
+`EamEdnmL7coXj5XEqsSPXhTYqtL6BDUGr5DnbVCdiVfL`, artifact
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
+This proves store integration with real finalized commitments, not successful
+HTTP delivery from a published market on the shared development deployment.
 
 Market YES/NO positions should likewise have one representation. If positions are program-owned quantities, no second independently spendable outcome-token balance exists. If outcome tokens are later adopted, escrow/reserve or burn/mint them atomically and reconcile their supply against positions and collateral. Supporting arbitrary transfer-fee/hook extensions is not part of the initial contract.
 

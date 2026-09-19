@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "./market-backend";
 import { db } from "@/lib/db";
 import { loadPositionValuations } from "@/lib/position-valuation";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
@@ -8,7 +9,7 @@ async function loadRankedPlayers() {
   const users = await db.user.findMany({
       where: { status: "ACTIVE", role: "USER" },
       include: {
-        positions: { where: { OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] }, include: { market: true } },
+        positions: { where: { market: DATABASE_MARKET_FILTER, OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] }, include: { market: true } },
       },
       orderBy: { id: "asc" },
     });
@@ -18,7 +19,7 @@ async function loadRankedPlayers() {
   const [wallets, grants, reservations] = userIds.length ? await Promise.all([
     db.ledgerAccount.findMany({ where: { ownerType: "USER", ownerId: { in: userIds }, purpose: "USER_FEATHERS", status: "ACTIVE" }, select: { ownerId: true, balanceMilli: true } }),
     db.journalEntry.findMany({ where: { type: "WELCOME_GRANT", actorUserId: { in: userIds } }, select: { actorUserId: true, metadata: true } }),
-    db.orderReservation.findMany({ where: { userId: { in: userIds }, cashAccountId: { not: null } }, select: { userId: true, cashAccount: { select: { balanceMilli: true } } } }),
+    db.orderReservation.findMany({ where: { market: DATABASE_MARKET_FILTER, userId: { in: userIds }, cashAccountId: { not: null } }, select: { userId: true, cashAccount: { select: { balanceMilli: true } } } }),
   ]) : [[], [], []];
   const reservedByUser = new Map<string, bigint>();
   for (const reservation of reservations) {

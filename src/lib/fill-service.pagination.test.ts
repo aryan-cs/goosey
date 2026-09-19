@@ -61,6 +61,7 @@ describe("private fill history pagination", () => {
 
     expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
+        market: { executionBackend: "DATABASE", collateralAccountId: { not: null } },
         OR: [
           { makerOrder: { userId: "user_12345678" } },
           { takerOrder: { userId: "user_12345678" } },
@@ -80,7 +81,7 @@ describe("private fill history pagination", () => {
 describe("public tape watermark", () => {
   it("excludes fills committed after the captured sequence and keeps the pagination boundary", async () => {
     mocks.findMarket.mockResolvedValue({
-      id: "market_fixture", slug: "fixture", status: "OPEN",
+      executionBackend: "DATABASE", collateralAccountId: "collateral", id: "market_fixture", slug: "fixture", status: "OPEN",
       pricingModel: "ORDER_BOOK", payoutMilli: 100_000n, tradeSequence: 10n,
     });
     mocks.findMany.mockImplementation(async ({ where }) => {

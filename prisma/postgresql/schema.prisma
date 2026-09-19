@@ -205,6 +205,8 @@ model SolanaProgramEvent {
 
 model Market {
   id                  String                     @id @default(cuid())
+  /// Immutable financial namespace. SQL migrations enforce backend/collateral consistency.
+  executionBackend    String                     @default("DATABASE")
   slug                String                     @unique
   title               String
   shortTitle          String
@@ -237,12 +239,13 @@ model Market {
   acceptingOrders     Boolean                    @default(true)
   createdById         String
   eventId             String?
-  collateralAccountId String                     @unique
+  collateralAccountId String?                    @unique
   createdAt           DateTime                   @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime                   @updatedAt @db.Timestamptz(3)
   createdBy           User                       @relation("MarketCreator", fields: [createdById], references: [id])
   event               MarketEvent?               @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  collateralAccount   LedgerAccount              @relation("MarketCollateral", fields: [collateralAccountId], references: [id])
+  collateralAccount   LedgerAccount?             @relation("MarketCollateral", fields: [collateralAccountId], references: [id], onDelete: Restrict)
+  solanaBinding       SolanaMarketBinding?
   positions           Position[]
   trades              Trade[]
   comments            Comment[]
@@ -264,6 +267,25 @@ model Market {
   @@index([category, status])
   @@index([featured, status])
   @@index([volumeMilli])
+  @@index([executionBackend, status, closesAt])
+}
+
+/// Immutable canonical chain identity, not chain state or a financial SQL ledger.
+/// Catalog creation must insert the SOLANA Market and its binding in one transaction.
+model SolanaMarketBinding {
+  id             String   @id @default(cuid())
+  marketId       String   @unique
+  cluster        String
+  genesisHash    String
+  programAddress String
+  marketAddress  String
+  /// Canonical unsigned decimal integer in [0, 18446744073709551615], never a JS number.
+  chainMarketId  String
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  market         Market   @relation(fields: [marketId], references: [id], onDelete: Restrict)
+
+  @@unique([genesisHash, programAddress, marketAddress], map: "SolanaMarketBinding_domain_address_key")
+  @@unique([genesisHash, programAddress, chainMarketId], map: "SolanaMarketBinding_domain_id_key")
 }
 
 model MarketEvent {

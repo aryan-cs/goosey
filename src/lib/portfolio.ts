@@ -1,13 +1,16 @@
 import type { Market, Position } from "@prisma/client";
+import { assertDatabaseFinancialMarket } from "./market-backend";
 import { executablePositionValue, positionSideLiquidationValueMilli, yesProbabilityBps } from "@/lib/trading";
 
 type PositionWithMarket = Position & { market: Market };
 
 export function liquidationValueMilli(position: PositionWithMarket): bigint {
+  assertDatabaseFinancialMarket(position.market);
   return executablePositionValue(position.market, position);
 }
 
 export function sideLiquidationValuesMilli(position: PositionWithMarket): { yes: bigint; no: bigint } {
+  assertDatabaseFinancialMarket(position.market);
   const pairs = Math.min(position.yesShares, position.noShares);
   const remainingYes = position.yesShares - pairs;
   const remainingNo = position.noShares - pairs;

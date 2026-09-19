@@ -1,3 +1,4 @@
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 import type { NextRequest } from "next/server";
 import { assertMutationSession } from "@/lib/mutation-session";
 import { createHash } from "node:crypto";
@@ -175,13 +176,14 @@ export async function createTradeQuote(input: {
   return runSerializableTransaction(prisma, async (tx) => {
     if (input.authRequest) await assertMutationSession(tx, input.authRequest, input.userId);
     if (input.authorize) await input.authorize(tx);
-    await tx.tradeQuote.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+    await tx.tradeQuote.deleteMany({ where: { expiresAt: { lt: new Date() }, market: DATABASE_MARKET_FILTER } });
     const user = await tx.user.findUnique({ where: { id: input.userId }, select: { role: true, status: true, emailVerifiedAt: true } });
     if (!user || user.status !== "ACTIVE") throw new ApiError(403, "ACCOUNT_INACTIVE", "Account is not active.");
     if (user.role !== "USER") throw new ApiError(403, "PARTICIPANT_REQUIRED", "Privileged accounts cannot trade.");
     if (requiresEmailVerification(user)) throw new ApiError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before trading.");
     const market = await tx.market.findUnique({ where: { id: input.marketId } });
     if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+    assertDatabaseFinancialMarket(market);
     if (market.pricingModel !== "LMSR") {
       throw new ApiError(422, "LMSR_UNAVAILABLE", "This market does not use the LMSR trading engine.");
     }
@@ -372,6 +374,7 @@ export async function executeTrade(input: {
       if (user.role !== "USER") throw new ApiError(403, "PARTICIPANT_REQUIRED", "Privileged accounts cannot trade.");
       if (requiresEmailVerification(user)) throw new ApiError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before trading.");
       if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+      assertDatabaseFinancialMarket(market);
       if (market.pricingModel !== "LMSR") {
         throw new ApiError(422, "LMSR_UNAVAILABLE", "This market does not use the LMSR trading engine.");
       }
@@ -420,6 +423,7 @@ export async function executeTrade(input: {
       const marketChanged = await tx.market.updateMany({
         where: {
           id: market.id,
+          ...DATABASE_MARKET_FILTER,
           version: expectedMarketVersion,
           status: "OPEN",
           closesAt: { gt: operationAt },

@@ -26,7 +26,7 @@ describe("unified public trade activity", () => {
     expect(await loadPublicTradeActivity(client, 3)).toEqual([]);
     for (const delegate of [tx.trade, tx.orderFill]) {
       expect(delegate.findMany).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-        where: { market: { status: { not: "DRAFT" } } }, take: 3,
+        where: { market: { ...{ executionBackend: "DATABASE", collateralAccountId: { not: null } }, status: { not: "DRAFT" } } }, take: 3,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       }));
     }
@@ -73,7 +73,7 @@ describe("unified public trade activity", () => {
     }]);
   });
 
-  it("removes private usernames from both sources before returning public data", async () => {
+  it("always identifies traders from both sources regardless of profile-page visibility", async () => {
     const legacy = trade("legacy");
     legacy.user = { username: "private-legacy", profilePublic: false };
     const execution = fill("book");
@@ -81,9 +81,8 @@ describe("unified public trade activity", () => {
     const { client } = database([legacy], [execution]);
     const items = await loadPublicTradeActivity(client);
     expect(items.map((item) => item.user)).toEqual([
-      { username: null, profilePublic: false }, { username: null, profilePublic: false },
+      { username: "private-taker", profilePublic: false }, { username: "private-legacy", profilePublic: false },
     ]);
-    expect(JSON.stringify(items, (_, value) => typeof value === "bigint" ? String(value) : value)).not.toContain("private-");
   });
 
   it.each([0, -1, 101, 1.5, NaN, Infinity])("rejects invalid limit %s before reading", async (limit) => {

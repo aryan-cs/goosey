@@ -80,8 +80,8 @@ describe("public event reads", () => {
     expect(mocks.marks).toHaveBeenCalledExactlyOnceWith(mocks.tx, event().markets, expect.any(Date));
     const args = mocks.tx.marketEvent.findMany.mock.calls[0][0];
     expect(args).toMatchObject({ take: 2, orderBy: [{ featured: "desc" }, { startsAt: "asc" }, { id: "asc" }] });
-    expect(args.where.markets).toEqual({ some: { status: { not: "DRAFT" } } });
-    expect(args.select.markets.where).toEqual({ status: { not: "DRAFT" } });
+    expect(args.where.markets).toEqual({ some: { ...{ executionBackend: "DATABASE", collateralAccountId: { not: null } }, status: { not: "DRAFT" } } });
+    expect(args.select.markets.where).toEqual({ ...{ executionBackend: "DATABASE", collateralAccountId: { not: null } }, status: { not: "DRAFT" } });
   });
   it("preserves independent marks, including zero, stale last fills, and LMSR without normalization", async () => {
     const row = event();
@@ -97,7 +97,7 @@ describe("public event reads", () => {
       [0, "SETTLEMENT", false], [7200, "LAST", true], [6200, "LMSR", false],
     ]);
     expect(mocks.transaction).toHaveBeenCalledOnce();
-    expect(mocks.tx.marketEvent.findUnique.mock.calls[0][0].select.markets.where).toEqual({ status: { not: "DRAFT" } });
+    expect(mocks.tx.marketEvent.findUnique.mock.calls[0][0].select.markets.where).toEqual({ ...{ executionBackend: "DATABASE", collateralAccountId: { not: null } }, status: { not: "DRAFT" } });
   });
   it.each([null, { ...event(), markets: [] }])("returns null for missing or empty/draft-only detail", async (row) => {
     mocks.tx.marketEvent.findUnique.mockResolvedValue(row);

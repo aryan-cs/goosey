@@ -69,6 +69,7 @@ function activeUser() {
 
 function orderBookMarket(overrides: Record<string, unknown> = {}) {
   return {
+    executionBackend: "DATABASE",
     id: MARKET_ID,
     slug: "test-market",
     status: "OPEN",
@@ -215,7 +216,7 @@ describe("transactional replacement authorization", () => {
 describe("authoritative CLOB history", () => {
   it("writes exactly one honest final-fill mark and no intermediate sweep points", async () => {
     const create = vi.fn().mockResolvedValue({ id: "snapshot_12345678" });
-    const tx = { marketPriceSnapshot: { create } };
+    const tx = { market: { findUnique: vi.fn().mockResolvedValue(orderBookMarket()) }, marketPriceSnapshot: { create } };
     const recordedAt = new Date("2026-09-19T12:00:00.000Z");
 
     await appendAuthoritativeFillSnapshot(tx as never, MARKET_ID, 100_000n, [

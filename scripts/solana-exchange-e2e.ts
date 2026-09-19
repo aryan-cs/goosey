@@ -35,6 +35,8 @@ import { encodeMarketTerms, hashMarketTerms } from "../src/lib/solana/market-ter
 import { decodeFinalizedProgramEvents, type GooseyProgramEvent } from "../src/lib/solana/program-events";
 import { readFinalizedProgramEvents } from "../src/lib/solana/program-event-read";
 import { ingestFinalizedProgramTransaction } from "../src/lib/solana/event-journal";
+import { ingestFinalizedProgramPage } from "../src/lib/solana/ingestion-worker";
+import { readGooseyWalletBalance } from "../src/lib/solana/wallet-balance";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -682,6 +684,57 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   const primaryFinalized = await state("finalized"); invariants(primaryFinalized);
   await verifyReaders("post-trade withdrawal with positions and fees still backed", primaryFinalized, primaryRoot);
 
+  const fundedWalletRead = await readGooseyWalletBalance({ runtime, wallet: actors[0].address });
+  assert.equal(fundedWalletRead.walletTokens, walletTokens[0]);
+  assert.equal(fundedWalletRead.mint, base.featherMint);
+  assert.equal(fundedWalletRead.featherAmount, primaryFinalized.walletAmounts[0]);
+  assert(fundedWalletRead.featherAmount >= 2_000n);
+  assert.equal(fundedWalletRead.featherAccountStatus, "present");
+  assert.equal(fundedWalletRead.walletAccountStatus, "present");
+  assert.equal(fundedWalletRead.walletAccountOwner, SYSTEM_PROGRAM_ADDRESS);
+  assert.equal(fundedWalletRead.ordinaryFeePayerAccount, true);
+  assert(fundedWalletRead.observedSlot >= BigInt(primaryRoot));
+  const [fundedWalletAccount] = await accounts([actors[0].address], "finalized");
+  assert(fundedWalletAccount); assert.equal(fundedWalletRead.solLamports, BigInt(fundedWalletAccount.lamports));
+
+  // This signer is generated only to prove a genuinely absent wallet and ATA.
+  // It is never funded, enrolled, claimed, signed, or submitted anywhere.
+  const absentWallet = await generateKeyPairSigner();
+  const absentWalletBalance = await readGooseyWalletBalance({ runtime, wallet: absentWallet.address });
+  assert.deepEqual(await accounts([absentWallet.address, absentWalletBalance.walletTokens], "finalized"), [null, null]);
+  assert.deepEqual({ featherAmount: absentWalletBalance.featherAmount, featherAccountStatus: absentWalletBalance.featherAccountStatus,
+    solLamports: absentWalletBalance.solLamports, walletAccountStatus: absentWalletBalance.walletAccountStatus,
+    walletAccountOwner: absentWalletBalance.walletAccountOwner, ordinaryFeePayerAccount: absentWalletBalance.ordinaryFeePayerAccount },
+  { featherAmount: 0n, featherAccountStatus: "absent", solLamports: 0n, walletAccountStatus: "absent",
+    walletAccountOwner: null, ordinaryFeePayerAccount: false });
+
+  const funding = await buildFeatherTransfer({ mint: base.featherMint, sender: actors[0], recipient: actors[1].address, payer: admin, amount: 2_000n });
+  const senderTransferBefore = await readGooseyWalletBalance({ runtime, wallet: actors[0].address });
+  const recipientTransferBefore = await readGooseyWalletBalance({ runtime, wallet: actors[1].address });
+  assert.equal(funding.source, senderTransferBefore.walletTokens); assert.equal(funding.destination, recipientTransferBefore.walletTokens);
+  const fundingReceipt = await execute("close-boundary funding transfers actual previously withdrawn feathers", funding.instructions);
+  const fundingRoot = await finalized(fundingReceipt.signature, fundingReceipt.receipt.slot);
+  const fundedWalletAfterTransfer = await readGooseyWalletBalance({ runtime, wallet: actors[0].address });
+  const recipientAfterTransfer = await readGooseyWalletBalance({ runtime, wallet: actors[1].address });
+  assert(fundedWalletAfterTransfer.observedSlot >= BigInt(fundingRoot));
+  assert(recipientAfterTransfer.observedSlot >= BigInt(fundingRoot));
+  assert.equal(fundedWalletAfterTransfer.featherAmount, senderTransferBefore.featherAmount - funding.amount);
+  assert.equal(recipientAfterTransfer.featherAmount, recipientTransferBefore.featherAmount + funding.amount);
+  assert.equal(fundedWalletAfterTransfer.solLamports, senderTransferBefore.solLamports);
+  assert.equal(recipientAfterTransfer.solLamports, recipientTransferBefore.solLamports);
+  assert.equal(fundedWalletAfterTransfer.walletTokens, funding.source);
+  assert.equal(recipientAfterTransfer.walletTokens, funding.destination);
+  const walletBalanceEvidence = { fundedWallet: actors[0].address, canonicalAta: funding.source,
+    fundedReadLamports: fundedWalletRead.solLamports, transferLamports: senderTransferBefore.solLamports,
+    featherBefore: senderTransferBefore.featherAmount,
+    featherAfter: fundedWalletAfterTransfer.featherAmount, recipient: actors[1].address,
+    recipientCanonicalAta: funding.destination, recipientBefore: recipientTransferBefore.featherAmount,
+    recipientAfter: recipientAfterTransfer.featherAmount, transferAmount: funding.amount,
+    transferSignature: fundingReceipt.signature, finalizedRoot: fundingRoot,
+    absentWallet: absentWallet.address, absentAta: absentWalletBalance.walletTokens,
+    absentFeathers: absentWalletBalance.featherAmount, absentLamports: absentWalletBalance.solLamports };
+  console.log("PASS finalized wallet-balance reader observes canonical ATA, SOL, true absence and exact existing-transfer movement");
+
   // Separate short-lived market. Fund only from the real primary withdrawal;
   // no new grants, account rewrites, clock warps, or synthetic positions.
   const shortId = 2n, shortClose = (await time()) + 30n;
@@ -711,8 +764,6 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     watched.add(registered.locator);
     await execute(`close-boundary register already-enrolled wallet ${i}`, [registered.instruction]);
   }
-  const funding = await buildFeatherTransfer({ mint: base.featherMint, sender: actors[0], recipient: actors[1].address, payer: admin, amount: 2_000n });
-  await execute("close-boundary funding transfers actual previously withdrawn feathers", funding.instructions);
   for (let i = 0; i < 2; i++) {
     const deposited = await buildDepositInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[i], seats: shortMarket.seats, amount: 2_000n, expectedNonce: 0n });
     await execute(`close-boundary deposit real balance for wallet ${i}`, [deposited.instruction]);
@@ -999,18 +1050,103 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     assert.equal(await journal.solanaTransactionReceipt.count(), verifiedReceipts.length);
     assert.equal(await journal.solanaProgramEvent.count(), verifiedReceipts.reduce((sum, receipt) => sum + receipt.records.length, 0));
   } finally { await journal.$disconnect(); }
-  const journalEvidence = { database: journalPath, tables: 3, receipts: verifiedReceipts.length,
-    events: verifiedReceipts.reduce((sum, receipt) => sum + receipt.records.length, 0), restartReplayInserted: 0,
-    failedFok: { signature: failedFok.signature, status: "VERIFIED_FAILED", events: 0 } };
   console.log("PASS actual finalized RPC receipts persist atomically and replay immutably after a Prisma restart");
+
+  // Add only the second, ALTER-free membership migration to this same private
+  // journal, then scan the actual finalized program history in bounded pages.
+  const visitsSql = await readFile(new URL("../prisma/sqlite-upgrades/20260919230000_solana_ingestion_visits.sql", import.meta.url), "utf8");
+  await executeFile("sqlite3", ["-batch", "-bail", "-init", "/dev/null", journalPath,
+    `PRAGMA foreign_keys=ON;\nBEGIN IMMEDIATE;\n${visitsSql}\nCOMMIT;\nPRAGMA foreign_key_check;\nPRAGMA integrity_check;`],
+  { timeout: 15_000, maxBuffer: 1024 * 1024 });
+  const upgradedSchema = await executeFile("sqlite3", ["-readonly", "-batch", "-bail", "-init", "/dev/null", "-noheader", "-list",
+    journalPath, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' ORDER BY name;"],
+  { timeout: 5_000, maxBuffer: 64 * 1024 });
+  assert.deepEqual(upgradedSchema.stdout.trim().split("\n"),
+    ["SolanaIngestionCursor", "SolanaIngestionVisit", "SolanaProgramEvent", "SolanaTransactionReceipt"]);
+
+  journal = new PrismaClient({ datasourceUrl: journalUrl });
+  const preexisting = await journal.solanaTransactionReceipt.findMany({ orderBy: { signature: "asc" },
+    select: { id: true, signature: true, status: true, eventCount: true } });
+  assert.equal(preexisting.length, verifiedReceipts.length);
+  const pageOptions = () => ({ client: journal, provider: "sqlite" as const, pageSize: 10, concurrency: 4 });
+  let pageResult = await ingestFinalizedProgramPage(runtime, initializationReceipt.signature, pageOptions());
+  assert.equal(pageResult.status, "page-committed"); assert.equal(pageResult.verifiedReceipts, 10);
+  assert.equal(pageResult.cursor.coverageStartSignature, initializationReceipt.signature);
+  assert.equal(pageResult.cursor.committedHeadSignature, null); assert.equal(pageResult.cursor.backfillComplete, false);
+  assert(pageResult.cursor.scanHeadSignature && pageResult.cursor.scanBeforeSignature);
+  const frozenHead = pageResult.cursor.scanHeadSignature;
+  let pageCount = 1, insertedByPages = pageResult.insertedReceipts;
+  const firstPageCursor = { revision: pageResult.cursor.revision, scanHeadSignature: pageResult.cursor.scanHeadSignature,
+    scanBeforeSignature: pageResult.cursor.scanBeforeSignature, committedHeadSignature: pageResult.cursor.committedHeadSignature };
+  await journal.$disconnect();
+
+  // A fresh client must resume the exact frozen window rather than silently
+  // replacing its head with transactions observed after the first page.
+  journal = new PrismaClient({ datasourceUrl: journalUrl });
+  assert.deepEqual(await journal.solanaIngestionCursor.findFirstOrThrow({ select: {
+    revision: true, scanHeadSignature: true, scanBeforeSignature: true, committedHeadSignature: true,
+  } }), firstPageCursor);
+  while (pageResult.status !== "window-complete") {
+    assert(pageCount < 100, "Finalized program history exceeded bounded test page count");
+    pageResult = await ingestFinalizedProgramPage(runtime, initializationReceipt.signature, pageOptions());
+    pageCount++; insertedByPages += pageResult.insertedReceipts;
+    if (pageResult.status === "page-committed") {
+      assert.equal(pageResult.cursor.scanHeadSignature, frozenHead);
+      assert.equal(pageResult.cursor.committedHeadSignature, null);
+      assert.equal(pageResult.cursor.backfillComplete, false);
+    }
+  }
+  assert.equal(pageResult.cursor.committedHeadSignature, frozenHead);
+  assert.equal(pageResult.cursor.backfillComplete, true);
+  assert.equal(pageResult.cursor.scanHeadSignature, null); assert.equal(pageResult.cursor.scanBeforeSignature, null);
+
+  const visits = await journal.solanaIngestionVisit.findMany({ orderBy: { createdAt: "asc" } });
+  const windowReceipts = await journal.solanaTransactionReceipt.findMany({ orderBy: { signature: "asc" },
+    include: { events: { orderBy: { logIndex: "asc" } } } });
+  assert(visits.length > 10); assert.equal(new Set(visits.map(visit => visit.signature)).size, visits.length);
+  assert(visits.every(visit => visit.genesisHash === genesis && visit.programAddress === PROGRAM
+    && visit.scanHeadSignature === frozenHead));
+  assert.deepEqual(visits.map(visit => visit.signature).sort(), windowReceipts.map(receipt => receipt.signature).sort());
+  assert.equal(insertedByPages, windowReceipts.length - preexisting.length);
+  const decodedSignatures = new Set<string>(decodedEventEvidence.signatures);
+  const preexistingAfter = windowReceipts.filter(receipt => decodedSignatures.has(receipt.signature))
+    .map(({ id, signature: transactionSignature, status, eventCount }) => ({ id, signature: transactionSignature, status, eventCount }))
+    .sort((a, b) => a.signature < b.signature ? -1 : a.signature > b.signature ? 1 : 0);
+  assert.deepEqual(preexistingAfter, preexisting);
+  assert(decodedEventEvidence.signatures.every(transactionSignature => visits.some(visit => visit.signature === transactionSignature)));
+  assert(visits.some(visit => visit.signature === initializationReceipt.signature));
+  assert(windowReceipts.some(receipt => receipt.status === "VERIFIED_SUCCESS" && receipt.eventCount === 0));
+  assert(windowReceipts.some(receipt => receipt.status === "VERIFIED_FAILED" && receipt.eventCount === 0));
+  const windowFailedFok = windowReceipts.find(receipt => receipt.signature === failedFok.signature); assert(windowFailedFok);
+  assert.equal(windowFailedFok.status, "VERIFIED_FAILED"); assert.equal(windowFailedFok.eventCount, 0);
+  assert.deepEqual(windowFailedFok.events, []);
+  assert.equal(await journal.solanaProgramEvent.count(),
+    windowReceipts.reduce((sum, receipt) => sum + receipt.eventCount, 0));
+
+  const completedCursor = await journal.solanaIngestionCursor.findFirstOrThrow();
+  const completedCounts = { receipts: windowReceipts.length, visits: visits.length,
+    events: await journal.solanaProgramEvent.count() };
+  const idle = await ingestFinalizedProgramPage(runtime, initializationReceipt.signature, pageOptions());
+  assert.equal(idle.status, "idle"); assert.equal(idle.verifiedReceipts, 0); assert.equal(idle.insertedReceipts, 0);
+  assert.deepEqual(idle.cursor, completedCursor);
+  assert.deepEqual({ receipts: await journal.solanaTransactionReceipt.count(), visits: await journal.solanaIngestionVisit.count(),
+    events: await journal.solanaProgramEvent.count() }, completedCounts);
+  await journal.$disconnect();
+  const journalEvidence = { database: journalPath, tables: 4, preexistingReceipts: verifiedReceipts.length,
+    preexistingReplayInserted: 0, coverageStartSignature: initializationReceipt.signature, frozenHead,
+    pageSize: 10, pages: pageCount, receipts: completedCounts.receipts, visits: completedCounts.visits,
+    events: completedCounts.events, pageInsertedReceipts: insertedByPages, completedRevision: completedCursor.revision,
+    idleRevision: idle.cursor.revision, idleInsertedReceipts: idle.insertedReceipts,
+    failedFok: { signature: failedFok.signature, status: "VERIFIED_FAILED", events: 0 } };
+  console.log("PASS bounded finalized program window resumes after restart, preserves membership and idles without writes");
   console.log(JSON.stringify({ result: "PASS", scope: "Actual RPC compiled-program exchange integration, not a host arithmetic simulation",
     rpc: endpoint.toString(), genesis, program: PROGRAM, validator: await rpc("getVersion"), market: market.market, seats: market.seats, book,
     bookBytes: BOOK_BYTES, bootstrapSizes: [10_240, 20_480, 30_720, 40_960, 51_200, 61_440, 69_720], transactionCaseCount: receipts.length,
     successBuilders: ["program-client.ts", "escrow-client.ts", "exchange-client.ts", "resolution-client.ts"],
     resolutionAdmission: { resolution, reviewers: reviewers.map((wallet, i) => ({ wallet: wallet.address, enrollment: reviewerEnrollments[i] })),
       reviewerAllowanceEach: 1, reviewerClaims: 0, finalizedReaderBatchAccounts: 10 },
-    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots", "actual finalized program-event decoding", "disposable SQLite finalized-event journal restart replay"],
-    decodedEventEvidence, journalEvidence,
+    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots", "actual finalized wallet balance and absent-account reads", "actual finalized program-event decoding", "disposable SQLite finalized-event journal restart replay", "bounded restart-safe full-window program ingestion"],
+    walletBalanceEvidence, decodedEventEvidence, journalEvidence,
     preparedOrder: { signature: preparedSignature, submissionStatus: submittedOrder.status, finalizedSlot: preparedRoot,
       sender: prepared.sender, expectedNonce: prepared.expectedNonce, observedSlot: prepared.observedSlot,
       bookRevision: prepared.bookRevision, receiptStorage: "in-memory callback only; not durable storage proof",

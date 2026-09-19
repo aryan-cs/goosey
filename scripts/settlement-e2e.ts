@@ -1,3 +1,4 @@
+import { requireDatabaseFinancialMarket } from "../src/lib/market-backend";
 import { randomUUID } from "node:crypto";
 
 import { PrismaClient } from "@prisma/client";
@@ -350,7 +351,7 @@ async function testMixedSideCostBasis(
     fail(`roundtrip rounding surplus is outside its conservative bound: ${conservativeRoundingSurplus}`);
   }
   expectEqual(
-    market.collateralAccount.balanceMilli,
+    requireDatabaseFinancialMarket(market).collateralAccount.balanceMilli,
     initialSubsidyMilli(market.liquidityParameter, market.payoutMilli) + conservativeRoundingSurplus,
     "roundtrip collateral must equal subsidy plus conservative rounding surplus",
   );
@@ -573,7 +574,7 @@ async function testResolutionApproval(
     include: { collateralAccount: true },
   });
   expectEqual(duringSettlement.status, "RESOLVING", "market must remain nonterminal between batches");
-  expectEqual(duringSettlement.collateralAccount.status, "ACTIVE", "collateral must remain open between batches");
+  expectEqual(requireDatabaseFinancialMarket(duringSettlement).collateralAccount.status, "ACTIVE", "collateral must remain open between batches");
 
   const finalBatch = await processSettlementRun({
     actorUserId: resolver.id,
@@ -641,8 +642,8 @@ async function testResolutionApproval(
   expectEqual(market.resolution, "YES", "approved proposal outcome must be authoritative");
   expectEqual(market.yesShares, 0, "terminal market must clear YES shares");
   expectEqual(market.noShares, 0, "terminal market must clear NO shares");
-  expectEqual(market.collateralAccount.balanceMilli, 0n, "settlement must close out market collateral");
-  expectEqual(market.collateralAccount.status, "CLOSED", "settlement must close collateral account");
+  expectEqual(requireDatabaseFinancialMarket(market).collateralAccount.balanceMilli, 0n, "settlement must close out market collateral");
+  expectEqual(requireDatabaseFinancialMarket(market).collateralAccount.status, "CLOSED", "settlement must close collateral account");
   expectEqual(terminalSnapshot.yesProbabilityBps, 10_000, "YES settlement must append terminal probability");
   expectEqual(positions.length, 2, "both participant positions must be retained as settled records");
   for (const position of positions) {
@@ -790,7 +791,7 @@ async function testMultiBatchSettlement(
     include: { collateralAccount: true },
   });
   expectEqual(beforeFinal.status, "RESOLVING", "multi-batch market must remain resolving before the last batch");
-  expectEqual(beforeFinal.collateralAccount.status, "ACTIVE", "collateral must remain open until all positions settle");
+  expectEqual(requireDatabaseFinancialMarket(beforeFinal).collateralAccount.status, "ACTIVE", "collateral must remain open until all positions settle");
 
   const finalBatch = await processSettlementRun({ actorUserId: resolver.id, runId: approval.run.id, batchSize: 100 });
   expectEqual(finalBatch.run.processedCount, 205, "final batch must settle the exact snapshotted workload");
@@ -811,7 +812,7 @@ async function testMultiBatchSettlement(
   expectEqual(activeNotifications, 205, "each active exposure must receive one resolution notification");
   expectEqual(redeemedNotifications, 0, "zero-share historical rows must receive no resolution notification");
   expectEqual(terminalMarket.status, "RESOLVED", "market may become terminal only after all batches complete");
-  expectEqual(terminalMarket.collateralAccount.status, "CLOSED", "collateral may close only after all batches complete");
+  expectEqual(requireDatabaseFinancialMarket(terminalMarket).collateralAccount.status, "CLOSED", "collateral may close only after all batches complete");
 
   const replay = await processSettlementRun({ actorUserId: resolver.id, runId: approval.run.id, batchSize: 100 });
   expectEqual(replay.replayed, true, "multi-batch completion must replay without duplicate settlements");

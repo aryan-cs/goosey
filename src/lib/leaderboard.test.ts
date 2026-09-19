@@ -116,7 +116,7 @@ describe("leaderboard reserved cash", () => {
 
     expect(mocks.reservations).toHaveBeenCalledWith({
       where: {
-        userId: { in: ["alice_id", "bob_id"] },
+        market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: { in: ["alice_id", "bob_id"] },
         cashAccountId: { not: null },
       },
       select: {
@@ -148,7 +148,7 @@ describe("leaderboard reserved cash", () => {
           id: "position-a", userId: "alice_id", marketId: "market-a",
           yesShares: 0, noShares: 1,
           market: {
-            id: "market-a", pricingModel: "LMSR", yesShares: 1_000, noShares: 1,
+            executionBackend: "DATABASE", collateralAccountId: "collateral", id: "market-a", pricingModel: "LMSR", yesShares: 1_000, noShares: 1,
             liquidityParameter: 40, payoutMilli: 100_000n, feeBps: 100,
             status: "OPEN", resolution: null,
           },
@@ -191,6 +191,26 @@ describe("leaderboard reserved cash", () => {
       pnlMilli: -100_000n,
     });
   });
+  it("sorts exact total balances highest first before previews and pagination", async () => {
+    const players = Array.from({ length: 107 }, (_, i) => ({
+      ...user(`rank_${i}`, `rank_${i}`),
+      // Distinct milli-feather totals can round to the same displayed balance.
+      balanceMilli: 1_000_000n + BigInt((i * 37) % 107),
+    }));
+    mocks.users.mockResolvedValue(players);
+    mocks.wallets.mockResolvedValue([]);
+    mocks.grants.mockResolvedValue([]);
+    mocks.activity.mockResolvedValue(new Map(players.map(player => [player.id, { trades: 0, marketsTraded: 0 }])));
+    const pages = await Promise.all([1, 2, 3].map(page => getLeaderboardPage(page, 50)));
+    const rows = pages.flatMap(page => page.rows);
+    expect(rows).toHaveLength(107);
+    for (let i = 0; i < rows.length; i++) {
+      expect(rows[i].equityMilli).toBe(1_000_106n - BigInt(i));
+      expect(rows[i].rank).toBe(i + 1);
+    }
+    expect((await getLeaderboardRows(8)).map(row => row.userId)).toEqual(rows.slice(0, 8).map(row => row.userId));
+  });
+
   it("includes players beyond 100 with global ranks and stable ties", async () => {
     const players = Array.from({length: 123}, (_, i) => user(`id_${i}`, `player_${String(i).padStart(3, "0")}`));
     mocks.users.mockResolvedValue([...players].reverse());

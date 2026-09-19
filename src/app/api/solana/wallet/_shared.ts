@@ -83,6 +83,7 @@ export function walletError(error: unknown) {
   if (error instanceof WalletLinkError) {
     const messages = {
       AUTHENTICATION_REQUIRED: [401, "Sign in again before linking a wallet."],
+      REAUTHENTICATION_REQUIRED: [401, "Enter your current password to link a wallet."],
       EMAIL_VERIFICATION_REQUIRED: [403, "Verify your email before linking a wallet."],
       INVALID_CHALLENGE: [400, "Wallet ownership could not be verified."],
       CHALLENGE_EXPIRED: [410, "Wallet challenge expired. Request a new challenge."],

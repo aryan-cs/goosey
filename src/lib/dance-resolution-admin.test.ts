@@ -15,6 +15,7 @@ vi.mock("./market-service", async (importOriginal) => ({ ...await importOriginal
 import { approveResolutionProposal, createResolutionProposal } from "./admin-service";
 
 const market = {
+  executionBackend: "DATABASE", collateralAccountId: "collateral_dance",
   id: "dab", slug: "htn-2026-winner-first-dance-dab", eventId: "event", createdById: "creator",
   status: "CLOSED", closesAt: new Date(0), resolvesAt: new Date(0), version: 1,
 };
