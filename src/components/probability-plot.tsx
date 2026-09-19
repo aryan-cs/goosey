@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { chartDomain, nearestChartIndex, normalizeChartPoints, selectChartRange, type ChartPoint } from "@/lib/chart-series";
+import { smoothChartPath } from "@/lib/chart-path";
 
 export function probabilityLabel(value: number) {
   return `${Number((value * 100).toFixed(2))}%`;
@@ -33,7 +34,7 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
     inspect(nearestChartIndex(series, firstTime + ratio * (lastTime - firstTime)));
   }
   if (!series.length) return <div className="probability-empty">No probability history yet</div>;
-  const path = series.map((point, i) => `${i ? "L" : "M"} ${x(point.timestamp)} ${y(point.probability)}`).join(" ") + ` H 100`;
+  const path = smoothChartPath(series.map(point => ({ x: x(point.timestamp), y: y(point.probability) }))) + ` H 100`;
   const selectedX = x(selected.timestamp);
   return <div className={`probability-plot ${compact ? "compact-plot" : "full-plot"} ${positive ? "positive" : "negative"}`}>
     <div className="probability-plot-surface" role="slider" tabIndex={0} aria-label={`${label} history`} aria-valuemin={0} aria-valuemax={series.length - 1} aria-valuenow={activeIndex ?? series.length - 1} aria-valuetext={`${probabilityLabel(selected.probability)} on ${dateLabel(selected.timestamp)}`} data-inspecting={index !== null}
