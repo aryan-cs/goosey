@@ -1069,6 +1069,20 @@ async function verifyLiquidationAgainstActualSale(creatorId: string) {
   await place(seller.id, "YES", "SELL", 4, "30000");
   const after = await db.user.findUniqueOrThrow({ where: { id: seller.id } });
   assert(after.balanceMilli - before.balanceMilli === quoted.valueMilli, "Estimated liquidation differs from actual matching-engine proceeds");
+  const feeNotices = await db.notification.findMany({
+    where: { userId: { in: [seller.id, oppositeBuyer.id, bidder.id] }, type: "TRADE_CONFIRMED", href: `/markets/${market.slug}` },
+  });
+  assert(feeNotices.length === 4, "Two fee-bearing fills did not create exactly four participant notices");
+  for (const expected of [
+    { userId: seller.id, title: "Bought 10 YES", price: "40", fee: "4" },
+    { userId: oppositeBuyer.id, title: "Bought 10 NO", price: "60", fee: "6" },
+    { userId: bidder.id, title: "Bought 4 YES", price: "30", fee: "1.2" },
+    { userId: seller.id, title: "Sold 4 YES", price: "30", fee: "1.2" },
+  ]) {
+    assert(feeNotices.some((notice) => notice.userId === expected.userId && notice.title === expected.title &&
+      notice.body === `${market.shortTitle}: filled at ${expected.price} feathers per contract. Fee: ${expected.fee} feathers.`),
+    `Committed fill notification misstated participant price or fee: ${expected.title}`);
+  }
   const sellerRanking = (await getLeaderboardRows()).find((row) => row.userId === seller.id);
   assert(sellerRanking?.trades === 2 && sellerRanking.marketsTraded === 1, "Maker and taker executions in the same market were not counted correctly");
   // Equal timestamps exercise the stable cursor tie-break against real rows.

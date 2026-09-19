@@ -28,3 +28,10 @@ services' participant and market checks.
 
 This checkpoint's focused unit run passed 73 tests across nine files. It is not
 a claim of hosted deployment readiness or a production load test.
+
+An archived copy of published commit `8f429ef`, separate from the dirty shared
+worktree, passed typecheck, 769 unit tests (one skipped), and the same complete
+order-book/backup/restore/reconciliation run. A follow-up regression also checks
+all four persisted notices from two fee-bearing fills: YES and NO purchases,
+maker and taker fees, and the seller's fractional 1.2-feather fee. That expanded
+integration run passed with the same reconciled totals.
