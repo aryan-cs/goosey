@@ -1,4 +1,4 @@
-import { grantWelcomeFeathers, hashPassword } from "@/lib/auth";
+import { grantWelcomeFeathers, hashPassword, INTERACTIVE_ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { EmailConfigurationError, sendEmail, smtpConfigFromEnvironment } from "@/lib/email";
 import { randomToken, sha256 } from "@/lib/security";
@@ -105,9 +105,9 @@ export async function requestEmailVerification(email: string): Promise<void> {
   buildAccountActionUrl("EMAIL_VERIFICATION_URL", "/verify-email", "A".repeat(43));
   const user = await db.user.findUnique({
     where: { email },
-    select: { id: true, email: true, displayName: true, emailVerifiedAt: true, status: true },
+    select: { id: true, email: true, displayName: true, emailVerifiedAt: true, status: true, role: true },
   });
-  if (!user || user.status !== "ACTIVE" || user.emailVerifiedAt) return;
+  if (!user || user.status !== "ACTIVE" || user.role !== "USER" || user.emailVerifiedAt) return;
 
   const minutes = tokenDurationMinutes("EMAIL_VERIFICATION_TTL_MINUTES", 60, 1_440);
   const issued = await issueToken({
@@ -186,9 +186,9 @@ export async function requestPasswordReset(email: string): Promise<void> {
   buildAccountActionUrl("PASSWORD_RESET_URL", "/reset-password", "A".repeat(43));
   const user = await db.user.findUnique({
     where: { email },
-    select: { id: true, email: true, displayName: true, status: true },
+    select: { id: true, email: true, displayName: true, status: true, role: true },
   });
-  if (!user || user.status !== "ACTIVE") return;
+  if (!user || user.status !== "ACTIVE" || !INTERACTIVE_ROLES.includes(user.role)) return;
 
   const minutes = tokenDurationMinutes("PASSWORD_RESET_TTL_MINUTES", 30, 240);
   const issued = await issueToken({
@@ -235,10 +235,11 @@ export async function confirmPasswordResetWithDatabase(
       data: { consumedAt: now },
     });
 
-    await tx.user.update({
-      where: { id: record.userId },
+    const updated = await tx.user.updateMany({
+      where: { id: record.userId, status: "ACTIVE", role: { in: INTERACTIVE_ROLES } },
       data: { passwordHash },
     });
+    if (updated.count !== 1) throw new InvalidAccountTokenError();
     await tx.session.deleteMany({ where: { userId: record.userId } });
     await tx.auditLog.create({
       data: {

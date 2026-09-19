@@ -65,4 +65,13 @@ describe("login versus password-reset session revocation", () => {
     expect(result?.session.token).toHaveLength(43);
     expect(await database.session.count({ where: { userId } })).toBe(1);
   });
+  it.each(["SYSTEM", "MODERATOR", "unknown"])("refuses an interactive session for %s even with a current verified password", async (role) => {
+    const principal = await database.user.create({ data: {
+      email: `${role.toLowerCase()}@example.com`, username: `${role.toLowerCase()}_principal`,
+      displayName: "Non-interactive principal", role, status: "ACTIVE", passwordHash: oldPasswordHash,
+    } });
+    await expect(createSessionForVerifiedLoginSnapshot(database, principal)).resolves.toBeNull();
+    expect(await database.session.count({ where: { userId: principal.id } })).toBe(0);
+  });
+
 });

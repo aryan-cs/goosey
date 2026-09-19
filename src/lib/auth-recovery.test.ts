@@ -312,4 +312,20 @@ describe("transactional token consumption", () => {
     expect(sessionCount).toBe(0);
     await expect(confirmPasswordResetWithDatabase(database, token, replacement)).rejects.toBeInstanceOf(InvalidAccountTokenError);
   });
+  it.each([
+    ["SYSTEM", "ACTIVE"], ["USER", "SUSPENDED"], ["unknown", "ACTIVE"],
+  ])("rejects password reset for %s/%s without consuming tokens or changing credentials", async (role, status) => {
+    const token = randomToken();
+    const principal = await database.user.create({ data: {
+      email: `reset-${role}-${status}@example.com`, username: `reset_${role}_${status}`.toLowerCase(),
+      displayName: "Blocked reset", role, status, passwordHash: "unchanged-credential",
+    } });
+    const issued = await database.accountToken.create({ data: {
+      userId: principal.id, purpose: PASSWORD_RESET_PURPOSE, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 60_000),
+    } });
+    await expect(confirmPasswordResetWithDatabase(database, token, "an otherwise valid new password")).rejects.toBeInstanceOf(InvalidAccountTokenError);
+    expect((await database.user.findUniqueOrThrow({ where: { id: principal.id } })).passwordHash).toBe(principal.passwordHash);
+    expect((await database.accountToken.findUniqueOrThrow({ where: { id: issued.id } })).consumedAt).toBeNull();
+  });
+
 });

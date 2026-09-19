@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 import { randomToken, sha256 } from "@/lib/security";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
+export const INTERACTIVE_ROLES = ["USER", "ADMIN"];
+
 export const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "goosey_session";
 
 const DEFAULT_STARTING_FEATHERS = "1000";
@@ -160,7 +162,7 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Public
     where: {
       tokenHash: sha256(token),
       expiresAt: { gt: new Date() },
-      user: { status: "ACTIVE" },
+      user: { status: "ACTIVE", role: { in: INTERACTIVE_ROLES } },
     },
     select: { user: { select: publicUserSelect } },
   });
@@ -311,7 +313,7 @@ export async function loginUser(input: {
   });
 
   const valid = await verifyPassword(input.password, record?.passwordHash ?? DUMMY_PASSWORD_HASH);
-  if (!record || !valid || record.status !== "ACTIVE") return null;
+  if (!record || !valid || record.status !== "ACTIVE" || !INTERACTIVE_ROLES.includes(record.role)) return null;
 
   return createSessionForVerifiedLoginSnapshot(db, record, {
     userAgent: input.userAgent,
@@ -336,6 +338,7 @@ export async function createSessionForVerifiedLoginSnapshot(
           id: verifiedSnapshot.id,
           passwordHash: verifiedSnapshot.passwordHash,
           status: "ACTIVE",
+          role: { in: INTERACTIVE_ROLES },
         },
         select: publicUserSelect,
       });

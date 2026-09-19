@@ -32,7 +32,7 @@ function errorResponse(
   const requestId = randomUUID();
   return NextResponse.json(
     { error: { ...error, requestId } },
-    { status, headers: { ...Object.fromEntries(new Headers(headers)), "X-Request-Id": requestId } },
+    { status, headers: { "Cache-Control": "private, no-store", ...Object.fromEntries(new Headers(headers)), "X-Request-Id": requestId } },
   );
 }
 
@@ -84,7 +84,9 @@ export function apiErrorResponse(error: unknown): NextResponse {
 }
 
 export function jsonResponse(value: unknown, init?: ResponseInit): NextResponse {
-  return NextResponse.json(jsonSafe(value), init);
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Cache-Control")) headers.set("Cache-Control", "private, no-store");
+  return NextResponse.json(jsonSafe(value), { ...init, headers });
 }
 
 export function assertSameOrigin(request: NextRequest): void {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { emailVerificationState, registerUser, setSessionCookie, WELCOME_GRANT_MILLI } from "@/lib/auth";
 import { authRouteError, InvalidRequestError, noStore, readJsonObject } from "@/lib/http";
@@ -13,12 +14,22 @@ import {
   requestRateLimitKey,
 } from "@/lib/security";
 
+const schema = z.object({
+  email: z.string(),
+  username: z.string(),
+  displayName: z.string().nullable().optional(),
+  password: z.string(),
+  acceptedCodeOfConduct: z.literal(true),
+}).strict();
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     assertMutationOrigin(request);
     await enforceRateLimit(requestRateLimitKey(request, "register:ip"), 5, 60 * 60 * 1_000);
 
-    const body = await readJsonObject(request);
+    const parsed = schema.safeParse(await readJsonObject(request));
+    if (!parsed.success) throw new InvalidRequestError();
+    const body = parsed.data;
     const email = canonicalizeEmail(body.email);
     const username = canonicalizeUsername(body.username);
     const displayName = username ? normalizeDisplayName(body.displayName, username) : null;

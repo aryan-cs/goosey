@@ -104,6 +104,13 @@ describe("POST /api/auth/register without invitations", () => {
     expect(mocks.setSessionCookie).not.toHaveBeenCalled();
   });
 
+  it.each(["role", "status", "balanceMilli", "realizedPnlMilli", "emailVerifiedAt", "id", "leaderboardScore", "wallet", "__proto__"])("rejects injected %s before account creation", async (field) => {
+    const response = await POST(request({ ...signup, [field]: "attacker-controlled" }));
+    expect(response.status).toBe(400);
+    expect(mocks.registerUser).not.toHaveBeenCalled();
+    expect(mocks.setSessionCookie).not.toHaveBeenCalled();
+  });
+
   it("continues rejecting cross-origin registration", async () => {
     const response = await POST(request(signup, "https://untrusted.example"));
 
