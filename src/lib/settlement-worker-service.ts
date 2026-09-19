@@ -134,7 +134,9 @@ async function closeExpiredMarkets(input: {
   actorUserId: string;
   instanceId: string;
   now: Date;
+  shouldStop?: () => boolean;
 }): Promise<{ closed: number; failures: string[] }> {
+  if (input.shouldStop?.()) return { closed: 0, failures: [] };
   const markets = await input.client.market.findMany({
     where: { status: "OPEN", closesAt: { lte: input.now } },
     orderBy: [{ closesAt: "asc" }, { id: "asc" }],
@@ -144,8 +146,10 @@ async function closeExpiredMarkets(input: {
   let closed = 0;
   const failures: string[] = [];
   for (const market of markets) {
+    if (input.shouldStop?.()) break;
     try {
       await heartbeatSettlementWorker(input.instanceId, input.client);
+      if (input.shouldStop?.()) break;
       const changed = await runSerializableTransaction(input.client, async (tx) => {
         const update = await tx.market.updateMany({
           where: { id: market.id, status: "OPEN", version: market.version, closesAt: { lte: input.now } },
@@ -182,7 +186,9 @@ async function processAvailableRuns(input: {
   actorUserId: string;
   instanceId: string;
   processRun: ProcessRun;
+  shouldStop?: () => boolean;
 }): Promise<{ attempted: number; completed: number; busy: number; failures: string[] }> {
+  if (input.shouldStop?.()) return { attempted: 0, completed: 0, busy: 0, failures: [] };
   const runs = await input.client.marketSettlementRun.findMany({
     where: { status: { in: ["READY", "RUNNING", "FINALIZING"] } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -190,11 +196,15 @@ async function processAvailableRuns(input: {
     select: { id: true },
   });
   let completed = 0;
+  let attempted = 0;
   let busy = 0;
   const failures: string[] = [];
   for (const run of runs) {
+    if (input.shouldStop?.()) break;
     try {
       await heartbeatSettlementWorker(input.instanceId, input.client);
+      if (input.shouldStop?.()) break;
+      attempted += 1;
       const result = await input.processRun({ actorUserId: input.actorUserId, runId: run.id, batchSize: RUN_BATCH_SIZE });
       if (result.run.status === "COMPLETED") completed += 1;
     } catch (error) {
@@ -205,7 +215,7 @@ async function processAvailableRuns(input: {
       }
     }
   }
-  return { attempted: runs.length, completed, busy, failures };
+  return { attempted, completed, busy, failures };
 }
 
 export async function runSettlementWorkerCycle(input: {
@@ -213,9 +223,11 @@ export async function runSettlementWorkerCycle(input: {
   client?: PrismaClient;
   processRun?: ProcessRun;
   now?: Date;
+  shouldStop?: () => boolean;
 }): Promise<SettlementWorkerCycleResult> {
   const client = input.client ?? db;
   const processRun = input.processRun ?? processSettlementRun;
+  const shouldStop = input.shouldStop ?? (() => false);
   const startedAt = input.now ?? new Date();
   await requireWorkerOwnership(client, input.instanceId, {
     status: "RUNNING",
@@ -225,19 +237,30 @@ export async function runSettlementWorkerCycle(input: {
   });
 
   try {
-    const actorUserId = await systemActorId(client);
-    const expirations = await expireOrders(
+    const actorUserId = shouldStop() ? null : await systemActorId(client);
+    const expirations = shouldStop() ? { expired: 0, failures: [] } : await expireOrders(
       client,
       startedAt,
       () => heartbeatSettlementWorker(input.instanceId, client),
+      shouldStop,
     );
-    const closures = await closeExpiredMarkets({ client, actorUserId, instanceId: input.instanceId, now: startedAt });
-    const runs = await processAvailableRuns({ client, actorUserId, instanceId: input.instanceId, processRun });
+    const closures = actorUserId === null || shouldStop() ? { closed: 0, failures: [] }
+      : await closeExpiredMarkets({ client, actorUserId, instanceId: input.instanceId, now: startedAt, shouldStop });
+    const runs = actorUserId === null || shouldStop() ? { attempted: 0, completed: 0, busy: 0, failures: [] }
+      : await processAvailableRuns({ client, actorUserId, instanceId: input.instanceId, processRun, shouldStop });
     const expirationFailures = expirations.failures.map(({ orderId, error }) =>
       `ORDER_EXPIRATION:${orderId}:${sanitizedWorkerError(error)}`.slice(0, MAX_PERSISTED_ERROR_LENGTH));
     const failures = [...expirationFailures, ...closures.failures, ...runs.failures];
     const finishedAt = new Date();
-    if (failures.length === 0) {
+    if (failures.length === 0 && shouldStop()) {
+      // Preserve prior health history: an interrupted cycle is neither a full
+      // success nor a failure. Keep counters for operations that did finish.
+      await requireWorkerOwnership(client, input.instanceId, {
+        lastHeartbeatAt: finishedAt,
+        closedMarketCount: { increment: BigInt(closures.closed) },
+        completedRunCount: { increment: BigInt(runs.completed) },
+      });
+    } else if (failures.length === 0) {
       await requireWorkerOwnership(client, input.instanceId, {
         status: "RUNNING",
         lastHeartbeatAt: finishedAt,

@@ -218,4 +218,91 @@ describe("settlement worker cycle", () => {
   it("sanitizes unknown failures to a bounded type label", () => {
     expect(sanitizedWorkerError(new Error("authorization=Bearer secret"))).toBe("Error");
   });
+
+  it("skips work when already stopping without recording a failed or successful cycle", async () => {
+    const fixture = clientFixture();
+    const result = await runSettlementWorkerCycle({
+      instanceId: "worker_123", client: fixture.client as never, shouldStop: () => true,
+    });
+    expect(expire).not.toHaveBeenCalled();
+    expect(fixture.client.user.findFirst).not.toHaveBeenCalled();
+    expect(fixture.client.market.findMany).not.toHaveBeenCalled();
+    expect(fixture.client.marketSettlementRun.findMany).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ attemptedRuns: 0, failedRuns: 0, marketCloseFailures: 0, orderExpirationFailures: 0 });
+    expect(fixture.workerState.updateMany.mock.calls.some(([call]) => call.data.failureCount || call.data.successCount)).toBe(false);
+  });
+
+  it("passes the stop predicate to expiration and skips closures and runs after expiration stops", async () => {
+    const fixture = clientFixture();
+    let stopping = false;
+    const shouldStop = () => stopping;
+    expire.mockImplementation(async (_client, _at, _heartbeat, stop) => {
+      expect(stop).toBe(shouldStop);
+      stopping = true;
+      return { expired: 1, failures: [] };
+    });
+    const result = await runSettlementWorkerCycle({
+      instanceId: "worker_123", client: fixture.client as never, shouldStop,
+    });
+    expect(result).toMatchObject({ expiredOrders: 1, orderExpirationFailures: 0, closedMarkets: 0, attemptedRuns: 0 });
+    expect(fixture.client.market.findMany).not.toHaveBeenCalled();
+    expect(fixture.client.marketSettlementRun.findMany).not.toHaveBeenCalled();
+  });
+
+  it("finishes the current market close, but starts neither the next market nor settlement runs", async () => {
+    const fixture = clientFixture();
+    let stopping = false;
+    fixture.client.$transaction.mockReset().mockImplementation(async (callback) => callback(fixture.healthyTx));
+    drain.mockImplementation(async () => { stopping = true; return { canceledOrders: 1, canceledQuantity: 2 }; });
+    const processRun = vi.fn();
+    const result = await runSettlementWorkerCycle({
+      instanceId: "worker_123", client: fixture.client as never, processRun: processRun as never, shouldStop: () => stopping,
+    });
+    expect(fixture.client.$transaction).toHaveBeenCalledOnce();
+    expect(drain).toHaveBeenCalledOnce();
+    expect(fixture.healthyTx.auditLog.create).toHaveBeenCalledOnce();
+    expect(processRun).not.toHaveBeenCalled();
+    expect(fixture.client.marketSettlementRun.findMany).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ closedMarkets: 1, marketCloseFailures: 0, attemptedRuns: 0, failedRuns: 0 });
+    expect(fixture.workerState.updateMany.mock.calls.some(([call]) => call.data.failureCount || call.data.successCount)).toBe(false);
+  });
+
+  it("finishes the first queued settlement run and does not start the second", async () => {
+    const fixture = clientFixture();
+    fixture.client.market.findMany.mockResolvedValue([]);
+    fixture.client.marketSettlementRun.findMany.mockResolvedValue([{ id: "first_run" }, { id: "second_run" }]);
+    let stopping = false;
+    const processRun = vi.fn(async () => { stopping = true; return { run: { status: "COMPLETED" } }; });
+    const result = await runSettlementWorkerCycle({
+      instanceId: "worker_123", client: fixture.client as never, processRun: processRun as never, shouldStop: () => stopping,
+    });
+    expect(processRun).toHaveBeenCalledOnce();
+    expect(processRun).toHaveBeenCalledWith({ actorUserId: "system_user", runId: "first_run", batchSize: 100 });
+    expect(result).toMatchObject({ attemptedRuns: 1, completedRuns: 1, failedRuns: 0 });
+    expect(fixture.workerState.updateMany.mock.calls.some(([call]) => call.data.failureCount || call.data.successCount)).toBe(false);
+  });
+
+  it.each(["market", "run"])("does not start a %s operation when stop arrives during its heartbeat", async (stage) => {
+    const fixture = clientFixture();
+    if (stage === "run") fixture.client.market.findMany.mockResolvedValue([]);
+    let stopping = false;
+    let heartbeats = 0;
+    fixture.workerState.updateMany.mockImplementation(async () => {
+      if (++heartbeats === 2) stopping = true; // Initial cycle ownership, then operation heartbeat.
+      return { count: 1 };
+    });
+    const processRun = vi.fn();
+    const result = await runSettlementWorkerCycle({
+      instanceId: "worker_123", client: fixture.client as never, processRun: processRun as never, shouldStop: () => stopping,
+    });
+    expect(fixture.client.$transaction).not.toHaveBeenCalled();
+    expect(processRun).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ closedMarkets: 0, attemptedRuns: 0, failedRuns: 0, marketCloseFailures: 0 });
+    for (const [call] of fixture.workerState.updateMany.mock.calls) {
+      expect(call.data).not.toHaveProperty("lastCycleSucceededAt");
+      expect(call.data).not.toHaveProperty("consecutiveFailures");
+      expect(call.data).not.toHaveProperty("lastError");
+      expect(call.data).not.toHaveProperty("failureCount");
+    }
+  });
 });

@@ -1,4 +1,5 @@
 import { db, requireDatabaseStartup } from "../src/lib/db";
+import { settlementWorkerCycleFailed } from "../src/lib/settlement-worker-result";
 import {
   heartbeatSettlementWorker,
   registerSettlementWorker,
@@ -52,10 +53,11 @@ async function main(): Promise<void> {
   const instanceId = await registerSettlementWorker();
   try {
     do {
-      const summary = await runSettlementWorkerCycle({ instanceId });
+      if (stopping) break;
+      const summary = await runSettlementWorkerCycle({ instanceId, shouldStop: () => stopping });
       console.log(JSON.stringify({ event: "settlement_worker_cycle", ...summary, at: new Date().toISOString() }));
       if (!continuous) {
-        if (summary.marketCloseFailures > 0 || summary.failedRuns > 0) process.exitCode = 1;
+        if (settlementWorkerCycleFailed(summary)) process.exitCode = 1;
         return;
       }
       await interruptibleDelay(intervalMs);

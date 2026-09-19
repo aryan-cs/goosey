@@ -394,7 +394,7 @@ export async function drainMarketOrderBook(
       marketId,
       actorUserId,
       scope: "MARKET_LIFECYCLE",
-      idempotencyKey: `${reason}:${market.version}`,
+      idempotencyKey: `${marketId}:${reason}:${market.version}`,
       requestHash: requestHash({ marketId, reason, marketVersion: market.version }),
       commandType: "LIFECYCLE",
       commandSequence: sequence,
@@ -1008,7 +1008,9 @@ export async function expireOrders(
   client: PrismaClient,
   operationAt = new Date(),
   beforeEach?: () => Promise<void>,
+  shouldStop?: () => boolean,
 ): Promise<ExpireOrdersResult> {
+  if (shouldStop?.()) return { expired: 0, failures: [] };
   const candidates = await client.marketOrder.findMany({
     where: {
       status: { in: [...ACTIVE_ORDER_STATUSES] },
@@ -1023,8 +1025,10 @@ export async function expireOrders(
   const failures: Array<{ orderId: string; error: unknown }> = [];
 
   for (const candidate of candidates) {
+    if (shouldStop?.()) break;
     try {
       await beforeEach?.();
+      if (shouldStop?.()) break;
       const changed = await runSerializableTransaction(client, async (tx) => {
         const order = await tx.marketOrder.findUnique({
           where: { id: candidate.id },

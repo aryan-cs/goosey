@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Prisma, type MarketSettlementRun } from "@prisma/client";
 
-import { settlementPayoutMilli, voidPayoutMilli } from "@/lib/market-maker";
+import { positionSettlementPayoutMilli } from "@/lib/settlement-payout";
 import { ApiError, consumeRateLimit, prisma } from "@/lib/market-service";
 import { jsonStringify } from "@/lib/serializers";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
@@ -68,17 +68,6 @@ async function treasuryAccount(tx: Prisma.TransactionClient) {
     },
     update: {},
   });
-}
-
-function payoutFor(
-  position: { yesShares: number; noShares: number },
-  outcome: string,
-  payoutMilli: bigint,
-): bigint {
-  if (outcome === "YES") return settlementPayoutMilli(position.yesShares, payoutMilli);
-  if (outcome === "NO") return settlementPayoutMilli(position.noShares, payoutMilli);
-  if (outcome === "VOID") return voidPayoutMilli(position.yesShares + position.noShares, payoutMilli);
-  throw new Error(`Unsupported settlement outcome ${outcome}`);
 }
 
 function publicRun(run: MarketSettlementRun) {
@@ -226,7 +215,7 @@ export async function processClaimedBatch(input: {
 
     let batchPayoutMilli = 0n;
     for (const position of positions) {
-      const payoutMilli = payoutFor(position, run.outcome, run.market.payoutMilli);
+      const payoutMilli = positionSettlementPayoutMilli(position, run.outcome, run.market.payoutMilli);
       batchPayoutMilli += payoutMilli;
     }
     if (batchPayoutMilli > run.market.collateralAccount.balanceMilli) {
@@ -234,7 +223,7 @@ export async function processClaimedBatch(input: {
     }
 
     for (const position of positions) {
-      const payoutMilli = payoutFor(position, run.outcome, run.market.payoutMilli);
+      const payoutMilli = positionSettlementPayoutMilli(position, run.outcome, run.market.payoutMilli);
       const realizedDelta = payoutMilli - position.netCostMilli;
       let journalEntryId: string | undefined;
       if (payoutMilli > 0n) {
