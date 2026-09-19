@@ -23,6 +23,19 @@
 .ticket :global(.trade-breakdown > div) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); align-items: baseline; gap: 16px; margin: 0; }
 .ticket :global(.trade-breakdown dd) { display: flex; align-items: center; justify-content: flex-end; gap: 6px; text-align: right; font-family: var(--font-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .ticket :global(.trade-breakdown dd > svg) { flex: 0 0 auto; margin: 0; }
+.moneySummary {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 10px !important;
+  margin: 2px 0 0 !important;
+  padding: 14px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+}
+.moneySummary > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); align-items: baseline; gap: 16px; }
+.primaryAmount dt { color: var(--ink); font-weight: 700; }
+.primaryAmount dd { color: var(--ink); font-size: 17px; font-weight: 700; }
+.estimateNote { margin: -10px 0 0; color: var(--ink-muted); font-size: 12px; line-height: 1.45; }
 .ticket :global(.review-note) { margin: 0; line-height: 1.5; }
 .ticket :global(.trade-actions) { margin: 0; }
 .ticket :global(.trade-submit) { min-width: 0; white-space: normal; }

@@ -107,6 +107,7 @@ export interface ComputedQuote {
   averagePriceMilli: bigint;
   probabilityYesBeforeBps: number;
   probabilityYesAfterBps: number;
+  payoutMilli: bigint;
   yesSharesAfter: number;
   noSharesAfter: number;
 }
@@ -141,6 +142,7 @@ export function computeQuote(
       averagePriceMilli: quote.averagePriceMilli,
       probabilityYesBeforeBps: quote.probabilityYesBeforeBps,
       probabilityYesAfterBps: quote.probabilityYesAfterBps,
+      payoutMilli: market.payoutMilli,
       yesSharesAfter: quote.stateAfter.yesQuantity,
       noSharesAfter: quote.stateAfter.noQuantity,
     };
@@ -150,6 +152,38 @@ export function computeQuote(
     }
     throw error;
   }
+}
+
+export async function previewTradeQuote(input: {
+  userId: string;
+  marketId: string;
+  side: Side;
+  action: Action;
+  quantity: number;
+  marketVersion?: number;
+}) {
+  await consumeRateLimit(prisma, `quote-preview:${input.userId}`, 120, 60_000);
+  const [market, position] = await Promise.all([
+    prisma.market.findUnique({ where: { id: input.marketId } }),
+    input.action === "SELL"
+      ? prisma.position.findUnique({ where: { userId_marketId: { userId: input.userId, marketId: input.marketId } } })
+      : null,
+  ]);
+  if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+  assertDatabaseFinancialMarket(market);
+  if (market.pricingModel !== "LMSR") {
+    throw new ApiError(422, "LMSR_UNAVAILABLE", "This market does not use the LMSR trading engine.");
+  }
+  if (!isLmsrMarketOpen(market)) throw new ApiError(422, "MARKET_NOT_OPEN", "This market is not open for trading.");
+  if (input.marketVersion !== undefined && market.version !== input.marketVersion) {
+    throw new ApiError(409, "STALE_MARKET", "Market prices changed. Refresh and try again.", {
+      currentVersion: market.version,
+    });
+  }
+  if (input.action === "SELL" && availableUnreservedShares(position, input.side) < input.quantity) {
+    throw new ApiError(422, "INSUFFICIENT_POSITION", "You do not own enough contracts to sell.");
+  }
+  return { marketVersion: market.version, ...computeQuote(market, input.side, input.action, input.quantity) };
 }
 
 export function isLmsrMarketOpen(

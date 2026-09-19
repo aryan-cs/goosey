@@ -3,18 +3,17 @@ import styles from "./trade-ticket.module.css";
 import { FeatherIcon } from "./brand";
 import { authPageHref } from "@/lib/auth-destination";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/client-api";
-import { MAX_TRADE_QUANTITY, tradePayoutMilli, validTradeQuantity } from "@/lib/trade-quantity";
+import { MAX_TRADE_QUANTITY, validTradeQuantity } from "@/lib/trade-quantity";
 import { formatFeathers } from "@/lib/feather-format";
 
 type Outcome = "YES" | "NO";
 type Action = "BUY" | "SELL";
 
-export interface TradeQuote {
-  quoteId: string;
+export interface TradePricing {
   marketVersion: number;
   quantity: number;
   grossMilli: number | string;
@@ -24,6 +23,11 @@ export interface TradeQuote {
   averagePriceMilli: number | string;
   probabilityYesBeforeBps: number;
   probabilityYesAfterBps: number;
+  payoutMilli: number | string;
+}
+
+export interface TradeQuote extends TradePricing {
+  quoteId: string;
   expiresAt: string;
 }
 
@@ -49,6 +53,7 @@ export interface TradeTicketProps {
   csrfToken?: string;
   disabled?: boolean;
   quoteEndpoint?: string;
+  previewEndpoint?: string;
   tradeEndpoint?: string;
   onExecuted?: (result: TradeResult) => void;
 }
@@ -68,29 +73,63 @@ function requestId() {
 
 export function TradeTicket({
   marketId, marketTitle, yesProbability, noProbability = 1 - yesProbability, balanceMilli,
-  csrfToken, signedIn = true, initialOutcome = "YES", initialAction = "BUY", onActionChange, outcomeLabel, returnTo, disabled = false, quoteEndpoint, tradeEndpoint, onExecuted,
+  csrfToken, signedIn = true, initialOutcome = "YES", initialAction = "BUY", onActionChange, outcomeLabel, returnTo, disabled = false, quoteEndpoint, previewEndpoint, tradeEndpoint, onExecuted,
 }: TradeTicketProps) {
   const router = useRouter();
   const [action, setAction] = useState<Action>(initialAction);
   const [outcome, setOutcome] = useState<Outcome>(outcomeLabel ? "YES" : initialOutcome);
   const [quantity, setQuantity] = useState(1);
   const [quote, setQuote] = useState<TradeQuote | null>(null);
+  const [preview, setPreview] = useState<TradePricing | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [state, setState] = useState<"editing" | "quoting" | "review" | "submitting" | "success">("editing");
   const [error, setError] = useState<string | null>(null);
   const ticketRef = useRef<HTMLElement>(null);
   const executionKey = useRef<string | null>(null);
   const quoteUrl = quoteEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/quote`;
+  const previewUrl = previewEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/preview`;
   const tradeUrl = tradeEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/trades`;
   const currentProbability = outcome === "YES" ? yesProbability : noProbability;
   const quantityValid = validTradeQuantity(quantity);
-  const estimatedPayout = useMemo(() => quantityValid ? quantity * 100 : 0, [quantity, quantityValid]);
   const milli = (value: number | string | bigint | undefined) => BigInt(value ?? 0);
   const featherText = (value: number | string | bigint | undefined) => {
     return formatFeathers(milli(value), 2);
   };
   const quotedTotal = quote ? (action === "BUY" ? milli(quote.totalDebitMilli ?? milli(quote.grossMilli) + milli(quote.feeMilli)) : milli(quote.netCreditMilli ?? milli(quote.grossMilli) - milli(quote.feeMilli))) : 0n;
-  const maxPayoutMilli = tradePayoutMilli(quantity);
+  const previewTotal = preview ? (action === "BUY" ? milli(preview.totalDebitMilli ?? milli(preview.grossMilli) + milli(preview.feeMilli)) : milli(preview.netCreditMilli ?? milli(preview.grossMilli) - milli(preview.feeMilli))) : 0n;
+  const activePricing = quote ?? preview;
+  const maxPayoutMilli = activePricing && quantityValid ? BigInt(quantity) * milli(activePricing.payoutMilli) : 0n;
   const potentialProfitMilli = action === "BUY" ? maxPayoutMilli - quotedTotal : quotedTotal;
+  const previewProfitMilli = action === "BUY" ? maxPayoutMilli - previewTotal : previewTotal;
+
+  useEffect(() => {
+    if (!signedIn || disabled || state !== "editing" || !quantityValid) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setPreviewing(true);
+      setPreviewError(null);
+      try {
+        const response = await apiFetch(previewUrl, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ side: outcome, action, quantity }),
+          signal: controller.signal,
+        });
+        const body = await readResponse(response) as TradePricing;
+        if (typeof body.grossMilli !== "number" && typeof body.grossMilli !== "string") throw new Error("The price preview was incomplete.");
+        setPreview(body);
+      } catch (reason) {
+        if (controller.signal.aborted) return;
+        setPreview(null);
+        setPreviewError(reason instanceof Error ? reason.message : "Could not calculate the current price.");
+      } finally {
+        if (!controller.signal.aborted) setPreviewing(false);
+      }
+    }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [action, disabled, outcome, previewUrl, quantity, quantityValid, signedIn, state]);
 
   useEffect(() => {
     if (state !== "success") return;
@@ -101,7 +140,7 @@ export function TradeTicket({
   function edit(next?: { action?: Action; outcome?: Outcome }) {
     if (next?.action) { setAction(next.action); onActionChange?.(next.action); }
     if (next?.outcome) setOutcome(next.outcome);
-    setQuote(null); setError(null); setState("editing"); executionKey.current = null;
+    setQuote(null); setPreview(null); setPreviewError(null); setError(null); setState("editing"); executionKey.current = null;
   }
 
   async function requestQuote() {
@@ -152,26 +191,34 @@ export function TradeTicket({
           <button className={outcome === "NO" ? "no selected" : "no"} aria-pressed={outcome === "NO"} onClick={() => edit({ outcome: "NO" })}><span>No</span><strong>{Math.round(noProbability * 100)}%</strong></button>
         </div>}
         <div className={styles.quantityGroup}><label className="field-label" htmlFor="trade-quantity">Contracts</label>
-        <div className="quantity-input"><input id="trade-quantity" inputMode="numeric" min={1} max={MAX_TRADE_QUANTITY} step={1} type="number" value={quantity} aria-invalid={!quantityValid} aria-describedby={!quantityValid ? "trade-quantity-error" : undefined} disabled={state !== "editing"} onChange={(event) => { setQuantity(event.currentTarget.valueAsNumber || 0); setError(null); }} /><span>contracts</span></div>
+        <div className="quantity-input"><input id="trade-quantity" inputMode="numeric" min={1} max={MAX_TRADE_QUANTITY} step={1} type="number" value={quantity} aria-invalid={!quantityValid} aria-describedby={!quantityValid ? "trade-quantity-error" : undefined} disabled={state !== "editing"} onChange={(event) => { setQuantity(event.currentTarget.valueAsNumber || 0); setPreview(null); setPreviewError(null); setError(null); }} /><span>contracts</span></div>
         {!quantityValid && <p id="trade-quantity-error" className="form-error" role="alert">Enter a whole number from 1 to 100,000 contracts.</p>}
-        {state === "editing" && <div className="quick-values" aria-label="Quick quantities">{[1, 5, 10, 25].map((value) => <button onClick={() => setQuantity(value)} key={value}>{value}</button>)}</div>}
+        {state === "editing" && <div className="quick-values" aria-label="Quick quantities">{[1, 5, 10, 25].map((value) => <button onClick={() => { setQuantity(value); setPreview(null); setPreviewError(null); }} key={value}>{value}</button>)}</div>}
         </div>
         <dl className="trade-breakdown">
           {quote ? <>
             <div><dt>Average price</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.averagePriceMilli)}</dd></div>
             <div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% {outcomeLabel ?? "Yes"}</dd></div>
             <div><dt>Fee</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.feeMilli)}</dd></div>
-            {action === "BUY" ? <>
-              <div className="trade-total"><dt>Total cost</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div>
-              <div><dt>If correct, receive</dt><dd><FeatherIcon width={15} height={15} /> {featherText(maxPayoutMilli)}</dd></div>
-              <div><dt>Net profit if correct</dt><dd><FeatherIcon width={15} height={15} /> {featherText(potentialProfitMilli)}</dd></div>
-            </> : <div className="trade-total"><dt>You receive</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div>}
-          </> : <>
+            {action === "BUY" ? <div className={styles.moneySummary}>
+              <div className={styles.primaryAmount}><dt>You pay now</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div>
+              <div><dt>Total return if correct</dt><dd><FeatherIcon width={15} height={15} /> {featherText(maxPayoutMilli)}</dd></div>
+              <div><dt>Profit if correct</dt><dd><FeatherIcon width={15} height={15} /> {featherText(potentialProfitMilli)}</dd></div>
+            </div> : <div className={`${styles.primaryAmount} trade-total`}><dt>You receive now</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div>}
+          </> : preview ? <>
             <div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div>
-            <div><dt>If correct, receive</dt><dd><FeatherIcon width={15} height={15} /> {estimatedPayout}</dd></div>
+            <div><dt>Average price</dt><dd><FeatherIcon width={15} height={15} /> {featherText(preview.averagePriceMilli)}</dd></div>
+            <div><dt>Fee</dt><dd><FeatherIcon width={15} height={15} /> {featherText(preview.feeMilli)}</dd></div>
+            {action === "BUY" ? <div className={styles.moneySummary}>
+              <div className={styles.primaryAmount}><dt>Current cost</dt><dd><FeatherIcon width={15} height={15} /> {featherText(previewTotal)}</dd></div>
+              <div><dt>Total return if correct</dt><dd><FeatherIcon width={15} height={15} /> {featherText(maxPayoutMilli)}</dd></div>
+              <div><dt>Potential profit</dt><dd><FeatherIcon width={15} height={15} /> {featherText(previewProfitMilli)}</dd></div>
+            </div> : <div className={styles.primaryAmount}><dt>Current proceeds</dt><dd><FeatherIcon width={15} height={15} /> {featherText(previewTotal)}</dd></div>}
             {balanceMilli !== undefined && <div><dt>Available</dt><dd><FeatherIcon width={15} height={15} /> {featherText(balanceMilli)}</dd></div>}
-          </>}
+          </> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div className={styles.calculating}><dt>Current price</dt><dd>{previewing ? "Calculating…" : "—"}</dd></div></>}
         </dl>
+        {state === "editing" && preview && <p className={styles.estimateNote}>Live preview based on the current market. Review to lock an exact price for 30 seconds.</p>}
+        {state === "editing" && previewError && <p className="form-error" role="alert"><AlertCircle /> {previewError}</p>}
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
         {state === "review" && <p className="review-note">Check the price before you confirm. Quotes can change or expire.</p>}
         <div className="trade-actions">
