@@ -1,8 +1,10 @@
 "use client";
+import { FeatherIcon } from "./brand";
+import { authPageHref } from "@/lib/auth-destination";
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowRight, CheckCircle2, Feather, LoaderCircle, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, RotateCcw, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/client-api";
 import { MAX_TRADE_QUANTITY, tradePayoutMilli, validTradeQuantity } from "@/lib/trade-quantity";
 
@@ -139,13 +141,13 @@ export function TradeTicket({
         {!quantityValid && <p id="trade-quantity-error" className="form-error" role="alert">Enter a whole number from 1 to 100,000 contracts.</p>}
         {state === "editing" && <div className="quick-values" aria-label="Quick quantities">{[1, 5, 10, 25].map((value) => <button onClick={() => setQuantity(value)} key={value}>{value}</button>)}</div>}
         <dl className="trade-breakdown">
-          {quote ? <><div><dt>Average price</dt><dd>{featherText(quote.averagePriceMilli)} 🪶</dd></div><div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% Yes</dd></div><div><dt>Fee</dt><dd>{featherText(quote.feeMilli)} 🪶</dd></div>{action === "BUY" && <div><dt>Potential profit if correct</dt><dd>{featherText(potentialProfitMilli)} 🪶</dd></div>}<div className="trade-total"><dt>{action === "BUY" ? "Total cost" : "You receive"}</dt><dd>{featherText(quotedTotal)} 🪶</dd></div></> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div><dt>Maximum payout</dt><dd><Feather size={15} /> {estimatedPayout}</dd></div>{balanceMilli !== undefined && <div><dt>Available</dt><dd>{featherText(balanceMilli)} 🪶</dd></div>}</>}
+          {quote ? <><div><dt>Average price</dt><dd>{featherText(quote.averagePriceMilli)} <FeatherIcon width={15} height={15} /></dd></div><div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% Yes</dd></div><div><dt>Fee</dt><dd>{featherText(quote.feeMilli)} <FeatherIcon width={15} height={15} /></dd></div>{action === "BUY" && <div><dt>Potential profit if correct</dt><dd>{featherText(potentialProfitMilli)} <FeatherIcon width={15} height={15} /></dd></div>}<div className="trade-total"><dt>{action === "BUY" ? "Total cost" : "You receive"}</dt><dd>{featherText(quotedTotal)} <FeatherIcon width={15} height={15} /></dd></div></> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div><dt>Maximum payout</dt><dd><FeatherIcon width={15} height={15} /> {estimatedPayout}</dd></div>{balanceMilli !== undefined && <div><dt>Available</dt><dd>{featherText(balanceMilli)} <FeatherIcon width={15} height={15} /></dd></div>}</>}
         </dl>
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
         {state === "review" && <p className="review-note">Check the price before you confirm. Quotes can change or expire.</p>}
         <div className="trade-actions">
           {state === "review" && <button className="button button-ghost" onClick={() => edit()}>Edit</button>}
-          <button className="button button-primary trade-submit" disabled={disabled || state === "quoting" || state === "submitting" || !quantityValid} onClick={!signedIn ? () => router.push("/login") : state === "review" ? executeTrade : requestQuote}>
+          <button className="button button-primary trade-submit" disabled={disabled || state === "quoting" || state === "submitting" || !quantityValid} onClick={!signedIn ? () => router.push(authPageHref("/login", `${window.location.pathname}${window.location.search}`)) : state === "review" ? executeTrade : requestQuote}>
             {(state === "quoting" || state === "submitting") && <LoaderCircle className="spin" />}{!signedIn ? "Sign in to trade" : state === "editing" ? "Review trade" : state === "quoting" ? "Getting quote…" : state === "review" ? `${action === "BUY" ? "Buy" : "Sell"} ${quantity} ${outcome}` : "Placing trade…"}<ArrowRight />
           </button>
         </div>

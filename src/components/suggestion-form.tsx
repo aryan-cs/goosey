@@ -12,12 +12,13 @@ export function SuggestionForm() {
   const [error, setError] = useState<string | null>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setState("sending"); setError(null);
-    const data = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const data = new FormData(formElement);
     try {
       const response = await apiFetch("/api/suggestions", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: data.get("title"), description: data.get("description"), category: data.get("category") }) });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error?.message ?? "Suggestion could not be sent.");
-      setState("sent"); event.currentTarget.reset(); router.refresh();
+      formElement.reset(); setState("sent"); router.refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Suggestion could not be sent."); setState("idle"); }
   }
   if (state === "sent") return <div className="success-panel" role="status"><CheckCircle2 /><h2>Suggestion sent</h2><p>We will review the question and how it should be decided.</p><button type="button" className="button button-secondary" onClick={() => setState("idle")}>Suggest another</button></div>;

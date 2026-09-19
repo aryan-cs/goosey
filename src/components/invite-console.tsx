@@ -14,7 +14,8 @@ export function InviteConsole({ initialInvites }: { initialInvites: Invite[] }) 
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(null); setIssuedCode(null); setBusy(true);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const expires = String(form.get("expiresAt") ?? "");
     const payload = JSON.stringify({ label: form.get("label"), maxUses: Number(form.get("maxUses")), expiresAt: expires ? new Date(expires).toISOString() : null });
     if (issuanceAttemptRef.current?.payload !== payload) issuanceAttemptRef.current = { key: crypto.randomUUID(), payload };
@@ -25,7 +26,7 @@ export function InviteConsole({ initialInvites }: { initialInvites: Invite[] }) 
       setInvites((current) => [body.invite, ...current.filter((invite) => invite.id !== body.invite.id)]);
       setIssuedCode(body.code);
       issuanceAttemptRef.current = null;
-      event.currentTarget.reset();
+      formElement.reset();
     } catch {
       setError("Invitation could not be created. Retry to safely resume this request.");
     } finally {
