@@ -50,6 +50,13 @@ if (env.GOOSEY_UNPUBLISH_SPEAKER) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+// Explicit one-off repair for the deployed badge quote/schema mismatch.
+if (env.GOOSEY_REPAIR_BADGE_QUOTES) {
+  run("db:generate:postgres");
+  const result = spawnSync("node", ["scripts/repair-badge-quotes.mjs"], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
 // Explicit opt-in: preview builds must not silently mutate shared databases.
 if (env.GOOSEY_DEPLOY_MIGRATIONS === "1") run("db:migrate:deploy:postgres");
 run("build");
