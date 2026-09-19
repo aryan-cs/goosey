@@ -5,6 +5,7 @@
   "type": "module",
   "description": "A University of Waterloo and Hack the North themed prediction market powered by feathers.",
   "scripts": {
+    "chain:preflight": "tsx scripts/solana-preflight.ts",
     "data:dev": "tsx scripts/development-data.ts",
     "data:fixture": "tsx scripts/development-fixture.ts",
     "predev": "npm run db:generate",
@@ -52,6 +53,9 @@
   },
   "dependencies": {
     "@prisma/client": "6.12.0",
+    "@solana-program/system": "0.14.1",
+    "@solana-program/token": "0.16.1",
+    "@solana/kit": "8.3.0",
     "@types/nodemailer": "^8.0.2",
     "bcryptjs": "^3.0.2",
     "clsx": "^2.1.1",
@@ -81,6 +85,6 @@
     "seed": "tsx prisma/seed.ts"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20.18.0"
   }
 }

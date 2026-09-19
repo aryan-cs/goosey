@@ -1,6 +1,8 @@
 # Goosey
 
-Goosey is a working play-money prediction market for a University of Waterloo and Hack the North-inspired hackathon experience. Its in-app unit is the feather (`🪶`). Feathers have no cash value, cannot be purchased, withdrawn, transferred for consideration, or redeemed for money or prizes unless a future event's separately published rules explicitly say otherwise.
+**Solana work in progress:** the requested free, transferable, non-cash-redeemable feather system is being implemented for localnet/devnet. The current website's trades are still database-backed, not on-chain. See [the migration scope, implemented foundations, and remaining gates](docs/solana-migration.md).
+
+Goosey is a working play-money prediction market for a University of Waterloo and Hack the North-inspired hackathon experience. Its unit is the feather (`🪶`). Feathers are free, have no promised cash value, and cannot be purchased or redeemed for money or prizes through Goosey. The Solana implementation will support user-to-user feather transfers without introducing a cash-out feature.
 
 > **Independent project.** Goosey is not affiliated with, endorsed by, sponsored by, or operated by the University of Waterloo, Hack the North, Kalshi, or Timbermarket. “University of Waterloo,” “Hack the North,” “Kalshi,” and “Timbermarket” are used only to describe inspiration or context. Do not use third-party logos, protected brand assets, proprietary copy, or language implying official status without written permission.
 
