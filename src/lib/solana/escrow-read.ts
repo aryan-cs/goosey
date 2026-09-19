@@ -7,6 +7,7 @@ import { probeSolanaRuntime, type SolanaRuntime } from "./runtime";
 import { deriveGooseyBookAddress } from "./exchange-client";
 import { readCanonicalOrderBook, GOOSEY_ORDER_BOOK_BYTES } from "./order-book-read";
 import { readResolutionState, RESOLUTION_STATE_BYTES, verifyPositionBacking, type ResolutionSeatBalance } from "./resolution-state";
+import { deriveGooseyMarketTermsAddresses, readMarketTermsAccount, MARKET_TERMS_ACCOUNT_BYTES } from "./market-terms-client";
 
 export type EscrowReadRpc = Pick<ReturnType<typeof createSolanaRpc>, "getGenesisHash" | "getAccountInfo" | "getMultipleAccounts">;
 export type EscrowReadInput = { marketId: bigint; wallet: Address };
@@ -140,11 +141,12 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
  * RPC trust remains necessary; this does not attest the deployed program binary.
  */
 export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowReadInput, options: {
-  rpc?: EscrowReadRpc; signal?: AbortSignal; includeOrderBook?: boolean; includeResolution?: boolean;
+  rpc?: EscrowReadRpc; signal?: AbortSignal; includeOrderBook?: boolean; includeResolution?: boolean; includeMarketTerms?: boolean;
 } = {}) {
   input = { ...input };
   runtime = { ...runtime };
-  const includeResolution = options.includeResolution === true;
+  const includeMarketTerms = options.includeMarketTerms === true;
+  const includeResolution = options.includeResolution === true || includeMarketTerms;
   const includeOrderBook = options.includeOrderBook === true || includeResolution;
   const signal = options.signal ?? AbortSignal.timeout(8_000);
   signal.throwIfAborted();
@@ -160,11 +162,14 @@ export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowRead
   const bookAddress = includeOrderBook ? (await deriveGooseyBookAddress(runtime.programAddress, addresses.market)).book : null;
   const [resolutionAddress] = await getProgramDerivedAddress({ programAddress: runtime.programAddress,
     seeds: ["resolution", getAddressEncoder().encode(addresses.market)] });
+  const termsAddress = includeMarketTerms ? (await deriveGooseyMarketTermsAddresses({
+    programAddress: runtime.programAddress, marketId: input.marketId })).terms : null;
   const response = await rpc.getMultipleAccounts([addresses.config, addresses.featherMint, addresses.market, market.seats,
-    addresses.locator, addresses.vault, addresses.walletTokens, ...(bookAddress ? [bookAddress] : []), ...(includeResolution ? [resolutionAddress] : [])], {
+    addresses.locator, addresses.vault, addresses.walletTokens, ...(bookAddress ? [bookAddress] : []),
+    ...(includeResolution ? [resolutionAddress] : []), ...(termsAddress ? [termsAddress] : [])], {
     encoding: "base64", commitment: "finalized", minContextSlot: discovery.context.slot,
   }).send({ abortSignal: signal });
-  if (typeof response.context.slot !== "bigint" || response.context.slot < discovery.context.slot || response.value.length !== (includeResolution ? 9 : includeOrderBook ? 8 : 7)) {
+  if (typeof response.context.slot !== "bigint" || response.context.slot < discovery.context.slot || response.value.length !== (includeMarketTerms ? 10 : includeResolution ? 9 : includeOrderBook ? 8 : 7)) {
     throw new Error("Invalid escrow final snapshot");
   }
   const [config, mint, marketAccount, seats, locator, vault, walletTokens] = response.value;
@@ -180,6 +185,16 @@ export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowRead
     book: { address: bookAddress, owner: runtime.programAddress, executable: false,
       data: raw(response.value[7], runtime.programAddress, GOOSEY_ORDER_BOOK_BYTES) },
   }) : null;
+  // The commitment and frozen reviewers come from the SAME financial batch.
+  // This validates the account, not availability/content of its manifest, and
+  // does not assert that the deployed program enforces terms at admission.
+  const marketTerms = termsAddress && snapshot.resolution ? await readMarketTermsAccount({
+    programAddress: runtime.programAddress, marketId: input.marketId, config: addresses.config,
+    market: addresses.market, creator: snapshot.marketState.creator,
+    proposer: snapshot.resolution.proposer, approver: snapshot.resolution.approver,
+  }, { address: termsAddress, owner: runtime.programAddress, executable: false,
+    data: raw(response.value[9], runtime.programAddress, MARKET_TERMS_ACCOUNT_BYTES) }) : null;
+  if (includeMarketTerms && !marketTerms) throw new Error("Missing verified market terms");
   signal.throwIfAborted();
-  return { ...snapshot, orderBook, finalizedSlot: response.context.slot };
+  return { ...snapshot, orderBook, marketTerms, finalizedSlot: response.context.slot };
 }

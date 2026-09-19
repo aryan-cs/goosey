@@ -4,6 +4,7 @@ import { TOKEN_PROGRAM_ADDRESS, ASSOCIATED_TOKEN_PROGRAM_ADDRESS } from "@solana
 import { describe, expect, it, vi } from "vitest";
 import { deriveGooseySeatAddresses } from "./escrow-client";
 import { deriveGooseyBookAddress } from "./exchange-client";
+import { deriveGooseyMarketTermsAddresses } from "./market-terms-client";
 import { readGooseyEscrow, verifyGooseyEscrowSnapshot, type EscrowReadRpc, type EscrowSnapshotAccounts } from "./escrow-read";
 
 const runtime = { cluster: "localnet" as const, rpcUrl: "http://127.0.0.1:18999",
@@ -280,6 +281,52 @@ describe("finalized read orchestration (mocked RPC, not chain proof)", () => {
       await expect(readGooseyEscrow(runtime, input, { rpc: f.rpc, includeResolution: true })).rejects.toThrow();
     }
   });
+  async function setupTerms() {
+    const f = await setupResolution(), terms = anchor(240, "MarketTerms");
+    const a = await deriveGooseyMarketTermsAddresses({ programAddress: runtime.programAddress, marketId: input.marketId });
+    terms[8] = 1; key(terms, 9, f.p.market); key(terms, 41, input.wallet);
+    terms.fill(1, 73, 105); terms.writeUInt32LE(1000, 105);
+    terms.set(f.resolution.subarray(96, 224), 109);
+    terms[237] = 3; terms[238] = 1; terms[239] = a.termsBump;
+    const configureTerms = (account: unknown = f.account(terms), short = false) => f.batch.mockReset()
+      .mockResolvedValueOnce({ context: { slot: 11n }, value: [f.account(f.market)] })
+      .mockResolvedValueOnce({ context: { slot: 12n }, value: [...Object.values(f.accounts()), f.account(f.book),
+        f.account(f.resolution), ...(short ? [] : [account])] });
+    configureTerms(); return { ...f, terms, termsAddress: a.terms, configureTerms };
+  }
+  it("verifies terms and frozen reviewers in the same ten-account finalized financial batch", async () => {
+    const f = await setupTerms();
+    const result = await readGooseyEscrow(runtime, input, { rpc: f.rpc, includeMarketTerms: true });
+    expect(result.marketTerms).toMatchObject({ address: f.termsAddress, sealed: true, acceptanceBits: 3, manifestLength: 1000 });
+    expect(result.marketTerms?.proposer).toEqual(result.resolution?.proposer);
+    expect(result.orderBook?.reservesReconciled).toBe(true);
+    expect(result.exchangeVerified).toBe(false);
+    expect(result.finalizedSlot).toBe(12n);
+    expect(f.getMultipleAccounts).toHaveBeenCalledTimes(2);
+    const { book } = await deriveGooseyBookAddress(runtime.programAddress, f.p.market);
+    expect(f.getMultipleAccounts).toHaveBeenNthCalledWith(2,
+      [f.p.config, f.p.featherMint, f.p.market, seatsAddress, f.p.locator, f.p.vault, f.p.walletTokens,
+        book, f.resolutionAddress, f.termsAddress],
+      { encoding: "base64", commitment: "finalized", minContextSlot: 11n });
+  });
+  it("reports unsealed commitments as unsealed without inventing acceptance or manifest verification", async () => {
+    const f = await setupTerms(); f.terms[237] = 1; f.terms[238] = 0; f.configureTerms();
+    const result = await readGooseyEscrow(runtime, input, { rpc: f.rpc, includeMarketTerms: true });
+    expect(result.marketTerms).toMatchObject({ sealed: false, acceptanceBits: 1 });
+    expect(result.marketTerms).not.toHaveProperty("manifestVerified");
+  });
+  it.each(["missing", "owner", "short", "market", "reviewer", "acceptance", "sealed", "bump"] as const)(
+    "fails closed on invalid required terms: %s", async mode => {
+      const f = await setupTerms();
+      if (mode === "market") f.terms[9] ^= 1;
+      if (mode === "reviewer") f.terms[109] ^= 1;
+      if (mode === "acceptance") f.terms[237] = 1;
+      if (mode === "sealed") f.terms[238] = 2;
+      if (mode === "bump") f.terms[239] ^= 1;
+      f.configureTerms(mode === "missing" ? null : f.account(f.terms,
+        mode === "owner" ? TOKEN_PROGRAM_ADDRESS : runtime.programAddress), mode === "short");
+      await expect(readGooseyEscrow(runtime, input, { rpc: f.rpc, includeMarketTerms: true })).rejects.toThrow();
+    });
   it("rejects stale snapshot context, short batches, and changed Seats binding", async () => {
     for (const mode of ["stale", "short", "binding"] as const) {
       const f = await setup();

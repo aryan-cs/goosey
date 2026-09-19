@@ -4,6 +4,16 @@ This is an implemented offline codec/hash contract, **not an installed on-chain
 admission rule**. Rust, existing layouts and current clients are unchanged.
 No fixture in the unit tests is a live market or source-availability claim.
 
+The TypeScript implementation also includes unsigned initialize/accept/seal
+builders and a strict 240-byte account decoder. `readGooseyEscrow` can request
+`includeMarketTerms: true`, forcing a single finalized ten-account batch with
+the book and resolution. It validates the commitment against that batch's market
+and frozen reviewer identities; a missing or malformed requested commitment
+fails, without a legacy fallback. It reports unsealed commitments as unsealed.
+This does not fetch or verify the manifest content, nor prove that the deployed
+program requires a commitment before trading. The existing callers remain on
+their explicitly selected read contracts until the program admission migration.
+
 ## Exact bytes
 
 `encodeMarketTerms` validates unknown input and emits UTF-8 JSON without BOM,
