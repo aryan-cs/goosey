@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/states";
 import { MARKET_CATEGORIES } from "@/lib/market-categories";
 import { loadMarketMarks } from "@/lib/market-marks";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
+import { MARKET_SUGGESTION_FORM_URL } from "@/lib/market-suggestion";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
   return <div className="page-shell browse-page">
     <div className="browse-layout">
       <div className={styles.intro}>
-        <header className={styles.header}><h1>Markets</h1><Link className={`button button-secondary ${styles.suggest}`} href="/markets/suggest">Suggest a market</Link></header>
+        <header className={styles.header}><h1>Markets</h1><a className={`button button-secondary ${styles.suggest}`} href={MARKET_SUGGESTION_FORM_URL} target="_blank" rel="noreferrer" aria-label="Suggest a market (opens in a new tab)">Suggest a market</a></header>
         <p><Link href="/events">Browse grouped events →</Link> · <Link href="/chain">On-chain markets →</Link></p>
       </div>
       <form className="market-filters" action="/markets">
