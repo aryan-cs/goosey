@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chartDomain, nearestChartIndex, normalizeChartPoints, selectChartRange, type ChartPoint } from "./chart-series";
+import { withHeldPriceEndpoint, chartDomain, nearestChartIndex, normalizeChartPoints, selectChartRange, type ChartPoint } from "./chart-series";
 
 const day = 86_400_000;
 const now = Date.parse("2026-09-19T12:00:00Z");
@@ -113,5 +113,26 @@ describe("selectChartRange", () => {
     expect(selectChartRange(input, "24H", now)).toEqual([point(2, 0.4), point(0, 0.6)]);
     expect(input).toEqual([point(0, 0.6), point(2, 0.4)]);
     expect(selectChartRange(input, "24H", NaN)).toEqual([]);
+  });
+});
+
+describe("withHeldPriceEndpoint", () => {
+  it("extends a stale price to now without changing the actual observation", () => {
+    const actual = { timestamp: now - 4_440_000, probability: 0.47 };
+    expect(withHeldPriceEndpoint([actual], now)).toEqual([actual, { timestamp: now, probability: 0.47, held: true }]);
+    expect(actual).toEqual({ timestamp: now - 4_440_000, probability: 0.47 });
+  });
+  it("replaces the display endpoint rather than accumulating artificial history", () => {
+    const points = withHeldPriceEndpoint([point(1, 0.65)], now);
+    expect(withHeldPriceEndpoint(points, now + 600_000)).toEqual([point(1, 0.65), { timestamp: now + 600_000, probability: 0.65, held: true }]);
+  });
+  it("does not invent a price for an empty history or duplicate current observations", () => {
+    expect(withHeldPriceEndpoint([], now)).toEqual([]);
+    expect(withHeldPriceEndpoint([point(0)], now)).toEqual([point(0)]);
+    expect(withHeldPriceEndpoint([point(0)], now - 1)).toEqual([point(0)]);
+  });
+  it("keeps a held value visible after its source leaves the selected time window", () => {
+    const series = selectChartRange([point(2, 0.47)], "1H", now);
+    expect(withHeldPriceEndpoint(series, now).at(-1)).toEqual({ timestamp: now, probability: 0.47, held: true });
   });
 });

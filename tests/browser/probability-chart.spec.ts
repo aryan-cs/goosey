@@ -1,12 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
+
+const chartSlug = process.env.GOOSEY_CHART_TEST_SLUG ?? "gallery-150-projects";
 
 test("probability inspection matches persisted history and resets cleanly", async ({ page, request, isMobile }) => {
-  const slug = "gallery-150-projects";
+  const slug = chartSlug;
   const response = await request.get(`/api/markets/${slug}/history?range=ALL&limit=2000`);
   expect(response.ok()).toBeTruthy();
   const { snapshots } = await response.json() as { snapshots: { createdAt: string; yesProbabilityBps: number }[] };
   expect(snapshots.length).toBeGreaterThan(0);
+  const historyLoaded = page.waitForResponse(response => response.url().includes(`/api/markets/${slug}/history?`) && new URL(response.url()).searchParams.get("range") === "ALL");
   await page.goto(`/markets/${slug}`);
+  await historyLoaded;
   const chart = page.locator(".full-plot");
   const slider = chart.getByRole("slider");
   const tooltip = chart.getByRole("tooltip", { includeHidden: true });
@@ -19,9 +23,15 @@ test("probability inspection matches persisted history and resets cleanly", asyn
   await expect(page.getByText("Historical probability", { exact: true })).toBeVisible();
   await slider.press("End");
   const last = snapshots.at(-1)!;
-  const label = `${Number((last.yesProbabilityBps / 100).toFixed(2))}%`;
+  const label = `${Math.round(last.yesProbabilityBps / 100)}%`;
   await expect(tooltip.locator("b")).toHaveText(label);
+  await expect(page.locator(".probability-chart figcaption .eyebrow")).toHaveText("Held price");
+  const heldTimestamp = await tooltip.locator("time").getAttribute("datetime");
+  expect(Date.parse(heldTimestamp!)).toBeGreaterThan(Date.parse(last.createdAt));
+  // Moving left from the display-only endpoint reaches the actual observation.
+  await slider.press("ArrowLeft");
   await expect(tooltip.locator("time")).toHaveAttribute("datetime", new Date(last.createdAt).toISOString());
+  await expect(page.locator(".probability-chart figcaption .eyebrow")).toHaveText("Historical probability");
   await expect(slider).toHaveAttribute("aria-valuetext", new RegExp(label.replace(".", "\\.")));
   await slider.press("Escape");
   await expect(tooltip).toBeHidden();
@@ -47,10 +57,10 @@ test("probability inspection matches persisted history and resets cleanly", asyn
 
   await slider.focus();
   await slider.press("Home");
-  await page.getByRole("button", { name: "1D", exact: true }).click();
+  await page.getByRole("button", { name: "24H", exact: true }).click();
   await expect(slider).toHaveAttribute("data-inspecting", "false");
   await expect(tooltip).toBeHidden();
-  await expect(page.getByRole("button", { name: "1D", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "24H", exact: true })).toHaveAttribute("aria-pressed", "true");
   await slider.focus();
   await slider.press("End");
   await slider.press("Tab");
@@ -128,14 +138,14 @@ test("a completed real history request clears both headline and plot inspection"
   const gate = new Promise<void>(resolve => { release = resolve; });
   let loaded!: () => void;
   const fetched = new Promise<void>(resolve => { loaded = resolve; });
-  await page.route("**/api/markets/gallery-150-projects/history?**", async route => {
+  await page.route(`**/api/markets/${chartSlug}/history?**`, async route => {
     const response = await route.fetch();
     loaded();
     await gate;
     await route.fulfill({ response });
   });
   try {
-    await page.goto("/markets/gallery-150-projects");
+    await page.goto(`/markets/${chartSlug}`);
     await fetched;
     const figure = page.locator(".probability-chart");
     const slider = figure.getByRole("slider");
@@ -155,11 +165,11 @@ test("a completed real history request clears both headline and plot inspection"
 });
 
 test("each chart range requests its own persisted observations", async ({ page }) => {
-  const initial = page.waitForResponse(response => response.url().includes("/api/markets/gallery-150-projects/history?") && new URL(response.url()).searchParams.get("range") === "ALL");
-  await page.goto("/markets/gallery-150-projects");
+  const initial = page.waitForResponse(response => response.url().includes(`/api/markets/${chartSlug}/history?`) && new URL(response.url()).searchParams.get("range") === "ALL");
+  await page.goto(`/markets/${chartSlug}`);
   expect((await initial).ok()).toBeTruthy();
-  for (const range of ["1D", "1W", "1M", "ALL"]) {
-    const received = page.waitForResponse(response => response.url().includes("/api/markets/gallery-150-projects/history?") && new URL(response.url()).searchParams.get("range") === range);
+  for (const range of ["1H", "4H", "8H", "24H", "ALL"]) {
+    const received = page.waitForResponse(response => response.url().includes(`/api/markets/${chartSlug}/history?`) && new URL(response.url()).searchParams.get("range") === range);
     await page.getByRole("button", { name: range, exact: true }).click();
     const response = await received;
     expect(response.ok()).toBeTruthy();
@@ -168,4 +178,104 @@ test("each chart range requests its own persisted observations", async ({ page }
     await expect(page.getByRole("button", { name: range, exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".probability-chart").getByRole("tooltip", { includeHidden: true })).toBeHidden();
   }
+});
+
+
+async function chartGeometry(figure: Locator) {
+  return figure.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const plot = element.querySelector(".probability-plot-surface")!.getBoundingClientRect();
+    const footer = element.querySelector(".probability-chart-footer")!.getBoundingClientRect();
+    return { height: box.height, plotHeight: plot.height, plotTop: plot.top - box.top, footerTop: footer.top - box.top };
+  });
+}
+
+test("inspection and range changes keep the chart and controls in place", async ({ page, isMobile }) => {
+  const historyLoaded = page.waitForResponse(response => response.url().includes(`/api/markets/${chartSlug}/history?`) && new URL(response.url()).searchParams.get("range") === "ALL");
+  await page.goto(`/markets/${chartSlug}`);
+  await historyLoaded;
+  const figure = page.locator(".probability-chart");
+  const slider = figure.getByRole("slider");
+  await expect(slider).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  const original = await chartGeometry(figure);
+  async function expectStableGeometry() {
+    await expect.poll(async () => {
+      const current = await chartGeometry(figure);
+      return Math.max(...Object.keys(original).map(key => Math.abs(current[key as keyof typeof current] - original[key as keyof typeof original])));
+    }).toBeLessThanOrEqual(1);
+  }
+  await slider.focus();
+  for (const key of ["Home", "End", "Escape"]) {
+    await slider.press(key);
+    await expectStableGeometry();
+  }
+  if (!isMobile) {
+    const box = await slider.boundingBox();
+    for (const ratio of [0.01, 0.5, 0.99]) {
+      await page.mouse.move(box!.x + box!.width * ratio, box!.y + box!.height / 2);
+      await expect(slider).toHaveAttribute("data-inspecting", "true");
+      await expectStableGeometry();
+    }
+    await page.mouse.move(0, 0);
+    await expectStableGeometry();
+  }
+  for (const range of ["1H", "4H", "8H", "24H", "ALL"]) {
+    const loaded = page.waitForResponse(response => response.url().includes(`/api/markets/${chartSlug}/history?`) && new URL(response.url()).searchParams.get("range") === range);
+    await figure.getByRole("button", { name: range, exact: true }).click();
+    expect((await loaded).ok()).toBeTruthy();
+    await expect(slider).toHaveAttribute("data-inspecting", "false");
+    await expectStableGeometry();
+    await slider.focus();
+    await slider.press("End");
+    await expect(figure.locator("figcaption .eyebrow")).toHaveText("Held price");
+    await expectStableGeometry();
+  }
+});
+
+test("held price advances ten minutes without creating another observation", async ({ page, request }) => {
+  const slug = chartSlug;
+  const historyUrl = `/api/markets/${slug}/history?range=ALL&limit=2000`;
+  const response = await request.get(historyUrl);
+  expect(response.ok()).toBeTruthy();
+  const before = await response.json() as { snapshots: { createdAt: string; yesProbabilityBps: number }[] };
+  const last = before.snapshots.at(-1);
+  expect(last).toBeDefined();
+  // Control only browser time; keep every price and timestamp from persisted history.
+  const now = Math.max(Date.now() + 120_000, Date.parse(last!.createdAt) + 74 * 60_000);
+  await page.clock.install({ time: now });
+  const loaded = page.waitForResponse(response => response.url().includes(`/api/markets/${slug}/history?`) && new URL(response.url()).searchParams.get("range") === "ALL");
+  await page.goto(`/markets/${slug}`);
+  await loaded;
+  const figure = page.locator(".probability-chart");
+  const slider = figure.getByRole("slider");
+  const tooltip = figure.getByRole("tooltip", { includeHidden: true });
+  await slider.focus();
+  await slider.press("End");
+  await expect(figure.locator("figcaption .eyebrow")).toHaveText("Held price");
+  const firstHeldTime = Date.parse((await tooltip.locator("time").getAttribute("datetime"))!);
+  expect(firstHeldTime).toBeGreaterThanOrEqual(now);
+  const price = `${Math.round(last!.yesProbabilityBps / 100)}%`;
+  await expect(tooltip.locator("b")).toHaveText(price);
+  await page.evaluate(() => document.fonts.ready);
+  const original = await chartGeometry(figure);
+  await page.clock.fastForward(10 * 60_000);
+  await expect(slider).toHaveAttribute("data-inspecting", "false");
+  await slider.focus();
+  await slider.press("End");
+  const advancedTime = Date.parse((await tooltip.locator("time").getAttribute("datetime"))!);
+  expect(advancedTime - firstHeldTime).toBeGreaterThanOrEqual(10 * 60_000 - 1_000);
+  await expect(tooltip.locator("b")).toHaveText(price);
+  await expect(figure.locator("figcaption .eyebrow")).toHaveText("Held price");
+  expect(await chartGeometry(figure)).toEqual(original);
+  // An opening-price hold can sit between the latest persisted observation and now.
+  for (let step = 0; step < 3; step++) {
+    await slider.press("ArrowLeft");
+    if (await tooltip.locator("time").getAttribute("datetime") === new Date(last!.createdAt).toISOString()) break;
+  }
+  await expect(tooltip.locator("time")).toHaveAttribute("datetime", new Date(last!.createdAt).toISOString());
+  const afterResponse = await request.get(historyUrl);
+  expect(afterResponse.ok()).toBeTruthy();
+  const after = await afterResponse.json() as typeof before;
+  expect(after.snapshots).toEqual(before.snapshots);
 });

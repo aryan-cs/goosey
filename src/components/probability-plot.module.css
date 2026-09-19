@@ -1,0 +1,16 @@
+.chart:global(.probability-chart) { --chart-plot-height: clamp(220px, 24vw, 320px); min-width: 0; }
+.chart:global(.probability-chart) figcaption { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.chart figcaption > div { min-width: 0; }
+.chart :global(.eyebrow) { display: block; line-height: 20px; white-space: nowrap; }
+.chart :global(.chart-inspected-time) { height: 16px; line-height: 16px; white-space: nowrap; }
+.chart :global(.chart-change) { align-self: center; white-space: nowrap; }
+.chart :global(.full-plot .probability-plot-surface) { height: var(--chart-plot-height); }
+.chart :global(.probability-time-axis) { height: 28px; line-height: 14px; }
+.chart :global(.probability-time-axis time) { max-width: 50%; }
+.chart :global(.probability-time-axis time:last-child) { text-align: right; }
+.chart :global(.probability-empty) { height: calc(var(--chart-plot-height) + 66px); min-height: 0; }
+@media (max-width: 809.98px) {
+  .chart:global(.probability-chart) { --chart-plot-height: 210px; }
+  .chart:global(.probability-chart) figcaption { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .chart :global(.chart-change) { height: 20px; line-height: 20px; }
+}

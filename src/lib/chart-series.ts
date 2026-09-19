@@ -2,12 +2,14 @@ export interface ChartPoint {
   timestamp: string | number | Date;
   probability: number;
   opening?: boolean;
+  held?: boolean;
 }
 
 export interface NormalizedChartPoint {
   timestamp: number;
   probability: number;
   opening?: boolean;
+  held?: boolean;
 }
 
 export const CHART_RANGES = ["1H", "4H", "8H", "24H", "ALL"] as const;
@@ -21,9 +23,17 @@ export function normalizeChartPoints(points: readonly ChartPoint[]): NormalizedC
     const timestamp = new Date(point.timestamp).getTime();
     if (!Number.isFinite(timestamp) || !Number.isFinite(point.probability)
       || point.probability < 0 || point.probability > 1) continue;
-    byTime.set(timestamp, { timestamp, probability: point.probability, ...(point.opening ? { opening: true } : {}) });
+    byTime.set(timestamp, { timestamp, probability: point.probability, ...(point.opening ? { opening: true } : {}), ...(point.held ? { held: true } : {}) });
   }
   return [...byTime.values()].sort((left, right) => left.timestamp - right.timestamp);
+}
+
+/** Display-only endpoint for the last known price; never a new observation. */
+export function withHeldPriceEndpoint(points: readonly ChartPoint[], now: number): NormalizedChartPoint[] {
+  const series = normalizeChartPoints(points).filter(point => !point.held);
+  const latest = series.at(-1);
+  if (!latest || !Number.isFinite(now) || now <= latest.timestamp) return series;
+  return [...series, { timestamp: now, probability: latest.probability, held: true }];
 }
 
 /** Keep small moves readable, with an explicitly labeled probability domain. */
