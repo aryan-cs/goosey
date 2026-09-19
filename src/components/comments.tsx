@@ -4,7 +4,7 @@ import { initials } from "@/lib/initials";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertCircle, Flag, MessageCircle, Pencil, Reply, Trash2, X } from "lucide-react";
+import { AlertCircle, Flag, MessageCircle, Pencil, Reply, Send, Trash2, X } from "lucide-react";
 import { EmptyState, LoadingState } from "./states";
 import { apiFetch } from "@/lib/client-api";
 import styles from "./comments.module.css";
@@ -207,8 +207,8 @@ function CommentSectionContent({ marketId, marketSlug, focusedCommentId, current
         {canPost === false && <p><Link href={`/login?next=${encodeURIComponent(`${marketHref}?comment=${comment.id}#discussion-heading`)}`}>Sign in to reply</Link></p>}
         {replyError && <p className="form-error" role="alert">{replyError}</p>}
         <div><span>{replyBody.length}/{maxLength}</span><div className={styles.replyActions}>
-          <button type="button" className="button button-ghost" disabled={sending} onClick={() => { setReplyTo(null); setReplyError(null); document.querySelector<HTMLButtonElement>(`#comment-${comment.id} > .comment-content > footer > button`)?.focus(); }}>Cancel</button>
-          <button className="button button-primary" disabled={!canPost || !replyBody.trim() || sending}>{sending ? "Posting…" : "Post reply"}</button>
+          <button type="button" className={`button button-ghost ${styles.replyIconButton}`} aria-label="Cancel reply" title="Cancel reply" disabled={sending} onClick={() => { setReplyTo(null); setReplyError(null); document.querySelector<HTMLButtonElement>(`#comment-${comment.id} > .comment-content > footer > button`)?.focus(); }}><X aria-hidden="true" /></button>
+          <button type="submit" className={`button button-primary ${styles.replyIconButton}`} aria-label={sending ? "Posting reply…" : "Post reply"} title={sending ? "Posting reply…" : "Post reply"} aria-busy={sending} disabled={!canPost || !replyBody.trim() || sending}><Send aria-hidden="true" /></button>
         </div></div>
       </form>}
     </>;
