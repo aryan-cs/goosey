@@ -38,7 +38,7 @@ async function loadRankedPlayers() {
     const cashMilli = walletByUser.get(user.id) ?? user.balanceMilli;
     const reservedCashMilli = reservedByUser.get(user.id) ?? 0n;
     const equityMilli = cashMilli + reservedCashMilli + positionValueMilli;
-    return { userId: user.id, username: user.username, displayName: user.displayName, equityMilli, reservedCashMilli, pnlMilli: equityMilli - (grantByUser.get(user.id) ?? 0n), realizedPnlMilli: user.realizedPnlMilli, ...activity.get(user.id)! };
+    return { userId: user.id, username: user.username, displayName: user.displayName, cashMilli, equityMilli, reservedCashMilli, pnlMilli: equityMilli - (grantByUser.get(user.id) ?? 0n), realizedPnlMilli: user.realizedPnlMilli, ...activity.get(user.id)! };
   }).sort((left, right) => left.pnlMilli === right.pnlMilli ? left.username.localeCompare(right.username) : left.pnlMilli > right.pnlMilli ? -1 : 1)
     .map((row, index) => ({ rank: index + 1, ...row }));
   });
