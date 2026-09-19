@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { normalizeChartPoints } from "@/lib/chart-series";
 import { ProbabilityPlot } from "./probability-plot";
 export { ProbabilityChart } from "./probability-plot";
 import { ArrowDownRight, ArrowUpRight, Bookmark, Clock3, MessageCircle, Radio, TrendingUp } from "lucide-react";
@@ -35,13 +36,25 @@ function formatProbability(value: number) {
   return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
 }
 
-function MiniSparkline({ values = [], positive = true }: { values?: ProbabilityPoint[]; positive?: boolean }) {
-  return <ProbabilityPlot points={values} compact positive={positive} />;
+function MiniSparkline({ values = [] }: { values?: ProbabilityPoint[] }) {
+  const series = normalizeChartPoints(values);
+  const positive = series.length < 2 || series.at(-1)!.probability >= series[0].probability;
+  return <ProbabilityPlot points={series} compact positive={positive} />;
+}
+
+function ProbabilityMovement({ change }: { change?: number }) {
+  if (change === undefined || !Number.isFinite(change)) return null;
+  const magnitude = Number(Math.abs(change).toFixed(2));
+  const amount = change !== 0 && magnitude === 0 ? "<0.01" : String(magnitude);
+  const direction = change > 0 ? "up" : change < 0 ? "down" : "flat";
+  return <small className={`movement-${direction}`} title="Change since the previous recorded price" aria-label={`Last change: ${amount} percentage points${change === 0 ? ", unchanged" : change > 0 ? " up" : " down"}`}>
+    {change > 0 ? <ArrowUpRight aria-hidden="true" /> : change < 0 ? <ArrowDownRight aria-hidden="true" /> : null}
+    <span>{amount} pts</span><span className="movement-period">last change</span>
+  </small>;
 }
 
 export function MarketCard({ market, priority = false }: { market: MarketSummary; priority?: boolean }) {
   const lead = market.outcomes[0];
-  const positive = (lead?.change ?? 0) >= 0;
   return (
     <article className={`market-card${priority ? " market-card-featured" : ""}`}>
       <div className="market-card-topline">
@@ -55,11 +68,11 @@ export function MarketCard({ market, priority = false }: { market: MarketSummary
       </div>
       {lead && (
         <div className="market-primary">
-          <MiniSparkline values={market.sparkline} positive={positive} />
+          <MiniSparkline values={market.sparkline} />
           <div className="probability-block">
             <span>{lead.label}</span>
             <strong>{formatProbability(lead.probability)}</strong>
-            {lead.change !== undefined && <small className={positive ? "movement-up" : "movement-down"}>{positive ? <ArrowUpRight /> : <ArrowDownRight />}{Math.abs(lead.change).toFixed(1)}%</small>}
+            <ProbabilityMovement change={lead.change} />
           </div>
         </div>
       )}
@@ -80,17 +93,16 @@ export function MarketCard({ market, priority = false }: { market: MarketSummary
 
 export function MarketListRow({ market }: { market: MarketSummary }) {
   const lead = market.outcomes[0];
-  const positive = (lead?.change ?? 0) >= 0;
   return (
     <article className="market-list-row">
       <Link className="market-list-main" href={`/markets/${market.slug}`}>
         <span className="market-list-icon"><TrendingUp /></span>
         <span><small>{market.category}</small><strong>{market.title}</strong></span>
       </Link>
-      <MiniSparkline values={market.sparkline} positive={positive} />
+      <MiniSparkline values={market.sparkline} />
       <span className="market-list-meta"><small>Volume</small><strong>🪶 {market.volume}</strong></span>
       <span className="market-list-meta"><small>Closes</small><strong>{market.closesAt}</strong></span>
-      {lead && <span className="market-list-probability"><strong>{formatProbability(lead.probability)}</strong><small className={positive ? "movement-up" : "movement-down"}>{positive ? "+" : ""}{lead.change ?? 0}%</small></span>}
+      {lead && <span className="market-list-probability"><strong>{formatProbability(lead.probability)}</strong><ProbabilityMovement change={lead.change} /></span>}
     </article>
   );
 }

@@ -345,27 +345,34 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .status-open { color: var(--yes); background: var(--yes-soft); }
 .status-resolved { color: var(--info); background: var(--info-soft); }
 .market-primary { min-height: 80px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px; margin: 14px 0; padding: 12px 0; border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); }
-.probability-plot { min-width: 0; color: var(--yes); }
-.probability-plot.negative { color: var(--no); }
+.probability-plot { --plot-color: var(--yes); min-width: 0; color: var(--plot-color); }
+.probability-plot.negative { --plot-color: var(--no); }
 .probability-plot-surface { position: relative; height: clamp(220px, 24vw, 320px); margin: 28px 40px 0 4px; cursor: crosshair; touch-action: pan-y; background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(50% - 1px), var(--border-subtle) 50%, transparent calc(50% + 1px)); }
 .probability-plot-surface svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .probability-line { stroke-linecap: round; stroke-linejoin: round; }
+.probability-series-base, .probability-series-past { transition: opacity 140ms ease; }
+.probability-series-past { opacity: 0; }
+[data-inspecting="true"] .probability-series-base { opacity: .25; }
+[data-inspecting="true"] .probability-series-past { opacity: 1; }
 .probability-tick { position: absolute; right: -40px; width: 36px; transform: translateY(-50%); color: var(--ink-muted); font-size: 10px; text-align: right; }
-.probability-crosshair { position: absolute; top: 0; bottom: 0; width: 1px; border-left: 1px dashed var(--ink-muted); }
+.probability-crosshair { position: absolute; top: 0; bottom: 0; width: 1px; border-left: 1px solid var(--ink-muted); }
 .probability-dot { position: absolute; width: 8px; height: 8px; transform: translate(-50%, -50%); background: currentColor; border: 2px solid var(--surface); border-radius: 50%; }
 .probability-tooltip { position: absolute; z-index: 5; top: 0; width: 220px; max-width: 100%; padding: 10px 12px; color: var(--ink); background: var(--panel-glass-solid); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-float); transform: translateY(-12px); }
-.probability-tooltip.from-right { transform: translate(-100%, -12px); }
+.full-plot .probability-tooltip { top: -26px; padding: 0; border: 0; background: transparent; box-shadow: none; transform: none; text-align: center; }
+.full-plot .probability-tooltip strong { display: none; }
+.probability-point-label { position: absolute; width: 120px; max-width: 100%; transform: translateY(-130%); color: var(--plot-color); font-size: 12px; font-weight: 650; text-shadow: 0 1px 3px var(--surface); }
 .probability-tooltip time { display: block; color: var(--ink-muted); font-size: 10px; white-space: normal; }
 .probability-tooltip strong { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; font-weight: 600; }
-.probability-tooltip strong i { width: 6px; height: 6px; background: var(--yes); border-radius: 50%; }
+.probability-tooltip strong i { width: 6px; height: 6px; flex-shrink: 0; background: var(--plot-color); border-radius: 50%; }
 .probability-tooltip b { margin-left: auto; font-variant-numeric: tabular-nums; }
-.probability-crosshair, .probability-dot, .probability-tooltip { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 140ms ease, visibility 140ms; }
-[data-inspecting="true"] > .probability-crosshair, [data-inspecting="true"] > .probability-dot, [data-inspecting="true"] > .probability-tooltip { opacity: 1; visibility: visible; }
+.probability-crosshair, .probability-dot, .probability-tooltip, .probability-point-label { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 140ms ease, visibility 140ms; }
+[data-inspecting="true"] > .probability-crosshair, [data-inspecting="true"] > .probability-dot, [data-inspecting="true"] > .probability-tooltip, [data-inspecting="true"] > .probability-point-label { opacity: 1; visibility: visible; }
 .probability-time-axis { display: flex; justify-content: space-between; gap: 8px; margin: 10px 40px 0 4px; color: var(--ink-muted); font-size: 10px; }
 .probability-time-axis span { text-align: center; }
 .compact-plot .probability-plot-surface { height: 48px; margin: 0; min-width: 60px; background: transparent; }
-.compact-plot .probability-tooltip { top: auto; bottom: calc(100% + 6px); transform: none; width: 210px; max-width: min(250%, 230px); }
-.compact-plot .probability-tooltip.from-right { transform: translateX(-100%); }
+.compact-plot .probability-tooltip { top: auto; bottom: calc(100% + 6px); transform: none; width: 220px; max-width: 100%; }
+.compact-plot .probability-tooltip strong { flex-wrap: wrap; }
+.market-list-row > .compact-plot { position: relative; z-index: 2; }
 .probability-empty { display: grid; place-items: center; min-height: 48px; color: var(--ink-muted); font-size: 12px; }
 .probability-chart .probability-empty { min-height: 220px; }
 .chart-inspected-time { display: block; margin-top: 4px; color: var(--ink-muted); font-size: 11px; }
@@ -382,7 +389,10 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .probability-block { min-width: 78px; display: grid; justify-items: end; }
 .probability-block > span { color: var(--ink-muted); font-size: 12px; }
 .probability-block strong { font: 652 32px/1 var(--font-display); font-variant-numeric: tabular-nums; }
-.probability-block small, .movement-up, .movement-down { display: inline-flex; align-items: center; color: var(--yes); font-variant-numeric: tabular-nums; font-weight: 700; }
+.probability-block small, .movement-up, .movement-down, .movement-flat { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+.movement-up { color: var(--yes); }
+.movement-flat { color: var(--ink-muted); }
+.movement-period { flex-basis: 100%; color: var(--ink-muted); font-size: 10px; font-weight: 400; text-align: right; }
 .probability-block small svg, .movement-up svg, .movement-down svg { width: 13px; height: 13px; stroke-width: 1.8; }
 .movement-down { color: var(--no); }
 .outcome-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; padding: 4px; background: var(--surface-sunken); border-radius: 999px; }
