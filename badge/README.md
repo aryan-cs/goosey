@@ -1,11 +1,13 @@
-# Goosey badge 0.7.1
+# Goosey badge 0.7.2
 
 The installable app is an offline practice app using the six requested
 markets in `prisma/selected-markets.json`, shared with the web database seed.
-Arm wrestling is deferred. Version 0.7.1 uses a separate `paper_v2` save and
-fresh 10,000 local balance; the old `paper_v1` wallet and holdings stay untouched.
+Arm wrestling is deferred. Version 0.7.2 uses a separate `paper_v2` save and
+fresh 1,000 local balance; the old `paper_v1` wallet and holdings stay untouched.
 It does not transfer old positions into unrelated questions or modify cloud
 accounts. All six start at a neutral 50%, not a researched probability.
+Existing valid `paper_v2` balances and holdings are preserved, including wallets
+created with the previous 10,000 starting balance.
 Database-backed history/account integration remains pending.
 
 ## Build and install
@@ -32,7 +34,7 @@ caused a firmware abort/reboot. Reopening after reboot succeeded.
 Radio and custom font rendering remain unverified.
 
 The builder checks `market-order-v2.json`: changing/removing/reordering a market
-requires a deliberate migration because `paper_v1` uses positional holdings.
+requires a deliberate migration because `paper_v2` uses positional holdings.
 It refuses to silently reinterpret another market's holdings.
 
 ## Controls
@@ -51,8 +53,7 @@ It refuses to silently reinterpret another market's holdings.
 
 Practice trades use local cent-rounded, fee-free simulation. Connected trading
 will use server milli-feather quotes and idempotent commits instead. No local
-balance or graph is presented as a shared server portfolio. The order-book
-market is hidden; its persistent slot is retained for save compatibility. Green LEDs mean **local practice save**, not cloud receipt.
+balance or graph is presented as a shared server portfolio. The selected six markets have no order-book screen. Green LEDs mean **local practice save**, not cloud receipt.
 
 ## Connected foundation (not wired into the installable app)
 

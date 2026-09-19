@@ -11,7 +11,7 @@ local function slot(index)
 end
 local page, selected, side, action, quantity = "list", 1, 1, 1, 1
 local portfolioIndex = 1
-local cash, positions, histories = 1000000, {}, {}
+local cash, positions, histories = 100000, {}, {}
 local labels, balance, header, mark, chart, track, dot, midline
 local settingsIndex, returnPage, field = 1, "list", 1
 local lastGC=0
@@ -187,7 +187,7 @@ function on_enter(root)
   badge.sys.gc_step()
   page,selected,side,action,quantity="list",1,1,1,1
   portfolioIndex=1; pulseUntil=0; settingsIndex=1; field=1; lastGC=0; returnPage="list"
-  cash=1000000; positions={}; histories={}; labels={}; note=""; pending=nil
+  cash=100000; positions={}; histories={}; labels={}; note=""; pending=nil
   for i=1,#markets do positions[i]={0,0} end
   local data=badge.store.get_str("paper_v2","")
   local vals={}
