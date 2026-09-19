@@ -41,6 +41,17 @@ export function boundedPriceHistory<T extends PriceHistoryPoint>(
   const first = ordered[0]!;
   const last = ordered.at(-1)!;
   const interior = ordered.slice(1, -1);
+  const firstAt = first.timestamp.getTime();
+  const duration = Math.max(1, last.timestamp.getTime() - firstAt);
+  const delta = last.probabilityYesBps - first.probabilityYesBps;
+  const deviation = (point: T) => {
+    const progress = (point.timestamp.getTime() - firstAt) / duration;
+    return Math.abs(point.probabilityYesBps - (first.probabilityYesBps + delta * progress));
+  };
+  if (limit === 3) {
+    const pivot = interior.reduce((best, point) => deviation(point) > deviation(best) ? point : best);
+    return [first, pivot, last];
+  }
   const bucketCount = Math.max(1, Math.floor((limit - 2) / 2));
   const selected = new Set<T>([first, last]);
   for (let bucket = 0; bucket < bucketCount; bucket += 1) {
@@ -59,16 +70,9 @@ export function boundedPriceHistory<T extends PriceHistoryPoint>(
   }
 
   if (selected.size < limit) {
-    const firstAt = first.timestamp.getTime();
-    const duration = Math.max(1, last.timestamp.getTime() - firstAt);
-    const delta = last.probabilityYesBps - first.probabilityYesBps;
     const remaining = interior
       .filter((point) => !selected.has(point))
       .sort((left, right) => {
-        const deviation = (point: T) => {
-          const progress = (point.timestamp.getTime() - firstAt) / duration;
-          return Math.abs(point.probabilityYesBps - (first.probabilityYesBps + delta * progress));
-        };
         return deviation(right) - deviation(left) || left.timestamp.getTime() - right.timestamp.getTime();
       });
     for (const point of remaining) {
@@ -76,7 +80,7 @@ export function boundedPriceHistory<T extends PriceHistoryPoint>(
       selected.add(point);
     }
   }
-  return [...selected]
-    .sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime())
-    .slice(0, limit);
+  // Selection order is not execution order: the Set starts with both endpoints.
+  // Filtering the stable chronological input preserves ties supplied by callers.
+  return ordered.filter((point) => selected.has(point)).slice(0, limit);
 }
