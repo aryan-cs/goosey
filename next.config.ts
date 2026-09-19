@@ -21,6 +21,14 @@ export default function configureNext(phase: string): NextConfig {
     turbopack: {
       root: process.cwd(),
     },
+    async redirects() {
+      return ["goosey-test.vercel.app", "goosey-test-bowens-projects-b0c91e9e.vercel.app"].map((host) => ({
+        source: "/:path*",
+        has: [{ type: "host" as const, value: host }],
+        destination: "https://getgoosey.vercel.app/:path*",
+        permanent: true,
+      }));
+    },
     async headers() {
       return [
         {
