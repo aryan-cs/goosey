@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 /** Read-only checks deliberately independent of the trading arithmetic helpers. */
-export async function validateDevelopmentData(client: PrismaClient, options: { asOf: Date }) {
+export async function validateDevelopmentData(client: Pick<PrismaClient, "market" | "marketEvent" | "user" | "ledgerAccount" | "journalEntry">, options: { asOf: Date }) {
   const errors: string[] = [];
   const cutoff = options.asOf.getTime();
   if (!Number.isFinite(cutoff)) throw new Error("Validation requires a valid asOf date.");

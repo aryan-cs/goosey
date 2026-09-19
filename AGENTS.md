@@ -19,3 +19,7 @@ balances, or fills directly; exercise the real services so accounting reconciles
 Do not reset an active team session or point this tooling at production. Stop the
 sandbox before `npm run data:dev -- reset`; it archives the previous dataset.
 Never copy synthetic data or development credentials into a live deployment.
+The shared starting snapshot is committed under `fixtures/synthetic/three-months`.
+Use `npm run data:fixture -- import --name <new-name>` to restore it with fresh
+local credentials, or `npm run data:fixture -- export --name <sandbox>` to prepare
+a sanitized snapshot for review. Never commit a raw database or credentials file.

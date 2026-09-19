@@ -1,0 +1,112 @@
+{
+  "format": "goosey-public-synthetic-v1",
+  "synthetic": true,
+  "capturedAt": "2026-09-19T17:47:20.850Z",
+  "sourceAsOf": "2026-09-19T17:38:55.893Z",
+  "seed": 20260919,
+  "schemaSha256": "2aa12fec3f0c2765f0939a7598720e523a492169cd12e4c50372a3e896fa2ce5",
+  "tables": [
+    {
+      "model": "User",
+      "file": "User.jsonl",
+      "rows": 28,
+      "sha256": "c907eedfa16176650c755f3366da4ff7437b066f04eb140102396cdf9a17fcfc"
+    },
+    {
+      "model": "LedgerAccount",
+      "file": "LedgerAccount.jsonl",
+      "rows": 39,
+      "sha256": "348b54a89b1ac8c5af1ab6a17368010cc4d44403e3314349bb416b1ba6dfbbc4"
+    },
+    {
+      "model": "MarketEvent",
+      "file": "MarketEvent.jsonl",
+      "rows": 3,
+      "sha256": "c34b2d1cc3df59d676131a706966d8211388c5b89968417a00daf26856d21f1e"
+    },
+    {
+      "model": "Market",
+      "file": "Market.jsonl",
+      "rows": 12,
+      "sha256": "c3bb2aabbcbc61a9a5287e9f98959f8652334f4c499fd87694acbba4af6c4a4d"
+    },
+    {
+      "model": "Position",
+      "file": "Position.jsonl",
+      "rows": 264,
+      "sha256": "632cd97e6988f1b0a0c1f4ad7fd6ede9a35c9c3e58898b7138ee9ce0266c1af5"
+    },
+    {
+      "model": "Trade",
+      "file": "Trade.jsonl",
+      "rows": 2613,
+      "sha256": "50f25aa512c4c937a385452b4edd5e7f993d5af1fed30b88401dd2f23acce230"
+    },
+    {
+      "model": "JournalEntry",
+      "file": "JournalEntry.jsonl",
+      "rows": 2720,
+      "sha256": "89d4e6464817b52886b543ecdf29e07f3d6bddc1325ab4b9dc80d8d48e9b9fc0"
+    },
+    {
+      "model": "LedgerPosting",
+      "file": "LedgerPosting.jsonl",
+      "rows": 8053,
+      "sha256": "9e4cdd76e730713a6293cdf269161eb8afd42df6e99e27cdd75663e123a636e7"
+    },
+    {
+      "model": "MarketResolutionProposal",
+      "file": "MarketResolutionProposal.jsonl",
+      "rows": 3,
+      "sha256": "ef92fe04ab5da3b03fe3b8764a63cd26da92dcdad59b4500ca85f40cfe2491cf"
+    },
+    {
+      "model": "MarketSettlementRun",
+      "file": "MarketSettlementRun.jsonl",
+      "rows": 3,
+      "sha256": "f6d4d9179c4b9ea160e14a60cbbd2282012991484d5036c1cba1e61d8d18abfb"
+    },
+    {
+      "model": "PositionSettlement",
+      "file": "PositionSettlement.jsonl",
+      "rows": 69,
+      "sha256": "9e4a9d1ce99ff0af5ad79d74e7b9b68ad817003e3df427c50829d55bf649678f"
+    },
+    {
+      "model": "MarketPriceSnapshot",
+      "file": "MarketPriceSnapshot.jsonl",
+      "rows": 2628,
+      "sha256": "fbc10044ef91462ce739a607a9a663a6c06f9d6ab032b1d7848c0e59b92f506c"
+    },
+    {
+      "model": "Comment",
+      "file": "Comment.jsonl",
+      "rows": 110,
+      "sha256": "22b72e2b4bf3d48cd3d249c43f60cb62f52536fe3551327b1e1ad81f6fb6349b"
+    },
+    {
+      "model": "CommentReport",
+      "file": "CommentReport.jsonl",
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "model": "WatchlistEntry",
+      "file": "WatchlistEntry.jsonl",
+      "rows": 60,
+      "sha256": "31995bbc8b5e4388be38a863f8951ed1fb5a1088c7c784d9546c608d5bb743c0"
+    },
+    {
+      "model": "MarketSuggestion",
+      "file": "MarketSuggestion.jsonl",
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "model": "Notification",
+      "file": "Notification.jsonl",
+      "rows": 2682,
+      "sha256": "70fad19b2b5005da66a377ccdcb1a87b2585d450df706aabf07aa9f4aba421d5"
+    }
+  ]
+}

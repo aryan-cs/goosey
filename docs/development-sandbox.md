@@ -9,6 +9,13 @@ on-chain settlement or the order-book engine.
 
 ## Start using it
 
+To start from the saved dataset committed to GitHub, including the original
+testing contributions, use `npm run data:fixture -- import --name shared` and
+then `npm run data:dev -- serve --name shared`. See the
+[published fixture](../fixtures/synthetic/three-months/README.md) for its record
+counts, formats, privacy exclusions and optional exact-date import. The commands
+below instead generate a new scenario from scratch.
+
 ```sh
 npm run db:generate
 npm run data:dev -- create
