@@ -1,5 +1,4 @@
 .list { list-style: none; padding: 0; margin: 0; }
-:global(.sidebar-panel):has(.list) { align-self: start; }
 .item { display: grid; gap: 6px; min-width: 0; padding: 20px 0; border-bottom: 1px solid var(--border-subtle); }
 .item:first-child { padding-top: 4px; }
 .item:last-child { border-bottom: 0; padding-bottom: 0; }
