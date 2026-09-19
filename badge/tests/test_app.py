@@ -78,7 +78,28 @@ def settings_item(n):
     for _ in range(n-1):press('DOWN')
     press('A')
 
-g.fresh();has('1000.00');snapshot('01-markets')
+# First-run picker requires an explicitly chosen, durably saved name.
+g.fresh();has('Your name');snapshot('00-username')
+press('START');has('Your name')
+press('UP','RIGHT','RIGHT','A');has('Use 3-12')
+press('DOWN','LEFT','LEFT','A','RIGHT','A','RIGHT','A')
+press('UP');press('A')
+has('@abc');assert g.saved['username_v1']=='abc'
+g.on_exit();g.fresh();has('Markets');has('@abc')
+# Invalid stored names cannot bypass setup; failed writes cannot finish setup.
+g.saved['username_v1']='person@example.com';g.fresh();has('Your name')
+press('A','RIGHT','A','RIGHT','A','UP')
+g.fail_save=True;press('A');has('Could not save');has('Your name')
+g.fail_save=False;press('A');has('@abc')
+# Long names remain in bounds and a thirteenth character is rejected.
+g.saved['username_v1']=None;g.fresh()
+for _ in range(12):press('A')
+press('A');has('12 characters maximum');snapshot('username-limit')
+press('UP','RIGHT','RIGHT','A');has('@aaaaaaaaaaaa')
+snapshot('username-header')
+# A different badge starts with empty app-scoped personal storage.
+g.saved['username_v1']=None;g.fresh();has('Your name')
+g.saved['username_v1']='bowen';g.writes=0;g.fresh();has('1000.00');snapshot('01-markets')
 # A opens; B backs out; Start settings never places an order.
 press('A');has('50.0%');snapshot('02-market')
 press('START');has('Settings');press('B');has('Market')
@@ -97,7 +118,7 @@ g.on_exit();assert len(list(g.leds.values()))==0
 g.fresh();assert g.saved['paper_v2']==saved
 settings_item(2);has('0Y\n1N');snapshot('08-portfolio')
 press('B','DOWN','A');has('TEST-BADGE-001');snapshot('06-account')
-press('A');has('not available');snapshot('09-linking')
+press('A');has('Your name');snapshot('09-edit-username');press('START');has('Account');has('@bowen')
 # Failed persistence never applies a trade.
 g.fresh();press('A','A');review();g.fail_save=True;press('A');has('Save failed');assert g.saved['paper_v2']==saved
 g.fail_save=False
@@ -171,3 +192,11 @@ assert len(record)==14 and record[2:8]==[2,3,4,5,6,7]
 # Existing six-market balances are not reduced by the new welcome grant.
 g.saved['paper_v2']='1,1000000,'+','.join(['0']*12);before_writes=g.writes;g.fresh()
 has('10000.00');assert g.writes==before_writes
+
+# Username survives trading and reopening, with no idle persistence writes.
+has('@bowen');assert g.saved['username_v1']=='bowen'
+
+# Renaming saves durably, preserves the wallet, and returns to Account.
+wallet_before=g.saved['paper_v2'];settings_item(3);press('A','B','UP','RIGHT','RIGHT','A')
+has('@bowe');assert g.saved['username_v1']=='bowe'
+g.on_exit();g.fresh();has('@bowe');assert g.saved['paper_v2']==wallet_before

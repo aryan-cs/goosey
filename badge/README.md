@@ -1,14 +1,28 @@
-# Goosey badge 0.7.2
+# Goosey badge 0.8.0
 
 The installable app is an offline practice app using the six requested
 markets in `prisma/selected-markets.json`, shared with the web database seed.
-Arm wrestling is deferred. Version 0.7.2 uses a separate `paper_v2` save and
+Arm wrestling is deferred. Version 0.8.0 uses a separate `paper_v2` save and
 fresh 1,000 local balance; the old `paper_v1` wallet and holdings stay untouched.
 It does not transfer old positions into unrelated questions or modify cloud
 accounts. All six start at a neutral 50%, not a researched probability.
 Existing valid `paper_v2` balances and holdings are preserved, including wallets
 created with the previous 10,000 starting balance.
 Database-backed history/account integration remains pending.
+
+## First-launch username
+
+On first launch, choose a 3–12 character display name using the D-pad keyboard.
+A selects, B deletes, and DONE saves. Lowercase letters, digits and underscore
+are supported. The name appears above the balance in the top-right header on
+every normal screen. Account → Edit username opens the picker again; Start
+cancels an edit. Initial setup cannot be skipped with Start.
+
+The name is stored under the app-scoped `username_v1` key. It is local, not a
+verified login or a globally reserved username. Existing balances and holdings
+are unaffected. Native app sharing excludes personal save data, so recipients
+choose their own names. Cloud uniqueness and account linking remain pending.
+A failed save keeps the picker open rather than pretending setup succeeded.
 
 ## Build and install
 
@@ -47,7 +61,7 @@ It refuses to silently reinterpret another market's holdings.
 | Review | A confirms once, B edits |
 | Settings | Up/down select, A opens, B resumes |
 | Portfolio | Up/down select, A opens market, B settings |
-| Account | A linking info, B settings |
+| Account | A edits username, B settings |
 | Everywhere | Start opens/closes Settings; firmware HOME exits the app |
 
 

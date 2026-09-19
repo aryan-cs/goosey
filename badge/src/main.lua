@@ -12,7 +12,12 @@ end
 local page, selected, side, action, quantity = "list", 1, 1, 1, 1
 local portfolioIndex = 1
 local cash, positions, histories = 100000, {}, {}
-local labels, balance, header, mark, chart, track, dot, midline
+local labels, balance, header, mark, chart, track, dot, midline, userLabel
+local username, draft, keyRow, keyCol = "", "", 1, 1
+local keys={"abcdef","ghijkl","mnopqr","stuvwx","yz0123","456789"}
+local function validName(s)
+  return type(s)=="string" and #s>=3 and #s<=12 and s:match("^[a-z0-9_]+$")~=nil
+end
 local settingsIndex, returnPage, field = 1, "list", 1
 local lastGC=0
 local initialized, pulseUntil = false, 0
@@ -73,11 +78,24 @@ end
 local function render()
   for i=1,#labels do labels[i]:set_text("") end
   mark:hidden(true); chart:hidden(true); track:hidden(true); dot:hidden(true); midline:hidden(true)
-  balance:set_text(money(cash))
+  balance:set_text(page=="username" and "" or money(cash))
+  userLabel:set_text(username~="" and ("@"..username) or "")
   local m,p=markets[selected],positions[selected]
-  local names={list="Markets",detail="Market",ticket="Trade",review="Review",portfolio="Portfolio",account="Account",link="Link account",settings="Settings",receipt="Saved"}
+  local names={username="Your name",list="Markets",detail="Market",ticket="Trade",review="Review",portfolio="Portfolio",account="Account",link="Link account",settings="Settings",receipt="Saved"}
   header:set_text(names[page])
-  if page=="list" or page=="portfolio" then
+  if page=="username" then
+    text(1,draft..(#draft<12 and "_" or ""),10,38,300,20)
+    text(2,"Choose letters / 3-12 characters",10,65,300,12,C.muted)
+    for r=1,7 do
+      local cells={}
+      for c=1,(r==7 and 3 or 6) do
+        local k=r==7 and ({"_","DEL","DONE"})[c] or keys[r]:sub(c,c)
+        cells[c]=(r==keyRow and c==keyCol) and ("["..k.."]") or (" "..k.." ")
+      end
+      text(r+2,table.concat(cells," "),18,84+(r-1)*18,292,16)
+    end
+    text(10,note~="" and note or "A selects / B deletes",10,217,300,12,C.muted)
+  elseif page=="list" or page=="portfolio" then
     local idx=page=="list" and selected or portfolioIndex
     local first=math.floor((slot(idx)-1)/3)*3+1
     for row=0,2 do
@@ -140,11 +158,11 @@ local function render()
     focus(7,47+(settingsIndex-1)*46,307,39)
     text(5,"Practice mode / cloud offline",10,211,300,14,C.muted)
   elseif page=="account" then
-    text(1,wrap(badge.me.name() or "Badge owner",30),10,42,300,20)
+    text(1,"@"..username,10,42,300,20)
     text(2,"Badge ID",10,108,300,14,C.muted)
     text(3,wrap(badge.me.badge_id() or "Not provisioned",36),10,131,300,14)
     text(4,"Practice wallet / not linked",10,177,300,14,C.muted)
-    focus(7,204,307,31); text(5,"Link account",18,211,285,16)
+    focus(7,204,307,31); text(5,"Edit username",18,211,285,16)
   elseif page=="link" then
     text(1,"Your Socials email",10,45,300,20)
     text(2,wrap("Account linking is not available on this badge yet.",36),10,87,300,16)
@@ -188,6 +206,10 @@ function on_enter(root)
   page,selected,side,action,quantity="list",1,1,1,1
   portfolioIndex=1; pulseUntil=0; settingsIndex=1; field=1; lastGC=0; returnPage="list"
   cash=100000; positions={}; histories={}; labels={}; note=""; pending=nil
+  local storedName=badge.store.get_str("username_v1","")
+  username=validName(storedName) and storedName or ""
+  draft=username; keyRow=1; keyCol=1
+  if username=="" then page="username" end
   for i=1,#markets do positions[i]={0,0} end
   local data=badge.store.get_str("paper_v2","")
   local vals={}
@@ -212,8 +234,10 @@ function on_enter(root)
   mark:style({border_width=1,border_color=C.text,radius=3})
   header=badge.ui.label(root,""); header:set_pos(10,7); header:set_size(138,22)
   header:style({text_font=18,text_color=C.text})
-  balance=badge.ui.label(root,""); balance:set_pos(149,9); balance:set_size(161,20)
-  balance:style({text_font=16,text_color=C.text,text_align="right"})
+  balance=badge.ui.label(root,""); balance:set_pos(149,16); balance:set_size(161,13)
+  balance:style({text_font=12,text_color=C.text,text_align="right"})
+  userLabel=badge.ui.label(root,""); userLabel:set_pos(149,1); userLabel:set_size(161,14)
+  userLabel:style({text_font=12,text_color=C.text,text_align="right"})
   track=badge.ui.box(root,274,48); track:set_pos(23,120)
   track:style({bg_color=C.panel,border_width=0,pad_all=0,radius=0})
   midline=box(10,134,178,1,C.muted)
@@ -228,7 +252,26 @@ function on_button(button,kind)
   if not initialized or kind~=badge.input.KIND.PRESSED then return end
   local B=badge.input.BUTTON
   note=""
-  if button==B.START then
+  if page=="username" then
+    if button==B.UP then keyRow=(keyRow-2)%7+1; keyCol=math.min(keyCol,keyRow==7 and 3 or 6)
+    elseif button==B.DOWN then keyRow=keyRow%7+1; keyCol=math.min(keyCol,keyRow==7 and 3 or 6)
+    elseif button==B.LEFT then keyCol=(keyCol-2)%(keyRow==7 and 3 or 6)+1
+    elseif button==B.RIGHT then keyCol=keyCol%(keyRow==7 and 3 or 6)+1
+    elseif button==B.B then draft=draft:sub(1,-2)
+    elseif button==B.START and username~="" then page="account"
+    elseif button==B.A then
+      if keyRow==7 and keyCol==3 then
+        if not validName(draft) then note="Use 3-12 letters, digits or _"
+        else
+          badge.store.set_str("username_v1",draft)
+          if badge.store.get_str("username_v1","")~=draft then note="Could not save. Try again."
+          else local first=username==""; username=draft; page=first and "list" or "account" end
+        end
+      elseif keyRow==7 and keyCol==2 then draft=draft:sub(1,-2)
+      elseif #draft<12 then draft=draft..(keyRow==7 and "_" or keys[keyRow]:sub(keyCol,keyCol))
+      else note="12 characters maximum" end
+    end
+  elseif button==B.START then
     if page=="settings" then page=returnPage
     else returnPage=page; page="settings"; settingsIndex=1 end
   elseif page=="settings" then
@@ -273,7 +316,7 @@ function on_button(button,kind)
     else return end
   elseif page=="account" then
     if button==B.B then page="settings"
-    elseif button==B.A then page="link" else return end
+    elseif button==B.A then draft=username; keyRow=1; keyCol=1; page="username" else return end
   elseif page=="link" then
     if button==B.B then page="account" else return end
   elseif page=="review" then
