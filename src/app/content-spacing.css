@@ -1,5 +1,5 @@
 /* Shared reading surfaces: consistent insets and a clear gap after headings. */
-:root { --content-panel-inset: 24px; --section-heading-gap: 24px; }
+:root { --content-panel-inset: var(--space-panel); --section-heading-gap: var(--space-section); }
 
 .page-shell .section-heading { margin-bottom: var(--section-heading-gap); }
 .page-shell .section-heading h2 { line-height: 1.2; }
@@ -37,7 +37,7 @@
 }
 
 @media (max-width: 809.98px) {
-  :root { --content-panel-inset: 20px; }
+  :root { --content-panel-inset: var(--space-panel-mobile); }
   .page-shell .featured-grid,
   .page-shell .market-grid,
   .page-shell .home-sidebar { gap: 16px; }

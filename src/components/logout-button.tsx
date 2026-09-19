@@ -28,7 +28,7 @@ export function LogoutButton() {
   }
 
   return (
-    <div className="stacked-form">
+    <div className="stacked-form logout-actions">
       <button className="button button-secondary" type="button" onClick={logout} disabled={submitting}>
         {submitting ? "Signing out…" : "Sign out"}
       </button>
