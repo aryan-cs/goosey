@@ -16,3 +16,7 @@ for bad in [frame+'junk\n',frame.replace('END\t123','END\t124'),frame.replace('5
 many=dict(snapshot,markets=[dict(snapshot['markets'][0],slug=str(i),history=[[50,j] for j in range(32)]) for i in range(4)])
 assert reader(mailbox_frame(many).decode()) is None
 print('Mailbox reader: truncation, invalid/reordered data, frame/footer mismatch, and total memory bounds passed.')
+
+collections=[]
+assert reader(frame,lambda:collections.append(True))["markets"][1]["history"][2][1]==51
+assert len(collections)>=5
