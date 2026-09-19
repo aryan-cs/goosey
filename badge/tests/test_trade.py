@@ -11,7 +11,7 @@ def tick(at): g.clock=at;g.on_tick()
 def response(state,qid='c123456789012345678901234',amount='50001',ttl=20,message='Trade complete'):
     rid=g.files['appdata/request.txt'].split('\t')[1]
     g.files['appdata/response.txt']=f'GR1\t{rid}\t{challenge}\t{state}\t{qid}\t{amount}\t0\t{ttl}\t{message}\tEND\n'
-account(1);g.fresh();has('Preparing sign-in');snapshot('trade-link')
+account(1);g.fresh();has('Reconnecting...');assert lua.eval('require("trade").pairing_challenge()') is None;snapshot('trade-link')
 account(2);tick(2000);has('@badge_test');has('1000.000')
 press('A','A','A');has('BUY YES');press('UP');has('x2');snapshot('trade-amount')
 press('A');has('Getting a live quote');assert '\tQUOTE\t' in g.files['appdata/request.txt']
@@ -28,3 +28,11 @@ assert '\tTRADE\t' not in g.files['appdata/request.txt']
 press('B','A','A');response('QUOTE');tick(16000);tick(46000);press('A');assert '\tTRADE\t' not in g.files['appdata/request.txt']
 assert g.saved['paper_v2'] is None
 print('PASS badge fresh account, quote/review, single confirmation, pending restart, receipt, expiry and saved-wallet isolation')
+
+# Only an explicit fresh LINK may expose the QR. Cached frames and outages cannot.
+g.on_exit();g.fresh();has('Reconnecting...')
+account(4,'OFFLINE');tick(48000);assert lua.eval('require("trade").pairing_challenge()') is None
+account(5,'LINK');tick(50000);assert lua.eval('require("trade").pairing_challenge()')==challenge
+tick(86000);assert lua.eval('require("trade").pairing_challenge()') is None
+account(6);tick(88000);has('@badge_test')
+print('PASS reconnect, explicit link, stale QR expiry and session restoration')

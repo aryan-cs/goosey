@@ -1,5 +1,6 @@
 -- USB account/trade state. No bearer key, password or local wallet is stored here.
 local T={name=nil,balance=nil,phase="account",message="Connect USB gateway",qty=1,action="BUY"}
+local accountState="UNKNOWN"
 local challenge,accountGen,lastRx,request,quoteId,bound,fee,deadline,started
 local function fields(s,tag,n)
   if type(s)~="string" or #s>600 then return nil end
@@ -23,7 +24,7 @@ function T.init()
   if id and badge.fs.read("appdata/device_id.txt")~="GB1\t"..id.."\n" then save("device_id.txt","GB1\t"..id.."\n") end
   local a=fields(badge.fs.read("appdata/account.txt"),"GA1",7)
   accountGen=a and a[2];challenge=a and a[3]
-  T.name=nil;T.balance=nil;lastRx=nil
+  T.name=nil;T.balance=nil;lastRx=nil;accountState="UNKNOWN"
   request=fields(badge.fs.read("appdata/request.txt"),"GQ1",11)
   if request and request[4]=="TRADE" then T.phase="pending";T.message="Checking confirmed trade"
   else request=nil;T.phase="account";save("request.txt","") end
@@ -55,12 +56,12 @@ function T.tick()
   local changed=false
   local a=fields(badge.fs.read("appdata/account.txt"),"GA1",7)
   if a and a[2]~=accountGen and #a[3]==64 and a[3]:match("^[a-f0-9]+$") then
-    accountGen=a[2];challenge=a[3];lastRx=badge.sys.ms()
+    accountGen=a[2];challenge=a[3];lastRx=badge.sys.ms();accountState=a[4]
     if a[4]=="READY" and a[5]:match("^[a-z0-9_]+$") and #a[5]<=24 and a[6]:match("^%d+$") then T.name=a[5];T.balance=a[6]
     else T.name=nil;T.balance=nil end
     changed=true
   end
-  if lastRx and not fresh() and T.name then T.name=nil;T.balance=nil;changed=true end
+  if lastRx and badge.sys.ms()-lastRx>=35000 and accountState~="UNKNOWN" then T.name=nil;T.balance=nil;accountState="UNKNOWN";changed=true end
   if request then
     local r=fields(badge.fs.read("appdata/response.txt"),"GR1",10)
     if r and r[2]==request[2] and r[3]==request[3] then
@@ -103,7 +104,7 @@ function T.button(button)
   end
   return false
 end
-function T.pairing_challenge() return T.phase=="account" and not fresh() and challenge or nil end
+function T.pairing_challenge() return T.phase=="account" and accountState=="LINK" and lastRx and badge.sys.ms()-lastRx<35000 and challenge or nil end
 function T.draw(text,wrap,hasQR)
   if T.phase=="account" and fresh() then
     text(1,"Account linked",10,55,300,22)
@@ -115,7 +116,7 @@ function T.draw(text,wrap,hasQR)
       text(1,"Scan to sign in",10,47,300,18,"center")
       text(2,"Use your phone to link Goosey",10,195,300,14,"center")
     else
-      text(1,"Preparing sign-in",10,65,300,20,"center")
+      text(1,"Reconnecting...",10,65,300,20,"center")
       text(2,"Waiting for connection",10,115,300,16,"center")
     end
   elseif T.phase=="edit" or T.phase=="review" then

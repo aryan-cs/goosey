@@ -39,7 +39,7 @@ local function render()
   for i=1,#labels do labels[i]:set_text("") end
   mark:hidden(true);chart:hidden(true);track:hidden(true);dot:hidden(true);midline:hidden(true)
   if qr then qr:hidden(true) end
-  header:set_text(({list="Markets",detail="Market",settings="Settings",link="Trade"})[page])
+  header:set_text(({list="Markets",detail="Market",settings="Settings",link="Account"})[page])
   status:set_text(lastRx and badge.sys.ms()-lastRx<45000 and "USB updated" or "Saved snapshot")
   stamp:set_text(cloud.capturedAt)
   if trade then local user,balance=trade.header();status:set_text(user);stamp:set_text(balance) end
