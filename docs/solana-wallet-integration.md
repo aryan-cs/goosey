@@ -213,6 +213,24 @@ nor signs, sends, funds SOL, claims tokens or changes database balances. Its 55
 mocked tests prove preparation validation, not actual execution of this helper.
 Runtime proof and the explicit enrollment operator are separate integration gates.
 
+### Read-only chain market API
+
+`GET /api/solana/markets/{marketId}?wallet={address}` reads a complete finalized
+market/book/resolution/terms/escrow snapshot on the server-pinned deployment.
+Market IDs are canonical decimal u64 strings, not database slugs. The selected
+wallet is public chain data, not authenticated ownership. Requests cannot select
+an RPC or override network/program identity. Missing or unverifiable accounts
+return 503, never a database-market fallback. The route rate-limits reads, bounds
+RPC time, rechecks genesis, and returns decimal-string quantities with no-store.
+Terms contain a digest commitment, not proof that manifest contents are available
+or understood; `manifestVerified` and `exchangeVerified` remain false.
+
+Twenty-two route tests cover malformed inputs, u64 precision, throttling, network
+change, incomplete snapshots and sanitized failures. Actual local HTTP checks
+confirmed invalid-ID 400 and absent-chain-market 503. Successful market snapshot
+runtime behavior is covered by the underlying exchange reader suite, but a
+successful HTTP market response still requires a published market on that network.
+
 Market YES/NO positions should likewise have one representation. If positions are program-owned quantities, no second independently spendable outcome-token balance exists. If outcome tokens are later adopted, escrow/reserve or burn/mint them atomically and reconcile their supply against positions and collateral. Supporting arbitrary transfer-fee/hook extensions is not part of the initial contract.
 
 Transition the application in this order:

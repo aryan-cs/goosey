@@ -18,6 +18,7 @@
     "test:chain:cancellation": "tsx scripts/solana-program-e2e-isolated.ts --suite cancellation",
     "test:chain:resolution": "tsx scripts/solana-program-e2e-isolated.ts --suite resolution",
     "test:chain:terms": "tsx scripts/solana-program-e2e-isolated.ts --suite terms",
+    "test:chain:enrollment": "tsx scripts/solana-program-e2e-isolated.ts --suite enrollment",
     "test:chain:wallet-api": "tsx scripts/solana-wallet-api-e2e.ts",
     "data:dev": "tsx scripts/development-data.ts",
     "data:fixture": "tsx scripts/development-fixture.ts",

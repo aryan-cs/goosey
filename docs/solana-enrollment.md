@@ -131,3 +131,28 @@ unknown outcomes, and read-only recovery. It is not a live-chain enrollment test
 ```sh
 npx vitest run scripts/solana-enroll.test.ts
 ```
+
+The separate actual-runtime suite uses the isolated runner, a fresh ledger/admin,
+and an immutable snapshot of the compiled program. It never adopts a shared
+validator, reads existing operator keys, or builds/replaces the compiled artifact:
+
+```sh
+GOOSEY_SOLANA_BIN_DIR=/ABSOLUTE/TOOLCHAIN/bin \
+  node --import tsx scripts/solana-program-e2e-isolated.ts --suite enrollment
+```
+
+It bootstraps the fresh test program, runs the real CLI subprocess through a
+transparent loopback RPC observer, checks the private exact receipt before its
+first send, and verifies finalized enrollment/identity fields. Repeated receipt,
+wrong issuer, per-wallet/campaign cap, and identity/wallet replay cases must fail
+before sending and leave watched on-chain accounts unchanged. The status command
+must report finality without sending or modifying the receipt. These rejection
+cases exercise CLI preparation against real chain state, not failed on-chain
+instruction executions. Private evidence is retained in the runner directory as
+`enrollment-cli-evidence.json`; the runner stops only its owned processes.
+
+Runtime checkpoint on 2026-09-19: eight cases passed on a fresh isolated ledger
+using ELF SHA-256
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
+This is separate from the mocked tests above and does not certify another build
+or deployment. The suite deliberately does not exercise the target's later claim.
