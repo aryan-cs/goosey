@@ -7,6 +7,8 @@
   "scripts": {
     "chain:preflight": "tsx scripts/solana-preflight.ts",
     "test:chain:tokens": "tsx scripts/solana-token-e2e.ts",
+    "chain:build": "cargo-build-sbf --manifest-path chain/programs/goosey-exchange/Cargo.toml --arch v3",
+    "test:chain:program": "tsx scripts/solana-program-e2e.ts",
     "data:dev": "tsx scripts/development-data.ts",
     "data:fixture": "tsx scripts/development-fixture.ts",
     "predev": "npm run db:generate",

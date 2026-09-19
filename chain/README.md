@@ -11,12 +11,33 @@ No keypair is committed. The provided deployment key and newly generated local a
 On 2026-09-19:
 
 - `cargo test --manifest-path chain/Cargo.toml`: 3 exact-arithmetic tests passed.
-- `cargo-build-sbf --manifest-path chain/programs/goosey-exchange/Cargo.toml`: passed; binary at `chain/target/deploy/goosey_exchange.so`.
+- `cargo-build-sbf --manifest-path chain/programs/goosey-exchange/Cargo.toml`: compilation passed, but the default SBPFv0 artifact was rejected by the local validator's deployment feature policy. Successful compilation alone did not establish runtime compatibility.
 - Host Rust 1.98.1; platform-tools v1.54 / SBF Rust 1.89 supplied by main; Solana CLI 4.2.2; cargo-build-sbf 4.1.0; Anchor crates 1.2.0. Cargo.lock is committed for reproducibility.
-- Runtime RPC acceptance/deployment is coordinated by main and the separate RPC-test agent. A compiled binary alone is not runtime verification.
+- The explicit v3 artifact was deployed and the real initialize/enroll/claim/transfer RPC suite passed. See [artifact, signatures and verification limits](../docs/solana-foundation-qa.md). Escrow and full exchange runtime checks are still outstanding.
 - `cargo fmt --check` could not run because the isolated host toolchain has no rustfmt component. No tooling was installed for formatting.
 
 Anchor 1.2.0's `CpiContext::new` takes the program **public key**. The mint-init macro references Token-2022 helpers, so the crate enables the corresponding compile-time features. Runtime accounts are explicitly classic `Program<Token>`/`Account<Mint>`/`Account<TokenAccount>`; this program does not accept Token-2022 mints. Bytemuck is pinned to 1.25.2 to satisfy the resolved SPL interfaces.
+
+### Required SBPF architecture for this validator
+
+Build from the repository root with an explicit architecture:
+
+```sh
+cargo-build-sbf --arch v3 --manifest-path chain/programs/goosey-exchange/Cargo.toml
+```
+
+The binary is written to `chain/target/deploy/goosey_exchange.so`. The main integration task built and deployed the v3 artifact successfully without changing validator features. The [runtime evidence](../docs/solana-foundation-qa.md) records its exact hash and deployment receipt; a later rebuilt artifact must be verified again.
+
+Read-only `solana --url http://127.0.0.1:18999 feature status --display-all` established both features active since epoch 0:
+
+| Feature address | Runtime policy |
+| --- | --- |
+| `B8JJXCy5amZyWG9r7EnUYLwzXSXTxG7GZ1qZ1qggo83g` | SIMD-0500: disables **new deployment** of SBPFv0, v1, and v2 |
+| `5cC3foj77CWun58pC51ebHFUWavHWKarWyR5UUik7dnC` | Enables deployment/execution of SBPFv3 |
+
+The installed cargo-build-sbf 4.1.0 defaults to `--arch v0`, explaining the original `Detected sbpf_version required by the executable which are not enabled` deployment error. Anza's [official build-tool documentation](https://github.com/anza-xyz/cargo-build-sbf#sbfpv3-migration) prescribes `--arch v3`; its release-scheduling prose is not a substitute for this validator's actual feature state. The [official ELF loader](https://github.com/anza-xyz/sbpf/blob/main/src/elf.rs) checks the executable's SBPF version against the enabled version set before loading it.
+
+Verify the artifact header with the supplied LLVM `llvm-readelf --file-header`: ELF `Flags: 0x3` identifies SBPFv3. Rebuilding for SBPFv3 is distinct from selecting Solana **transaction** version 3 (there is no such choice here); clients may continue sending legacy/v0 transactions. Do not add experimental `--abi-v2`, disable features, or reset the validator to accommodate the older artifact. Preserve the pinned genesis and existing test state. Sources and feature state checked 2026-09-19.
 
 ## Stable instruction interface
 
