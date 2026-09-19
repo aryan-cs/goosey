@@ -21,7 +21,7 @@ const communityFeedSelect = {
   body: true,
   parentId: true,
   createdAt: true,
-  user: { select: { username: true, displayName: true } },
+  user: { select: { username: true, displayName: true, profilePublic: true } },
   market: { select: { slug: true, shortTitle: true } },
 } satisfies Prisma.CommentSelect;
 
@@ -66,7 +66,6 @@ export async function getCommunityFeed(cursor?: string): Promise<CommunityFeedPa
   const rows = await db.comment.findMany({
     where: {
       status: "VISIBLE",
-      user: { profilePublic: true },
       market: { status: { not: "DRAFT" } },
       AND: [
         {
