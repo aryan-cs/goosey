@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function WatchlistPage() {
   const user = await getServerUser();
-  if (!user) return <div className="page-shell centered-state"><EmptyState title="Sign in to view saved markets" description="Your watchlist is only visible to you." action={<Link className="button button-primary" href="/login">Sign in</Link>} /></div>;
+  if (!user) return <div className="page-shell centered-state"><EmptyState title="Sign in to view saved markets" description="Your watchlist is only visible to you." action={<Link className="button button-primary" href="/login?next=%2Fwatchlist">Sign in</Link>} /></div>;
   if (requiresEmailVerification(user)) redirect("/verify-email?next=%2Fwatchlist");
   const { entries, marks } = await runSerializableTransaction(db, async (tx) => {
     const entries = await tx.watchlistEntry.findMany({ where: { userId: user.id, ...(user.role === "ADMIN" ? {} : { market: { status: { not: "DRAFT" } } }) }, orderBy: { createdAt: "desc" }, include: { market: { include: { priceHistory: { orderBy: { createdAt: "desc" }, take: 30 }, orderFills: { orderBy: { tradeSequence: "desc" }, take: 30, select: { canonicalYesPriceMilli: true, createdAt: true } } } } } });

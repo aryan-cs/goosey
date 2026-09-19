@@ -1,14 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 
-test("signed-out portfolio preserves its history destination through account handoff", async ({ page }) => {
-  const next = "/portfolio?historyCursor=preserved-history-cursor";
+for (const next of ["/portfolio?historyCursor=preserved-history-cursor", "/watchlist"]) {
+test(`signed-out ${next} preserves its destination through account handoff`, async ({ page }) => {
   await page.goto(next);
   await page.getByRole("main").getByRole("link", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(`/login?next=${encodeURIComponent(next)}`);
   await page.locator(".auth-switch").getByRole("link", { name: "Create an account" }).click();
   await expect(page).toHaveURL(`/signup?next=${encodeURIComponent(next)}`);
 });
+}
 
 test("account pages retain the destination across signup and recovery", async ({ page }) => {
   const next = "/portfolio/activity?tab=fills";
