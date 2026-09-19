@@ -38,7 +38,7 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
     <div className="browse-layout">
       <div className={styles.intro}>
         <header className={styles.header}><h1>Markets</h1><Link className={`button button-secondary ${styles.suggest}`} href="/markets/suggest">Suggest a market</Link></header>
-        <p><Link href="/events">Browse grouped events →</Link></p>
+        <p><Link href="/events">Browse grouped events →</Link> · <Link href="/chain">On-chain markets →</Link></p>
       </div>
       <form className="market-filters" action="/markets">
         <label className="search-field"><Search /><span className="sr-only">Search markets</span><input type="search" name="q" defaultValue={query} placeholder="Search questions and topics" /></label>

@@ -1,5 +1,13 @@
 # Chain catalog discovery
 
+The server-rendered `/chain` page uses this same catalog read helper and is linked
+from the Markets browse page. It distinguishes disabled, unavailable, empty and
+invalid-cursor states, preserves exact integer feather precision, and links each
+entry to its canonical chain market route. It does not calculate prices from SQL
+defaults. Desktop dark and mobile light/dark disabled states were visually checked
+at 1280px/390px with no console errors or horizontal overflow. Populated rendering
+has an explicitly mocked fixture test, not a claim of a shared published market.
+
 `GET /api/solana/catalog` is the dedicated metadata discovery endpoint. It is
 disabled unless `GOOSEY_SOLANA_CATALOG_ENABLED=true`. The server's configured
 localnet/devnet cluster, genesis hash and program select the namespace; request
