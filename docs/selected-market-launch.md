@@ -36,3 +36,23 @@ No personal account is promoted. Existing operator identity must match its
 provisioning audit. The normal market service creates and funds the markets.
 A real SQLite rehearsal verified replay safety, six markets, one operator,
 no issued sessions and no trades.
+
+## University of Toronto market
+
+The catalog also includes `htn-2026-all-toronto-team-wins`: **Will a University
+of Toronto team win?** Like Waterloo, every listed member of at least one overall
+winning team must be enrolled at that university; mixed-university teams and
+sponsor-only prizes do not qualify. It uses the same close/result schedule and
+neutral 50% opening price. The two university markets settle independently.
+
+Publish only this new contract, without revisiting or changing other markets:
+
+```sh
+node --import tsx scripts/launch-selected-markets.ts --system-operator --slug=htn-2026-all-toronto-team-wins
+GOOSEY_CONFIRM_MARKET_LAUNCH=htn-2026-all-toronto-team-wins node --import tsx scripts/launch-selected-markets.ts --system-operator --slug=htn-2026-all-toronto-team-wins --apply
+```
+
+Configure the intended database privately first. The first command previews;
+the second uses the normal audited creation service. Exact slug selection rejects
+unknown names and avoids unrelated existing-market differences. Rerunning does
+not duplicate the contract. Fresh seeds automatically include this market.

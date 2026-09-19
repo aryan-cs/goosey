@@ -48,6 +48,22 @@
     "pricingRationale": "Neutral starting price; not an evidence-based forecast."
   },
   {
+    "slug": "htn-2026-all-toronto-team-wins",
+    "title": "Will a University of Toronto team win?",
+    "shortTitle": "Will a University of Toronto team win?",
+    "description": "Will a University of Toronto team win?",
+    "rules": "YES if every listed member of at least one overall winning team is enrolled at the University of Toronto at the time of the hackathon. Mixed-university teams do not qualify. Use voluntary enrollment confirmations or public institutional records, not names or appearance. NO requires enough evidence to rule out all-University-of-Toronto membership for every overall winning team; otherwise VOID. Overall winners means any team officially announced as an overall Hack the North 2026 winner; sponsor-only prizes do not count. If the event is cancelled or the available evidence cannot establish YES or NO, resolve VOID. Trading closes before closing ceremonies; do not reopen after the result is known.",
+    "resolutionSource": "Official overall winners list and confirmed enrollment of all listed team members.",
+    "category": "Hack the North",
+    "icon": "sparkles",
+    "color": "green",
+    "featured": true,
+    "closesAt": "2026-09-20T14:30:00-04:00",
+    "resolvesAt": "2026-09-20T16:30:00-04:00",
+    "openingProbability": 0.5,
+    "pricingRationale": "Neutral starting price; not an evidence-based forecast."
+  },
+  {
     "slug": "htn-2026-winner-stage-dance",
     "title": "Will a winning team member do the worm, dab, or floss on stage?",
     "shortTitle": "Will a winning team member do the worm, dab, or floss on stage?",
