@@ -4,11 +4,14 @@
  * Does not launch, reset or stop any validator. See --help; no default endpoint.
  */
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "../src/lib/solana/runtime";
 import { createHash, randomBytes } from "node:crypto";
-import { readFile, realpath } from "node:fs/promises";
+import { open, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { promisify } from "node:util";
+import { PrismaClient } from "@prisma/client";
 import { AccountRole, address, appendTransactionMessageInstructions, blockhash, createKeyPairSignerFromBytes,
   createTransactionMessage, generateKeyPairSigner, getAddressDecoder, getAddressEncoder, getBase64EncodedWireTransaction,
   getProgramDerivedAddress, getSignatureFromTransaction, pipe, setTransactionMessageFeePayerSigner,
@@ -30,12 +33,15 @@ import { buildInitializeMarketTermsInstruction, buildAcceptMarketTermsInstructio
   deriveGooseyMarketTermsAddresses } from "../src/lib/solana/market-terms-client";
 import { encodeMarketTerms, hashMarketTerms } from "../src/lib/solana/market-terms";
 import { decodeFinalizedProgramEvents, type GooseyProgramEvent } from "../src/lib/solana/program-events";
+import { readFinalizedProgramEvents } from "../src/lib/solana/program-event-read";
+import { ingestFinalizedProgramTransaction } from "../src/lib/solana/event-journal";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
 const CLOCK = address("SysvarC1ock11111111111111111111111111111111");
 const BOOK_BYTES = 69_720, STEP = 10_240, CAPACITY = 1024;
 const PAYOUT = 1_000n, FEE_BPS = 100n, GRANT = 1_000_000n;
+const executeFile = promisify(execFile);
 const keyBytes = (key: Address) => Buffer.from(getAddressEncoder().encode(key));
 const disc = (space: string, name: string) => createHash("sha256").update(`${space}:${name}`).digest().subarray(0, 8);
 function u64(n: bigint) { const b = Buffer.alloc(8); b.writeBigUInt64LE(n); return b; }
@@ -928,14 +934,83 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     failedReceiptExcludedEvents: true,
   };
   console.log("PASS finalized compiled-program event decoding matches actual enrollment, cash, order and fill receipts");
+
+  // Exercise the shipping finalized reader and immutable journal against these
+  // same actual transactions. The database contains only the three additive
+  // journal tables and lives beside this run's disposable key and ledger.
+  const verifiedReceipts = [];
+  for (const transactionSignature of decodedEventEvidence.signatures) {
+    verifiedReceipts.push(await readFinalizedProgramEvents(runtime, transactionSignature));
+  }
+  assert.deepEqual(verifiedReceipts.map(receipt => receipt.outcome),
+    ["success", "success", "success", "success", "success", "success", "failed"]);
+  assert(verifiedReceipts.slice(0, -1).every(receipt => receipt.records.length > 0));
+  assert.deepEqual(verifiedReceipts.at(-1)?.records, []);
+
+  const journalPath = path.join(path.dirname(adminPath), "event-journal.sqlite");
+  const journalHandle = await open(journalPath, "wx", 0o600); await journalHandle.close();
+  const journalSql = await readFile(new URL("../prisma/sqlite-upgrades/20260919220000_solana_event_journal.sql", import.meta.url), "utf8");
+  await executeFile("sqlite3", ["-batch", "-bail", "-init", "/dev/null", journalPath,
+    `PRAGMA foreign_keys=ON;\n${journalSql}\nPRAGMA foreign_key_check;\nPRAGMA integrity_check;`],
+  { timeout: 15_000, maxBuffer: 1024 * 1024 });
+  const schema = await executeFile("sqlite3", ["-readonly", "-batch", "-bail", "-init", "/dev/null", "-noheader", "-list",
+    journalPath, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' ORDER BY name;"],
+  { timeout: 5_000, maxBuffer: 64 * 1024 });
+  assert.deepEqual(schema.stdout.trim().split("\n"), ["SolanaIngestionCursor", "SolanaProgramEvent", "SolanaTransactionReceipt"]);
+
+  const journalUrl = `file:${journalPath}?connection_limit=1`;
+  let journal = new PrismaClient({ datasourceUrl: journalUrl });
+  const inserted = [];
+  try {
+    for (const expected of verifiedReceipts) {
+      const result = await ingestFinalizedProgramTransaction(runtime, expected.signature,
+        { client: journal, provider: "sqlite" });
+      assert.equal(result.inserted, true); assert.equal(result.outcome, expected.outcome);
+      assert.equal(result.eventCount, expected.records.length); assert.equal(result.slot, expected.slot);
+      inserted.push(result);
+    }
+    const stored = await journal.solanaTransactionReceipt.findMany({
+      orderBy: { slot: "asc" }, include: { events: { orderBy: { logIndex: "asc" } } },
+    });
+    assert.equal(stored.length, verifiedReceipts.length);
+    for (const expected of verifiedReceipts) {
+      const receipt = stored.find(candidate => candidate.signature === expected.signature); assert(receipt);
+      assert.equal(receipt.genesisHash, genesis); assert.equal(receipt.programAddress, PROGRAM);
+      assert.equal(receipt.slot, expected.slot); assert.equal(receipt.eventCount, expected.records.length);
+      assert.equal(receipt.status, expected.outcome === "failed" ? "VERIFIED_FAILED" : "VERIFIED_SUCCESS");
+      assert.deepEqual(receipt.events.map(event => [event.eventKey, event.logIndex, event.invocationDepth, event.kind]),
+        expected.records.map(record => [record.eventKey, record.logIndex, record.invocationDepth, record.event.kind]));
+    }
+    const failedStored = stored.find(receipt => receipt.signature === failedFok.signature); assert(failedStored);
+    assert.equal(failedStored.status, "VERIFIED_FAILED"); assert.equal(failedStored.eventCount, 0);
+    assert.deepEqual(failedStored.events, []);
+  } finally { await journal.$disconnect(); }
+
+  // Reopen the database to prove replay behavior does not depend on an
+  // in-memory Prisma connection or process-local deduplication state.
+  journal = new PrismaClient({ datasourceUrl: journalUrl });
+  try {
+    for (const [index, expected] of verifiedReceipts.entries()) {
+      const replay = await ingestFinalizedProgramTransaction(runtime, expected.signature,
+        { client: journal, provider: "sqlite" });
+      assert.equal(replay.inserted, false); assert.equal(replay.receiptId, inserted[index].receiptId);
+      assert.equal(replay.eventCount, expected.records.length); assert.equal(replay.outcome, expected.outcome);
+    }
+    assert.equal(await journal.solanaTransactionReceipt.count(), verifiedReceipts.length);
+    assert.equal(await journal.solanaProgramEvent.count(), verifiedReceipts.reduce((sum, receipt) => sum + receipt.records.length, 0));
+  } finally { await journal.$disconnect(); }
+  const journalEvidence = { database: journalPath, tables: 3, receipts: verifiedReceipts.length,
+    events: verifiedReceipts.reduce((sum, receipt) => sum + receipt.records.length, 0), restartReplayInserted: 0,
+    failedFok: { signature: failedFok.signature, status: "VERIFIED_FAILED", events: 0 } };
+  console.log("PASS actual finalized RPC receipts persist atomically and replay immutably after a Prisma restart");
   console.log(JSON.stringify({ result: "PASS", scope: "Actual RPC compiled-program exchange integration, not a host arithmetic simulation",
     rpc: endpoint.toString(), genesis, program: PROGRAM, validator: await rpc("getVersion"), market: market.market, seats: market.seats, book,
     bookBytes: BOOK_BYTES, bootstrapSizes: [10_240, 20_480, 30_720, 40_960, 51_200, 61_440, 69_720], transactionCaseCount: receipts.length,
     successBuilders: ["program-client.ts", "escrow-client.ts", "exchange-client.ts", "resolution-client.ts"],
     resolutionAdmission: { resolution, reviewers: reviewers.map((wallet, i) => ({ wallet: wallet.address, enrollment: reviewerEnrollments[i] })),
       reviewerAllowanceEach: 1, reviewerClaims: 0, finalizedReaderBatchAccounts: 10 },
-    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots", "actual finalized program-event decoding"],
-    decodedEventEvidence,
+    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots", "actual finalized program-event decoding", "disposable SQLite finalized-event journal restart replay"],
+    decodedEventEvidence, journalEvidence,
     preparedOrder: { signature: preparedSignature, submissionStatus: submittedOrder.status, finalizedSlot: preparedRoot,
       sender: prepared.sender, expectedNonce: prepared.expectedNonce, observedSlot: prepared.observedSlot,
       bookRevision: prepared.bookRevision, receiptStorage: "in-memory callback only; not durable storage proof",

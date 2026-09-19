@@ -4,60 +4,75 @@ import styles from "./probability-plot.module.css";
 import rangeStyles from "./chart-range.module.css";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { CHART_RANGES, CHART_RANGE_DURATION, type ChartRange, chartDomain, withHeldPriceEndpoint, nearestChartIndex, normalizeChartPoints, selectChartRange, type ChartPoint } from "@/lib/chart-series";
-import { smoothChartPath } from "@/lib/chart-path";
+import { CHART_RANGES, CHART_RANGE_DURATION, type ChartRange, chartDomain, withHeldPriceEndpoint, normalizeChartPoints, selectChartRange, type ChartPoint } from "@/lib/chart-series";
+import { createChartCurve } from "@/lib/chart-path";
+
+type ChartInspection = { timestamp: number; probability: number; opening?: boolean; held?: boolean; interpolated?: boolean };
 
 export function probabilityLabel(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
 function dateLabel(timestamp: number) {
-  return new Date(timestamp).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short", timeZone: "America/Toronto" });
+  return new Date(timestamp).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone: "America/Toronto" });
 }
 
 export function ProbabilityPlot({ points, compact = false, positive = true, startAt, endAt, label = "YES probability", emptyLabel = "No probability history yet", onInspect }: {
   points: ChartPoint[]; compact?: boolean; positive?: boolean; startAt?: number; endAt?: number; label?: string; emptyLabel?: string;
-  onInspect?: (point: { timestamp: number; probability: number; opening?: boolean; held?: boolean } | null) => void;
+  onInspect?: (point: ChartInspection | null) => void;
 }) {
   const series = useMemo(() => normalizeChartPoints(points), [points]);
-  const [index, setIndex] = useState<number | null>(null);
-  const [heldTimestamp, setHeldTimestamp] = useState<number | null>(null);
+  const [inspectedTime, setInspectedTime] = useState<number | null>(null);
   const interaction = useRef<"pointer" | "keyboard">("pointer");
   const gradient = useId().replace(/:/g, "");
   const [low, high] = chartDomain(series);
   const firstTime = startAt ?? series[0]?.timestamp ?? 0;
   const lastTime = Math.max(endAt ?? series.at(-1)?.timestamp ?? firstTime, firstTime + 1);
+  const inspectionStart = Math.max(firstTime, series[0]?.timestamp ?? firstTime);
+  const clampTime = (time: number) => Math.max(inspectionStart, Math.min(lastTime, time));
+  const selectedTime = inspectedTime === null ? lastTime : clampTime(inspectedTime);
   const x = (time: number) => Math.max(0, Math.min(100, (time - firstTime) / (lastTime - firstTime) * 100));
   const y = (probability: number) => 100 - (probability - low) / (high - low) * 100;
-  const activeIndex = index === null ? null : Math.min(index, series.length - 1);
-  const active = series[activeIndex ?? series.length - 1];
-  const selected = active?.held && heldTimestamp !== null ? { ...active, timestamp: heldTimestamp } : active;
-  function inspect(next: number | null, timestamp: number | null = null) {
-    setIndex(next); setHeldTimestamp(timestamp);
-    const point = next === null ? null : series[next];
-    onInspect?.(point?.held && timestamp !== null ? { ...point, timestamp } : point);
+  const geometry = useMemo(() => createChartCurve(series.filter(point => !point.held).map(point => ({
+    x: Math.max(0, Math.min(100, (point.timestamp - firstTime) / (lastTime - firstTime) * 100)),
+    y: 100 - (point.probability - low) / (high - low) * 100,
+  }))), [series, firstTime, lastTime, low, high]);
+  function sample(timestamp: number): ChartInspection {
+    const lastObservation = series.at(-1)?.held ? series.at(-2) : series.at(-1);
+    const exact = series.find(point => point.timestamp === timestamp);
+    if (exact) return exact;
+    const nextIndex = series.findIndex(point => point.timestamp > timestamp);
+    const previous = series[nextIndex < 0 ? series.length - 1 : Math.max(0, nextIndex - 1)];
+    const next = nextIndex < 0 ? undefined : series[nextIndex];
+    const held = lastObservation && timestamp > lastObservation.timestamp;
+    const opening = previous?.opening && (!next || next.opening || previous.probability === next.probability);
+    return { timestamp, probability: Math.max(0, Math.min(1, low + (100 - (geometry.valueAt(x(timestamp)) ?? 50)) / 100 * (high - low))),
+      ...(held ? { held: true } : opening ? { opening: true } : { interpolated: true }) };
+  }
+  const selected = series.length ? sample(selectedTime) : undefined;
+  function inspect(timestamp: number | null) {
+    const time = timestamp === null ? null : clampTime(timestamp);
+    setInspectedTime(time);
+    onInspect?.(time === null ? null : sample(time));
   }
   function pointer(clientX: number, bounds: DOMRect) {
     if (!bounds.width) return;
     const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
     const time = firstTime + ratio * (lastTime - firstTime);
-    const held = series.at(-1);
-    const lastObservation = held?.held ? series.at(-2) : undefined;
-    if (lastObservation && time > lastObservation.timestamp) inspect(series.length - 1, time);
-    else inspect(nearestChartIndex(series, time));
+    inspect(time);
   }
-  if (!series.length) return <div className="probability-empty">{emptyLabel}</div>;
-  const path = smoothChartPath(series.filter(point => !point.held).map(point => ({ x: x(point.timestamp), y: y(point.probability) }))) + ` H 100`;
+  if (!series.length || !selected) return <div className="probability-empty">{emptyLabel}</div>;
+  const path = geometry.path + ` H 100`;
   const selectedX = x(selected.timestamp);
   return <div className={`probability-plot ${compact ? "compact-plot" : "full-plot"} ${positive ? "positive" : "negative"}`}>
-    <div className="probability-plot-surface" role="slider" tabIndex={0} aria-label={`${label} history`} aria-valuemin={0} aria-valuemax={series.length - 1} aria-valuenow={activeIndex ?? series.length - 1} aria-valuetext={`${probabilityLabel(selected.probability)} on ${dateLabel(selected.timestamp)}`} data-inspecting={index !== null}
+    <div className="probability-plot-surface" role="slider" tabIndex={0} aria-label={`${label} history`} aria-valuemin={inspectionStart} aria-valuemax={lastTime} aria-valuenow={selectedTime} aria-valuetext={`${probabilityLabel(selected.probability)} on ${dateLabel(selected.timestamp)}${selected.held ? ", held price" : selected.opening ? ", opening price" : selected.interpolated ? ", interpolated" : ""}`} data-inspecting={inspectedTime !== null}
       onPointerMove={(event) => { if (event.pointerType !== "touch" || event.buttons) { interaction.current = "pointer"; pointer(event.clientX, event.currentTarget.getBoundingClientRect()); } }}
       onPointerDown={(event) => { interaction.current = "pointer"; if (event.pointerType === "touch") event.currentTarget.setPointerCapture(event.pointerId); pointer(event.clientX, event.currentTarget.getBoundingClientRect()); }}
       onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); if (event.pointerType !== "mouse") inspect(null); }}
       onPointerCancel={() => inspect(null)} onPointerLeave={() => { if (interaction.current === "pointer") inspect(null); }} onBlur={() => inspect(null)}
       onKeyDown={(event) => {
-        const selectedIndex = activeIndex ?? series.length - 1;
-        const target = event.key === "Home" ? 0 : event.key === "End" ? series.length - 1 : ["ArrowLeft", "ArrowDown"].includes(event.key) ? Math.max(0, selectedIndex - 1) : ["ArrowRight", "ArrowUp"].includes(event.key) ? Math.min(series.length - 1, selectedIndex + 1) : null;
+        const selectedTimestamp = selectedTime;
+        const target = event.key === "Home" ? inspectionStart : event.key === "End" ? lastTime : ["ArrowLeft", "ArrowDown"].includes(event.key) ? Math.max(inspectionStart, selectedTimestamp - 10 * 60_000) : ["ArrowRight", "ArrowUp"].includes(event.key) ? Math.min(lastTime, selectedTimestamp + 10 * 60_000) : null;
         if (event.key === "Escape") { inspect(null); return; }
         if (target !== null) { event.preventDefault(); interaction.current = "keyboard"; inspect(target); }
       }}>
@@ -72,7 +87,7 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
       </svg>
       <span className="probability-crosshair" style={{ left: `${selectedX}%` }} aria-hidden="true" />
       <span className="probability-dot" style={{ left: `${selectedX}%`, top: `${y(selected.probability)}%` }} aria-hidden="true" />
-      <span className="probability-tooltip" style={{ left: `clamp(0px, ${selectedX}% - 110px, max(0px, 100% - 220px))` }} role="tooltip" aria-hidden={index === null}>
+      <span className="probability-tooltip" style={{ left: `clamp(0px, ${selectedX}% - 110px, max(0px, 100% - 220px))` }} role="tooltip" aria-hidden={inspectedTime === null}>
         <time dateTime={new Date(selected.timestamp).toISOString()}>{dateLabel(selected.timestamp)}</time>
         <strong><i />{selected.opening ? "Opening price" : label === "YES probability" || label === "YES execution price" ? "Yes" : label}<b>{probabilityLabel(selected.probability)}</b></strong>
       </span>
@@ -83,8 +98,8 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
 }
 
 export function ProbabilityChart({ points, label = "YES probability", height = 300, asOf, marketSlug, executionPrices = false, openingBaseline }: { points: ChartPoint[]; label?: string; height?: number; asOf?: number; marketSlug?: string; executionPrices?: boolean; openingBaseline?: OpeningBaseline }) {
-  const [range, setRange] = useState<ChartRange>("ALL");
-  const [inspected, setInspected] = useState<{ timestamp: number; probability: number; opening?: boolean; held?: boolean } | null>(null);
+  const [range, setRange] = useState<ChartRange>("1H");
+  const [inspected, setInspected] = useState<ChartInspection | null>(null);
   // The first client render must use the same domain as the server render.
   // After hydration, advance the domain even when there are no new observations.
   const [revision, setRevision] = useState(0);
@@ -125,12 +140,12 @@ export function ProbabilityChart({ points, label = "YES probability", height = 3
   const now = Math.max(clock, ...normalizeChartPoints(observations).map(point => point.timestamp));
   const series = useMemo(() => withHeldPriceEndpoint(selectChartRange(withOpeningBaseline(observations, openingBaseline, now), range, now), now), [observations, openingBaseline, range, now]);
   const latest = series.at(-1);
-  const selected = inspected ?? latest;
+  const selected: ChartInspection | undefined = inspected ?? latest;
   const change = latest && series[0] ? (latest.probability - series[0].probability) * 100 : null;
   const duration = range === "ALL" ? null : CHART_RANGE_DURATION[range];
   return <figure className={`probability-chart ${styles.chart}`} style={{ minHeight: height }}>
     {historyError && <p className="chart-history-error" role="status">Full history could not load. <button type="button" onClick={() => setRetry(value => value + 1)}>Try again</button></p>}
-    <figcaption><div><span className="eyebrow">{selected?.held && inspected ? "Held price" : selected?.opening ? "Opening price" : executionPrices ? inspected ? "Historical execution" : "Last execution" : inspected ? "Historical probability" : "Current forecast"}</span><strong>{selected ? probabilityLabel(selected.probability) : "N/A"}</strong><small className="chart-inspected-time" style={{ visibility: inspected ? "visible" : "hidden" }}>{dateLabel(selected?.timestamp ?? now)}</small></div>
+    <figcaption><div><span className="eyebrow">{selected?.held && inspected ? "Held price" : selected?.opening ? "Opening price" : selected?.interpolated && executionPrices ? "Interpolated price" : executionPrices ? inspected ? "Historical execution" : "Last execution" : inspected ? "Historical probability" : "Current forecast"}</span><strong>{selected ? probabilityLabel(selected.probability) : "N/A"}</strong><small className="chart-inspected-time" style={{ visibility: inspected ? "visible" : "hidden" }}>{dateLabel(selected?.timestamp ?? now)}</small></div>
       <span style={{ visibility: change === null ? "hidden" : "visible" }} className={`chart-change ${change !== null && change < 0 ? "movement-down" : change !== null && change > 0 ? "movement-up" : ""}`}>{change !== null && change > 0 ? "+" : ""}{Number((change ?? 0).toFixed(2))} pts <small>in this period</small></span>
     </figcaption>
     <ProbabilityPlot key={`${range}-${revision}`} points={series} label={label} emptyLabel={executionPrices ? "No executions yet" : "No probability history yet"} startAt={duration === null ? undefined : now - duration} endAt={now} onInspect={setInspected} />
