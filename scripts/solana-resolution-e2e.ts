@@ -4,7 +4,7 @@
  * instructions; this file never writes or fabricates account state. */
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readFile, realpath } from "node:fs/promises";
+import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -37,6 +37,10 @@ import {
 } from "../src/lib/solana/resolution-client";
 import { readResolutionState } from "../src/lib/solana/resolution-state";
 import { readGooseyEscrow } from "../src/lib/solana/escrow-read";
+import { prepareEscrowDeposit, prepareEscrowWithdrawal } from "../src/lib/solana/prepare-escrow";
+import { prepareResolutionClaim } from "../src/lib/solana/prepare-resolution-claim";
+import { submitSignedWalletTransaction, type TransferSubmission } from "../src/lib/solana/submit-transfer";
+import type { PreparedWalletTransaction } from "../src/lib/solana/wallet-transaction";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -209,6 +213,55 @@ configuration, account injection and validator resets are refused.`);
   const commonClose = (await chainTime()) + 150n;
   const commonResolve = commonClose + 20n;
   const runtime = { cluster: "localnet" as const, rpcUrl: endpoint.toString(), genesisHash: genesis, programAddress: PROGRAM };
+  const preparedEvidence: Record<string, unknown>[] = [];
+  async function executePrepared(name: string, prepared: PreparedWalletTransaction) {
+    const signed = await signTransactionMessageWithSigners(prepared.message);
+    const signature = getSignatureFromTransaction(signed);
+    assert.deepEqual(Object.keys(signed.signatures), [prepared.sender], "Prepared path must have exactly the sole wallet signer/payer");
+    assert.equal(prepared.message.feePayer.address, prepared.sender);
+    const persisted: Omit<TransferSubmission, "status">[] = [];
+    const submission = await submitSignedWalletTransaction({ runtime, prepared, signed, onPrepared: async receipt => {
+      assert.equal(receipt.signature, signature);
+      const status = (await rpc<Context<(unknown | null)[]>>("getSignatureStatuses", [[signature], { searchTransactionHistory: true }])).value[0];
+      assert.equal(status, null, "Recovery receipt callback must precede first transaction send");
+      const file = path.join(path.dirname(adminPath), `prepared-resolution-${preparedEvidence.length}.json`);
+      await writeFile(file, JSON.stringify(receipt, (_, v: unknown) => typeof v === "bigint" ? v.toString() : v), { flag: "wx", mode: 0o600 });
+      assert.equal(JSON.parse(await readFile(file, "utf8")).signature, signature);
+      persisted.push(receipt);
+    } });
+    assert.equal(persisted.length, 1);
+    assert.equal(submission.signature, signature);
+    assert.equal(submission.signedWireBase64, getBase64EncodedWireTransaction(signed));
+    assert.equal(submission.lastValidBlockHeight, prepared.message.lifetimeConstraint.lastValidBlockHeight);
+    assert(["submitted", "unknown"].includes(submission.status));
+    const send = async () => {
+      await pin();
+      assert.equal(await rpc("sendTransaction", [persisted[0].signedWireBase64,
+        // Byte-identical rebroadcast only. A finalized signature is intentionally
+        // replayed below; simulation otherwise returns AlreadyProcessed before
+        // exercising the validator's transaction deduplication path.
+        { encoding: "base64", skipPreflight: true, maxRetries: 0 }]), signature);
+    };
+    const deadline = Date.now() + 60_000;
+    let receipt: Receipt | null = null, resentAt = Date.now();
+    while (Date.now() < deadline) {
+      receipt = await rpc("getTransaction", [signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
+      if (receipt?.meta) break;
+      if (Date.now() - resentAt > 1_000) { await send(); resentAt = Date.now(); }
+      await delay(200);
+    }
+    assert(receipt?.meta, `Unknown prepared transaction outcome: ${signature}`);
+    assert.equal(receipt.meta.err, null, `${name}: ${JSON.stringify(receipt.meta)}`);
+    assert(receipt.meta.logMessages?.some(line => line.startsWith(`Program ${PROGRAM} invoke`)));
+    await awaitFinalized(signature);
+    const finalizedReceipt = await rpc<Receipt>("getTransaction", [signature, { commitment: "finalized", maxSupportedTransactionVersion: 0 }]);
+    assert.equal(finalizedReceipt.meta.err, null); assert.equal(finalizedReceipt.slot, receipt.slot);
+    receipts.push({ name, signature, slot: receipt.slot, error: null, cu: receipt.meta.computeUnitsConsumed });
+    preparedEvidence.push({ name, signature, slot: receipt.slot, sender: prepared.sender,
+      receiptPersistedBeforeSend: true, finality: "finalized" });
+    console.log(`PASS ${name}: ${signature} (finalized, sole wallet signer)`);
+    return { signature, receipt, send };
+  }
   const phaseThreeReaderEvidence: Record<string, unknown>[] = [];
   let earlyResolutionTimingChecked = false;
   async function createMarket(marketId: bigint, payout: bigint, outcome: ResolutionOutcome): Promise<Market> {
@@ -439,7 +492,18 @@ configuration, account injection and validator resets are refused.`);
       const claim = await buildClaimResolutionInstruction({ programAddress: PROGRAM, marketId: market.marketId,
         seats: market.seats, payer: admin, seatIndex });
       watched.add(claim.receipt);
-      const sent = await execute(`permissionless ${market.outcome} claim seat${seatIndex}`, [claim.instruction]);
+      let sent;
+      if (market.outcome === "YES" && seatIndex === 0) {
+        // Finalize the latest successful lifecycle write before the shipping
+        // reader; rejected execution receipts cannot satisfy a success barrier.
+        await awaitFinalized(String([...receipts].reverse().find(receipt => receipt.error === null)!.signature));
+        const payerBefore = (await state(market, "finalized")).rows[3];
+        const prepared = await prepareResolutionClaim({ runtime, payer: actors[3], targetWallet: actors[0].address, marketId: market.marketId });
+        assert.notEqual(prepared.sender, prepared.targetWallet);
+        assert.equal(prepared.seatIndex, seatIndex); assert.equal(prepared.receipt, claim.receipt);
+        sent = await executePrepared("permissionless YES claim seat0 via prepareResolutionClaim distinct payer", prepared);
+        assert.deepEqual((await state(market, "finalized")).rows[3], payerBefore, "Claim must not credit or consume payer's escrow seat");
+      } else sent = await execute(`permissionless ${market.outcome} claim seat${seatIndex}`, [claim.instruction]);
       const after = await state(market);
       assert.equal(after.rows[seatIndex].yes, 0n); assert.equal(after.rows[seatIndex].no, 0n);
       assert.equal(after.rows[seatIndex].available - before.rows[seatIndex].available, expectedPayouts[seatIndex]);
@@ -527,6 +591,37 @@ configuration, account injection and validator resets are refused.`);
   assert.equal(beforeWithdraw.vault.amount - afterWithdraw.vault.amount, amount);
   assert.equal(walletAfter - walletBefore, amount);
 
+  // Additional real round trip after finalization; retain the original direct
+  // withdrawal and every resolution/replay behavior above.
+  const transferAmount = 123_457n;
+  const beforePrepared = await readGooseyEscrow(runtime, { marketId: withdrawMarket.marketId, wallet: actors[0].address }, { includeResolution: true });
+  assert.equal(beforePrepared.resolution?.phase, 4); assert(beforePrepared.seat);
+  const preparedDeposit = await prepareEscrowDeposit({ runtime, sender: actors[0], marketId: withdrawMarket.marketId, amount: transferAmount });
+  assert.equal(preparedDeposit.expectedNonce, beforePrepared.seat.nextNonce);
+  const deposited = await executePrepared("finalized market shipping prepareEscrowDeposit sole-wallet submission", preparedDeposit);
+  const afterDeposit = await readGooseyEscrow(runtime, { marketId: withdrawMarket.marketId, wallet: actors[0].address }, { includeResolution: true });
+  assert(afterDeposit.seat); assert(afterDeposit.finalizedSlot >= BigInt(deposited.receipt.slot));
+  assert.equal(afterDeposit.seat.availableCash, beforePrepared.seat.availableCash + transferAmount);
+  assert.equal(afterDeposit.seat.nextNonce, beforePrepared.seat.nextNonce + 1n);
+  assert.equal(afterDeposit.walletTokenAmount, beforePrepared.walletTokenAmount! - transferAmount);
+  assert.equal(afterDeposit.vaultAmount, beforePrepared.vaultAmount + transferAmount);
+  assert.equal(afterDeposit.marketState.accountedVault, beforePrepared.marketState.accountedVault + transferAmount);
+  const preparedWithdrawal = await prepareEscrowWithdrawal({ runtime, sender: actors[0], marketId: withdrawMarket.marketId, amount: transferAmount });
+  assert.equal(preparedWithdrawal.expectedNonce, afterDeposit.seat.nextNonce);
+  const withdrawn = await executePrepared("finalized market shipping prepareEscrowWithdrawal sole-wallet submission", preparedWithdrawal);
+  const afterPrepared = await readGooseyEscrow(runtime, { marketId: withdrawMarket.marketId, wallet: actors[0].address }, { includeResolution: true });
+  assert(afterPrepared.seat); assert(afterPrepared.finalizedSlot >= BigInt(withdrawn.receipt.slot));
+  assert.deepEqual(afterPrepared.seat, { ...beforePrepared.seat, nextNonce: beforePrepared.seat.nextNonce + 2n });
+  assert.equal(afterPrepared.walletTokenAmount, beforePrepared.walletTokenAmount);
+  assert.equal(afterPrepared.vaultAmount, beforePrepared.vaultAmount);
+  assert.deepEqual(afterPrepared.marketState, beforePrepared.marketState);
+  for (const snapshot of [afterDeposit, afterPrepared]) {
+    assert.equal(snapshot.orderBook?.reservesReconciled, true); assert.equal(snapshot.vaultSurplus, 0n);
+    assert.equal(snapshot.seat?.reservedCash, beforePrepared.seat.reservedCash); assert.equal(snapshot.resolution?.phase, 4);
+  }
+  const finalRows = await state(withdrawMarket, "finalized");
+  assert.deepEqual(finalRows.rows.slice(1), afterWithdraw.rows.slice(1));
+
   const conservationAccounts = await accounts([...walletTokens, ...markets.map(market => market.vault), base.featherMint], "finalized");
   const tokenTotal = conservationAccounts.slice(0, -1).reduce((sum, account) =>
     sum + getTokenDecoder().decode(bytes(account)).amount, 0n);
@@ -536,7 +631,7 @@ configuration, account injection and validator resets are refused.`);
 
   console.log(JSON.stringify({ result: "PASS", scope: "Actual compiled-program YES/NO/VOID resolution RPC lifecycle",
     rpc: endpoint.toString(), genesis, program: PROGRAM, validator: await rpc("getVersion"),
-    transactionCaseCount: receipts.length, finalizedSignature: withdrawalReceipt.signature,
+    transactionCaseCount: receipts.length, finalizedSignature: withdrawn.signature, preparedEvidence,
     funding: "authorized grants -> wallet claims -> wallet-signed deposits -> actual CLOB fills",
     checks: ["mandatory pre-trade resolution", "canonical post-close cleanup",
       ...(earlyResolutionTimingChecked ? ["pre-resolvesAt rejection"] : []), "frozen two-person review",

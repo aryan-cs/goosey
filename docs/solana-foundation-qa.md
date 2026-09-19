@@ -133,3 +133,11 @@ Six shipping nine-account finalized reader snapshots checked the **partially cla
 The winner then withdrew actual SPL feathers, with exact-signature finality for `59yBUH33tsmXar6kkKGQn3XbtxdQXoykvUu9DzVFdb82dy42xREPM7MZo67RuBokLWLiy9Ry4gAgaSyBgFrmtXa4`. Wallet plus all three vault balances reconciled to the unchanged 40,000,000-unit mint supply. Maximum observed CU across these small-market cases was 41,756, not a full-capacity bound.
 
 Remaining: higher-level prepared claim/escrow execution, browser-wallet lifecycle, immutable question/rules admission, reviewer availability, replacement orders, full-capacity runtime stress, indexer recovery, devnet rehearsal and web financial-authority cutover. The on-chain reviewers' real-world judgment remains a trust assumption; the test proves enforcement and accounting, not truth of external outcomes.
+
+### Wallet-prepared payout claim and escrow round trip
+
+The expanded resolution suite passed **127 actual transaction cases** on the same `6222b66e…a93523` artifact, genesis `7Kac1E8N8AiwqiGqYJzi8XNu9YDU6ccvR2iFRJxw4TZx`. Evidence: `/tmp/goosey-solana-runner-0z4lDn/`. It retained all 125 prior behaviors and exercised three shipping prepared-message paths with wallet-only signing and exact-signature finality.
+
+`prepareResolutionClaim` used a payer distinct from the winner; the payer's escrow seat was unchanged, while only the winner received proceeds. In the finalized market, `prepareEscrowDeposit` and `prepareEscrowWithdrawal` moved 123,457 units into and back out of the vault. Final balances matched the starting balances, with exactly two additional owner nonces and no other seat changes. All three callbacks wrote private receipt files before sending; this is local file persistence, not browser crash-recovery proof. Final withdrawal signature: `3XuwqZ1YoYAsURufACiLjGtaKYWPVvLatha7RZiSuqKycv7M7PBmKopi1acZ9LUaDg2pQQ7FooddGj5o3EBQHgr8`, slot 706.
+
+This closes the higher-level claim/escrow execution gate for that artifact. New terms-admission changes, browser-wallet operation, real-user enrollment, devnet and the web cutover still require separate verification.
