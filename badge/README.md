@@ -8,6 +8,8 @@ It preserves the green 320×240 layout and repository launcher icon. A opens a
 market, B returns, left/right selects an outcome, and Start opens settings.
 A on a detail screen currently opens website sign-in instructions, not an order.
 **Website account linking, balances, positions and badge trading are not wired.**
+The required zero-input sign-in flow and its issuer dependency are documented in
+[AUTHENTICATION.md](AUTHENTICATION.md); manual pairing is not the accepted final UX.
 
 ```sh
 python3 badge/scripts/build.py --cloud-url https://getgoosey.vercel.app --output badge/dist-cloud

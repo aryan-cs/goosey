@@ -7,5 +7,5 @@
     "Separate smaller cloud client; only documented font sizes",
     "Validated private-file USB response mailbox and saved snapshot recovery"
   ],
-  "integrationStatus": "Physical upload, three app restarts, public live update, graph and memory checks passed. Account pairing, balances and trading remain unwired; awaiting USB-only versus wireless deployment choice."
+  "integrationStatus": "Physical public USB sync and restart recovery verified. Zero-input account login requires organizer-supported verification of badge identity and registered email. Stock Lua hides Socials email; observed badge-token sync also requires portal or organizer authentication. Account balances and trading remain unwired."
 }
