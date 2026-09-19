@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_DIR="${0:A:h:h}"
-PORT=3100
+PORT=$(node --input-type=module -e 'import { createServer } from "node:net"; const server = createServer(); server.listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });')
 ORIGIN="http://127.0.0.1:${PORT}"
 RUN_DIR="$(mktemp -d /tmp/goosey-e2e.XXXXXX)"
 DB_FILE="${RUN_DIR}/goosey.db"
@@ -11,9 +11,25 @@ COOKIE_JAR_TWO="${RUN_DIR}/cookies-two.txt"
 COOKIE_JAR_ADMIN="${RUN_DIR}/cookies-admin.txt"
 COOKIE_JAR_EXTRA="${RUN_DIR}/cookies-extra.txt"
 SERVER_LOG="${RUN_DIR}/server.log"
+ADMIN_EMAIL="invite-fixture-admin@goosey.test"
+ADMIN_PASSWORD="Invite-fixture-password-only"
+
+# This harness asserts delivery-unavailable behavior. Never inherit a real
+# developer mail transport or let Next reload it from .env for test accounts.
+export SMTP_HOST="" SMTP_PORT="" SMTP_FROM="" SMTP_USER="" SMTP_PASSWORD=""
 
 cd "$PROJECT_DIR"
-cp prisma/dev.db "$DB_FILE"
+touch "$DB_FILE"
+env -u POSTGRES_DATABASE_URL -u POSTGRES_DIRECT_DATABASE_URL \
+  DATABASE_PROVIDER="sqlite" \
+  DATABASE_URL="file:${DB_FILE}" \
+  npx prisma db push --skip-generate >/dev/null
+env -u POSTGRES_DATABASE_URL -u POSTGRES_DIRECT_DATABASE_URL \
+  DATABASE_PROVIDER="sqlite" \
+  DATABASE_URL="file:${DB_FILE}" \
+  ADMIN_EMAIL="$ADMIN_EMAIL" \
+  ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  npx tsx prisma/seed.ts >/dev/null
 
 DATABASE_PROVIDER="sqlite" DATABASE_URL="file:${DB_FILE}" APP_URL="$ORIGIN" NEXT_PUBLIC_APP_URL="$ORIGIN" RATE_LIMIT_KEY_SECRET="$(openssl rand -hex 32)" npm start -- --hostname 127.0.0.1 --port "$PORT" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
@@ -58,14 +74,17 @@ MARKETS=$(curl -fsS "$ORIGIN/api/markets?limit=1")
 MARKET_ID=$(jq -r '.items[0].id' <<<"$MARKETS")
 MARKET_SLUG=$(jq -r '.items[0].slug' <<<"$MARKETS")
 EVENTS=$(curl -fsS "$ORIGIN/api/events?timing=all&limit=10")
-jq -e '.items | (length >= 2 and all(.[]; .markets | length > 0))' <<<"$EVENTS" >/dev/null
+jq -e '.items | (length > 0 and all(.[]; .markets | length > 0))' <<<"$EVENTS" >/dev/null
 [[ "$(jq -r '.items[0] | has("createdById") or has("version")' <<<"$EVENTS")" == "false" ]]
-curl -fsS "$ORIGIN/api/events/hack-the-north-finals" | jq -e '.event.markets | length == 7' >/dev/null
-curl -fsS "$ORIGIN/api/search?q=finalist&limit=5" | jq -e '.markets | length > 0' >/dev/null
+CATALOG_EVENT_SLUG=$(jq -r '.items[0].slug' <<<"$EVENTS")
+CATALOG_EVENT_MARKET_COUNT=$(jq '.items[0].markets | length' <<<"$EVENTS")
+curl -fsS "$ORIGIN/api/events/$CATALOG_EVENT_SLUG" | jq -e --argjson count "$CATALOG_EVENT_MARKET_COUNT" '.event.markets | length == $count' >/dev/null
+CATALOG_SEARCH=$(jq -r '.items[0].shortTitle | @uri' <<<"$MARKETS")
+curl -fsS "$ORIGIN/api/search?q=$CATALOG_SEARCH&limit=5" | jq -e --arg id "$MARKET_ID" '.markets | any(.[]; .id == $id)' >/dev/null
 curl -fsS "$ORIGIN/api/calendar" | jq -e '(.events | length) > 0 and (.markets | length) > 0' >/dev/null
 curl -fsS "$ORIGIN/api/discovery" | jq -e '(.trending | length) > 0 and (.newest | length) > 0 and (.closingSoon | length) > 0' >/dev/null
 
-curl -fsS -c "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"email":"invite-fixture-admin@goosey.test","password":"Invite-fixture-password-only"}' "$ORIGIN/api/auth/login" | jq -e '.user.role == "ADMIN"' >/dev/null
+curl -fsS -c "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" "$ORIGIN/api/auth/login" | jq -e '.user.role == "ADMIN"' >/dev/null
 [[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" "$ORIGIN/api/admin/audit-logs")" == "403" ]]
 curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/audit-logs?limit=10" | jq -e '.items | type == "array"' >/dev/null
 EVENT_KEY="smoke-event-${RANDOM}-$$"
@@ -88,6 +107,14 @@ ADMIN_MARKET_SLUG="smoke-admin-market-${RANDOM}-$$"
 ADMIN_MARKET_BODY="{\"slug\":\"$ADMIN_MARKET_SLUG\",\"title\":\"Will the isolated API smoke market resolve correctly?\",\"shortTitle\":\"Smoke market resolves?\",\"description\":\"A temporary ungrouped contract used to verify event membership behavior.\",\"rules\":\"Resolves YES only when the isolated API smoke assertions all complete successfully.\",\"resolutionSource\":\"Automated API integration test output\",\"category\":\"Testing\",\"status\":\"OPEN\",\"featured\":false,\"color\":\"blue\",\"icon\":\"sparkles\",\"closesAt\":\"2030-09-18T20:00:00.000Z\",\"resolvesAt\":\"2030-09-18T22:00:00.000Z\",\"liquidityParameter\":40,\"payoutMilli\":\"100000\",\"feeBps\":0}"
 CREATED_MARKET=$(curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $ADMIN_MARKET_KEY" -H 'Content-Type: application/json' -d "$ADMIN_MARKET_BODY" "$ORIGIN/api/admin/markets")
 ADMIN_MARKET_ID=$(jq -r '.market.id' <<<"$CREATED_MARKET")
+BOOK_MARKET_SLUG="smoke-order-book-${RANDOM}-$$"
+BOOK_MARKET_KEY="smoke-order-book-${RANDOM}-$$"
+BOOK_MARKET_BODY=$(jq --arg slug "$BOOK_MARKET_SLUG" '. + {slug: $slug, pricingModel: "ORDER_BOOK"}' <<<"$ADMIN_MARKET_BODY")
+BOOK_MARKET=$(curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $BOOK_MARKET_KEY" -H 'Content-Type: application/json' -d "$BOOK_MARKET_BODY" "$ORIGIN/api/admin/markets")
+jq -e '.market.pricingModel == "ORDER_BOOK" and .subsidyMilli == "0" and .replayed == false' <<<"$BOOK_MARKET" >/dev/null
+curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H "Idempotency-Key: $BOOK_MARKET_KEY" -H 'Content-Type: application/json' -d "$BOOK_MARKET_BODY" "$ORIGIN/api/admin/markets" | jq -e --arg id "$(jq -r '.market.id' <<<"$BOOK_MARKET")" '.market.id == $id and .replayed == true and .subsidyMilli == "0"' >/dev/null
+curl -fsS "$ORIGIN/api/markets/$BOOK_MARKET_SLUG" | jq -e '.probabilityYesBps == null and .probabilitySource == "NONE" and (.priceHistory | length) == 0' >/dev/null
+curl -fsS "$ORIGIN/api/v1/markets/$BOOK_MARKET_SLUG/orderbook" | jq -e '(.bids | length) == 0 and (.asks | length) == 0' >/dev/null
 curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"expectedMarketVersion":0,"expectedEventVersion":1}' "$ORIGIN/api/admin/events/$EVENT_ID/markets/$ADMIN_MARKET_ID/attach" | jq -e --arg event "$EVENT_ID" '.market.eventId == $event and .market.version == 1 and .eventVersion == 2 and .replayed == false' >/dev/null
 curl -fsS -b "$COOKIE_JAR_ADMIN" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"expectedMarketVersion":0,"expectedEventVersion":1}' "$ORIGIN/api/admin/events/$EVENT_ID/markets/$ADMIN_MARKET_ID/attach" | jq -e '.market.version == 1 and .eventVersion == 2 and .replayed == true' >/dev/null
 curl -fsS "$ORIGIN/api/events/$EVENT_SLUG" | jq -e --arg slug "$ADMIN_MARKET_SLUG" '.event.markets | any(.[]; .slug == $slug)' >/dev/null
@@ -123,6 +150,10 @@ jq -e --arg executedAt "$(jq -r '.trade.createdAt' <<<"$TRADE")" '
 
 PORTFOLIO=$(curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/portfolio")
 [[ "$(jq -r '.positions | length' <<<"$PORTFOLIO")" == "1" ]]
+UNIFIED_HISTORY=$(curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/portfolio/history?limit=1")
+jq -e '.items | length == 1' <<<"$UNIFIED_HISTORY" >/dev/null
+jq -e --arg amount "$(jq -r '.trades[0].amountMilli' <<<"$PORTFOLIO")" --arg fee "$(jq -r '.trades[0].feeMilli' <<<"$PORTFOLIO")" '.items[0].source == "LMSR" and .items[0].amountMilli == $amount and .items[0].feeMilli == $fee and .nextCursor == null' <<<"$UNIFIED_HISTORY" >/dev/null
+[[ "$(curl -sS -o /dev/null -w '%{http_code}' "$ORIGIN/api/portfolio/history")" == "401" ]]
 NOTIFICATIONS=$(curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications")
 [[ "$(jq -r '.unreadCount' <<<"$NOTIFICATIONS")" == "1" ]]
 [[ "$(jq -r '.items[0].type' <<<"$NOTIFICATIONS")" == "TRADE_CONFIRMED" ]]
@@ -172,4 +203,14 @@ curl -fsS -b "$COOKIE_JAR_EXTRA" -X DELETE -H "Origin: $ORIGIN" -H 'Content-Type
 [[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" "$ORIGIN/api/me")" == "401" ]]
 curl -fsS -b "$COOKIE_JAR_EXTRA" "$ORIGIN/api/me" | jq -e '.user.email != null' >/dev/null
 
-echo "Goosey API E2E passed: discovery rails, grouped events, admin events and audit export, recovery-route failure handling, one-time invitations, two-account registration, session isolation, authz, quote, atomic trade, idempotent replay, portfolio, notifications, comment ownership and reporting, privacy controls, watchlist, suggestions, origin defense, request IDs, and malformed-body handling."
+# Snapshot the still-running application's actual state, then restore into a
+# separate file. Reconciliation may set SQLite connection pragmas, so never run
+# it against the retained archive itself.
+node --import tsx scripts/backup-sqlite.ts --source "$DB_FILE" --output "$RUN_DIR/archive.db"
+node --import tsx scripts/backup-sqlite.ts --source "$RUN_DIR/archive.db" --output "$RUN_DIR/restored.db"
+node --import tsx scripts/verify-sqlite-restore.ts --source "$RUN_DIR/archive.db" --restored "$RUN_DIR/restored.db"
+env -u POSTGRES_DATABASE_URL -u POSTGRES_DIRECT_DATABASE_URL \
+  DATABASE_PROVIDER=sqlite DATABASE_URL="file:$RUN_DIR/restored.db" \
+  node --import tsx scripts/reconcile.ts
+
+echo "Goosey API E2E passed: discovery rails, grouped events, admin events and audit export, recovery-route failure handling, one-time invitations, two-account registration, session isolation, authz, quote, atomic trade, idempotent replay, portfolio, notifications, comment ownership and reporting, privacy controls, watchlist, suggestions, origin defense, request IDs, malformed-body handling, and live SQLite backup/restore reconciliation."
