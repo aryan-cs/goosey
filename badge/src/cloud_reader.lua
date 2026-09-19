@@ -1,10 +1,9 @@
 -- Public USB mailbox only. This is never an account or order channel.
-local function readCloudFrame(data,collect)
+local function readCloudFrame(data)
   if type(data)~="string" or #data>16000 or data:sub(-1)~="\n" then return nil end
   local iter=data:gmatch("([^\n]*)\n")
   local lineCount=0
   local function nextRow()
-    if collect then collect() end
     local line=iter()
     if not line then return nil end
     lineCount=lineCount+1

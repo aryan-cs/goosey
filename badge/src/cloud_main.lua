@@ -24,10 +24,10 @@ local function focus(x,y,w,h)
   mark:set_pos(x,y);mark:set_size(w,h);mark:hidden(false)
 end
 local function refresh(initial)
-  for i=1,16 do badge.sys.gc_step() end
+  badge.sys.gc_step()
   local data=badge.fs.read("appdata/market_snapshot.txt")
   if type(data)=="string" and cloud.generation and data:match("^GS1\t(%d+)\t")==cloud.generation then return false end
-  local nextCloud=readCloudFrame(data,badge.sys.gc_step)
+  local nextCloud=readCloudFrame(data)
   if not nextCloud or nextCloud.generation==cloud.generation then return false end
   if cloud.generation and (#nextCloud.generation<#cloud.generation or (#nextCloud.generation==#cloud.generation and nextCloud.generation<cloud.generation)) then return false end
   local slug=cloud.markets[selected] and cloud.markets[selected].slug
