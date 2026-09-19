@@ -347,8 +347,8 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .market-card-featured { padding: 22px; border-radius: var(--radius-lg); }
 .market-card-topline, .status-row, .market-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .market-title-link h3 { margin: 10px 0; min-height: 52px; font: 600 20px/26px var(--font-display); letter-spacing: 0; }
-.market-title-link h3 { text-decoration: underline; text-decoration-color: transparent; text-decoration-thickness: 2px; text-underline-offset: 3px; }
-.market-title-link:hover h3 { text-decoration-color: var(--feather-300); }
+.market-title-link h3 span { padding-bottom: 3px; background-image: linear-gradient(var(--feather-300), var(--feather-300)); background-position: left bottom; background-repeat: no-repeat; background-size: 0% 2px; -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background-size var(--motion-base) var(--ease-emphasized); }
+.market-title-link:hover h3 span, .market-title-link:focus-visible h3 span { background-size: 100% 2px; }
 .status-row { justify-content: flex-start; color: var(--ink-muted); font-size: 12px; }
 .status-row > span { display: flex; align-items: center; gap: 5px; }
 .feather-icon { display: inline-block; vertical-align: -.15em; flex-shrink: 0; }

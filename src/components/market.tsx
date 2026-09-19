@@ -62,7 +62,7 @@ export function MarketCard({ market, priority = false }: { market: MarketSummary
         <span className="eyebrow">{market.category}</span>
         <WatchlistButton marketId={market.id} icon={<Bookmark size={17} />} />
       </div>
-      <Link className="market-title-link" href={`/markets/${market.slug}`}><h3>{market.title}</h3></Link>
+      <Link className="market-title-link" href={`/markets/${market.slug}`}><h3><span>{market.title}</span></h3></Link>
       <div className="status-row">
         <MarketStatusLabel status={market.status} />
         <span><Clock3 size={14} /> {market.closesAt}</span>
