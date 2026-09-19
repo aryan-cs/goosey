@@ -13,7 +13,7 @@ import { getAddressDecoder } from "@solana/kit";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const program = "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q";
-const help = `Usage: node --import tsx scripts/solana-program-e2e-isolated.ts [--suite foundation|exchange]
+const help = `Usage: node --import tsx scripts/solana-program-e2e-isolated.ts [--suite foundation|exchange|cancellation]
 
 Runs the actual compiled Goosey program on a NEW loopback validator and ledger.
 No build, public network, existing wallet, shared validator reset, or deployment.
@@ -40,9 +40,10 @@ async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) { console.log(help); return; }
   const argsIn = process.argv.slice(2);
   assert(argsIn.length === 0 || (argsIn.length === 2 && argsIn[0] === "--suite"
-    && ["foundation", "exchange"].includes(argsIn[1])), "Unknown arguments; use --help");
+    && ["foundation", "exchange", "cancellation"].includes(argsIn[1])), "Unknown arguments; use --help");
   const selectedSuite = argsIn[1] ?? "foundation";
-  const suiteScript = selectedSuite === "exchange" ? "solana-exchange-e2e.ts" : "solana-program-e2e.ts";
+  const suiteScript = selectedSuite === "exchange" ? "solana-exchange-e2e.ts"
+    : selectedSuite === "cancellation" ? "solana-cancellation-e2e.ts" : "solana-program-e2e.ts";
   const validatorBin = process.env.GOOSEY_SOLANA_VALIDATOR_BIN
     ?? (process.env.GOOSEY_SOLANA_BIN_DIR ? path.join(process.env.GOOSEY_SOLANA_BIN_DIR, "solana-test-validator") : "solana-test-validator");
   const artifact = await realpath(process.env.GOOSEY_SOLANA_PROGRAM_ARTIFACT ?? path.join(root, "chain/target/deploy/goosey_exchange.so"));
