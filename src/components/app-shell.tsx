@@ -190,7 +190,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
           <Link href="/" aria-current={isCurrentPath(pathname, "/") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Explore</Link>
           <Link href="/markets" aria-current={isCurrentPath(pathname, "/markets") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Markets</Link>
           <SearchLauncher className="button mobile-search-trigger" onOpen={() => setMoreOpen(false)}>Search</SearchLauncher>
-          <Link href="/leaderboard" aria-current={isCurrentPath(pathname, "/leaderboard") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Ranks</Link>
+          <Link href="/leaderboard" aria-current={isCurrentPath(pathname, "/leaderboard") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Leaderboard</Link>
           <Link href="/community" aria-current={isCurrentPath(pathname, "/community") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Social</Link>
           {signedIn ? verificationRequired ? <>
             <Link className="mobile-more-primary" href="/verify-email" onClick={() => setMoreOpen(false)}>Verify email</Link>

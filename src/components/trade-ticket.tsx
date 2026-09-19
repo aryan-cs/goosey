@@ -148,7 +148,20 @@ export function TradeTicket({
         {state === "editing" && <div className="quick-values" aria-label="Quick quantities">{[1, 5, 10, 25].map((value) => <button onClick={() => setQuantity(value)} key={value}>{value}</button>)}</div>}
         </div>
         <dl className="trade-breakdown">
-          {quote ? <><div><dt>Average price</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.averagePriceMilli)}</dd></div><div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% {outcomeLabel ?? "Yes"}</dd></div><div><dt>Fee</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.feeMilli)}</dd></div>{action === "BUY" && <div><dt>Potential profit if correct</dt><dd><FeatherIcon width={15} height={15} /> {featherText(potentialProfitMilli)}</dd></div>}<div className="trade-total"><dt>{action === "BUY" ? "Total cost" : "You receive"}</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div></> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div><dt>Maximum payout</dt><dd><FeatherIcon width={15} height={15} /> {estimatedPayout}</dd></div>{balanceMilli !== undefined && <div><dt>Available</dt><dd><FeatherIcon width={15} height={15} /> {featherText(balanceMilli)}</dd></div>}</>}
+          {quote ? <>
+            <div><dt>Average price</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.averagePriceMilli)}</dd></div>
+            <div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% {outcomeLabel ?? "Yes"}</dd></div>
+            <div><dt>Fee</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.feeMilli)}</dd></div>
+            {action === "BUY" ? <>
+              <div className="trade-total"><dt>Total cost</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div>
+              <div><dt>If correct, receive</dt><dd><FeatherIcon width={15} height={15} /> {featherText(maxPayoutMilli)}</dd></div>
+              <div><dt>Net profit if correct</dt><dd><FeatherIcon width={15} height={15} /> {featherText(potentialProfitMilli)}</dd></div>
+            </> : <div className="trade-total"><dt>You receive</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div>}
+          </> : <>
+            <div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div>
+            <div><dt>If correct, receive</dt><dd><FeatherIcon width={15} height={15} /> {estimatedPayout}</dd></div>
+            {balanceMilli !== undefined && <div><dt>Available</dt><dd><FeatherIcon width={15} height={15} /> {featherText(balanceMilli)}</dd></div>}
+          </>}
         </dl>
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
         {state === "review" && <p className="review-note">Check the price before you confirm. Quotes can change or expire.</p>}
