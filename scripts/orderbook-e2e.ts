@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 
 import { ApiError } from "../src/lib/market-service";
 import { listUserFills, parseListFillsQuery } from "../src/lib/fill-service";
-import { cancelOrder, expireOrders, placeOrder, replaceOrder } from "../src/lib/order-exchange";
+import { cancelAllOrders, cancelOrder, expireOrders, placeOrder, replaceOrder } from "../src/lib/order-exchange";
 import { listUserOrders, parseListOrdersQuery } from "../src/lib/order-service";
 
 const db = new PrismaClient();
@@ -385,6 +385,34 @@ async function main() {
     cursor = page.nextCursor;
   } while (cursor);
   assert(seenFillIds.size === expectedAliceFillCount, "Private fill history did not terminate after every Alice fill");
+
+  await placeOrder({
+    userId: alice.id,
+    idempotencyKey: `alice-bulk-second-${suffix}`,
+    request: {
+      marketId: market.id,
+      clientOrderId: `alice-bulk-second-client-${suffix}`,
+      outcome: "YES",
+      action: "BUY",
+      limitPriceMilli: "20000",
+      quantity: 1,
+      timeInForce: "GTC",
+    },
+  });
+
+  const bulkCancelInput = {
+    userId: alice.id,
+    idempotencyKey: `alice-bulk-cancel-${suffix}`,
+    request: { marketSlug: market.slug },
+  };
+  const bulkCanceled = await cancelAllOrders(bulkCancelInput) as { canceledCount: number; canceledQuantity: number };
+  const bulkReplay = await cancelAllOrders(bulkCancelInput);
+  assert(JSON.stringify(bulkCanceled) === JSON.stringify(bulkReplay), "Bulk cancellation replay changed its response");
+  assert(bulkCanceled.canceledCount === 2 && bulkCanceled.canceledQuantity === 3, "Bulk cancellation missed Alice's live orders");
+  const aliceLiveOrders = await db.marketOrder.count({
+    where: { userId: alice.id, status: { in: ["OPEN", "PARTIALLY_FILLED"] }, remainingQuantity: { gt: 0 } },
+  });
+  assert(aliceLiveOrders === 0, "Bulk cancellation left an Alice order live");
 
   const journals = await db.journalEntry.findMany({ include: { postings: true } });
   assert(journals.every((journal) => journal.postings.length >= 2 && journal.postings.reduce((sum, posting) => sum + posting.amountMilli, 0n) === 0n), "A journal failed reconciliation");

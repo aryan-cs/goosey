@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readJsonObject } from "@/lib/http";
-import { placeOrder } from "@/lib/order-exchange";
+import { cancelAllOrders, placeOrder } from "@/lib/order-exchange";
 import { ApiError, apiErrorResponse, jsonResponse, parseIdempotencyKey, prisma, requireUser } from "@/lib/market-service";
 import { listUserOrders, parseListOrdersQuery } from "@/lib/order-service";
 
@@ -66,6 +66,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       "accepted" in result &&
       result.accepted === false;
     return privateNoStore(jsonResponse(result, { status: rejected ? 422 : 201 }));
+  } catch (error) {
+    return privateNoStore(apiErrorResponse(error));
+  }
+}
+
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
+  try {
+    const user = await requireUser(request, true);
+    const idempotencyKey = parseIdempotencyKey(request);
+    const body = await readJsonObject(request);
+    const result = await cancelAllOrders({ userId: user.id, idempotencyKey, request: body });
+    return privateNoStore(jsonResponse(result));
   } catch (error) {
     return privateNoStore(apiErrorResponse(error));
   }
