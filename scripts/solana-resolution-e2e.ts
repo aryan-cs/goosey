@@ -41,6 +41,9 @@ import { prepareEscrowDeposit, prepareEscrowWithdrawal } from "../src/lib/solana
 import { prepareResolutionClaim } from "../src/lib/solana/prepare-resolution-claim";
 import { submitSignedWalletTransaction, type TransferSubmission } from "../src/lib/solana/submit-transfer";
 import type { PreparedWalletTransaction } from "../src/lib/solana/wallet-transaction";
+import { encodeMarketTerms, hashMarketTerms, verifyMarketTerms, type MarketTerms } from "../src/lib/solana/market-terms";
+import { buildInitializeMarketTermsInstruction, buildAcceptMarketTermsInstruction,
+  buildSealMarketTermsInstruction, readMarketTermsAccount } from "../src/lib/solana/market-terms-client";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -57,7 +60,7 @@ type Row = { available: bigint; reserved: bigint; yes: bigint; no: bigint; reser
 type Order = { id: bigint; owner: number; price: bigint; quantity: bigint; chain: bigint;
   side: "BID" | "ASK"; heapIndex: number; action: "BUY" | "SELL"; outcome: "YES" | "NO" };
 type Market = { marketId: bigint; market: Address; seats: Address; vault: Address; book: Address;
-  resolution: Address; payout: bigint; closesAt: bigint; resolvesAt: bigint; outcome: ResolutionOutcome };
+  resolution: Address; terms: Address; payout: bigint; closesAt: bigint; resolvesAt: bigint; outcome: ResolutionOutcome };
 
 async function main() {
   if (process.argv.includes("--help")) {
@@ -210,7 +213,8 @@ configuration, account injection and validator resets are refused.`);
     watched.add(grant.enrollment); watched.add(grant.identity);
   }
 
-  const commonClose = (await chainTime()) + 150n;
+  const observationStart = await chainTime();
+  const commonClose = observationStart + 150n;
   const commonResolve = commonClose + 20n;
   const runtime = { cluster: "localnet" as const, rpcUrl: endpoint.toString(), genesisHash: genesis, programAddress: PROGRAM };
   const preparedEvidence: Record<string, unknown>[] = [];
@@ -263,6 +267,12 @@ configuration, account injection and validator resets are refused.`);
     return { signature, receipt, send };
   }
   const phaseThreeReaderEvidence: Record<string, unknown>[] = [];
+  const termsEvidence: Record<string, unknown>[] = [];
+  // Retain the exact local source referenced by the manifest's snapshot hash.
+  // The HTTPS locator is not a claim that this unpublished revision is hosted.
+  const testSource = await readFile(new URL(import.meta.url));
+  const testSourceHash = createHash("sha256").update(testSource).digest("hex");
+  await writeFile(path.join(path.dirname(adminPath), "resolution-suite-source.ts"), testSource, { flag: "wx", mode: 0o600 });
   let earlyResolutionTimingChecked = false;
   async function createMarket(marketId: bigint, payout: bigint, outcome: ResolutionOutcome): Promise<Market> {
     const created = await buildCreateMarketInstructions({ programAddress: PROGRAM, marketId, admin,
@@ -290,10 +300,77 @@ configuration, account injection and validator resets are refused.`);
     await execute(`finalize ${outcome} canonical book`, [await setup({ kind: "finalize" })]);
     const resolution = await buildInitializeResolutionInstruction({ programAddress: PROGRAM, marketId, seats: created.seats,
       creator: admin, proposer: reviewers[0].address, approver: reviewers[1].address });
+    const binding = { cluster: runtime.cluster, genesisHash: runtime.genesisHash, program: PROGRAM, config: base.config,
+      market: created.market, marketId: marketId.toString(), creator: admin.address, featherMint: base.featherMint };
+    const economics = { payoutMilli: payout.toString(), feeBps: FEE_BPS.toString(), closesAt: commonClose.toString(),
+      resolvesAt: commonResolve.toString(), decimals: 3 as const };
+    const proposer = { wallet: reviewers[0].address, enrollment: resolution.proposerEnrollment };
+    const approver = { wallet: reviewers[1].address, enrollment: resolution.approverEnrollment };
+    const manifest: MarketTerms = { version: 1, binding,
+      question: `LOCAL TEST ONLY: exercise the ${outcome} resolution branch for isolated market ${marketId}?`,
+      rules: { yes: "YES only when this isolated suite assigns the YES branch. This is not a real-world prediction.",
+        no: "NO only when this isolated suite assigns the NO branch. This is not a real-world prediction.",
+        void: "VOID only when this isolated suite assigns the VOID branch, including its odd-unit rounding checks." },
+      observation: { startsAt: observationStart.toString(), endsAt: commonClose.toString(), timezone: "UTC" },
+      sources: [{ id: "isolated-suite", uri: "https://github.com/aryan-cs/goosey/blob/master/scripts/solana-resolution-e2e.ts",
+        selection: `Use the retained resolution-suite-source.ts with the committed snapshot hash and this run's market ${marketId} branch ${outcome}. The URL is a repository locator, not proof this local revision is published.`,
+        snapshotSha256: testSourceHash }],
+      sourcePolicy: { priority: "array-order-first-authoritative", missing: "Abort the local test if the retained exact source snapshot is missing; do not invent an outcome.",
+        revisions: "Only the retained snapshot bytes apply. Later repository revisions cannot replace this commitment." },
+      economics, oracle: { kind: "two-reviewer-no-fallback-v1", proposer, approver,
+        unavailable: "wait-for-designated-reviewers", replacement: "none", automaticVoid: false } };
+    const manifestBytes = encodeMarketTerms(manifest), digestHex = await hashMarketTerms(manifestBytes);
+    const digest = Uint8Array.from(Buffer.from(digestHex, "hex"));
+    const manifestFile = path.join(path.dirname(adminPath), `market-${marketId}-terms.json`);
+    await writeFile(manifestFile, manifestBytes, { flag: "wx", mode: 0o600 });
+    const terms = await buildInitializeMarketTermsInstruction({ programAddress: PROGRAM, marketId, seats: created.seats,
+      creator: admin, proposer: proposer.wallet, approver: approver.wallet, version: 1, digest, manifestLength: manifestBytes.length });
+    assert.equal(resolution.instruction.accounts[9].address, terms.terms);
+    assert.equal(resolution.instruction.accounts[9].role, 0);
+    watched.add(terms.terms);
+    watched.add(resolution.resolution);
+    await execute(`missing ${outcome} terms blocks resolution admission`, [resolution.instruction], {});
+    await execute(`initialize canonical test-only ${outcome} terms`, [terms.instruction]);
+    await execute(`unsealed ${outcome} terms blocks resolution admission`, [resolution.instruction], {});
+    const termsBinding = { programAddress: PROGRAM, marketId, config: base.config, market: created.market,
+      creator: admin.address, proposer, approver };
+    const readTerms = async () => {
+      const [account] = await accounts([terms.terms]); assert(account);
+      const decoded = await readMarketTermsAccount(termsBinding, { address: terms.terms, owner: account.owner,
+        executable: account.executable, data: bytes(account) });
+      assert.equal(Buffer.from(decoded.digest).toString("hex"), digestHex);
+      assert.equal(decoded.manifestLength, manifestBytes.length);
+      return decoded;
+    };
+    assert.equal((await readTerms()).acceptanceBits, 0);
+    for (const [index, reviewer] of reviewers.entries()) {
+      // Each designated signer retrieves and verifies the exact retained bytes
+      // against the actual commitment before authorizing its acceptance.
+      const observed = await readTerms();
+      await verifyMarketTerms(await readFile(manifestFile), { digest: Buffer.from(observed.digest).toString("hex"),
+        binding, economics, proposer: observed.proposer, approver: observed.approver });
+      const accepted = await buildAcceptMarketTermsInstruction({ programAddress: PROGRAM, marketId,
+        seats: created.seats, reviewer, expectedDigest: observed.digest });
+      await execute(`designated ${outcome} reviewer ${index} accepts exact terms digest`, [accepted.instruction]);
+      const afterAcceptance = await readTerms();
+      assert.equal(afterAcceptance.acceptanceBits, index === 0 ? 1 : 3); assert.equal(afterAcceptance.sealed, false);
+    }
+    const seal = await buildSealMarketTermsInstruction({ programAddress: PROGRAM, marketId, seats: created.seats,
+      creator: admin, expectedDigest: digest });
+    await execute(`creator seals independently accepted ${outcome} terms`, [seal.instruction]);
+    assert.equal((await readTerms()).sealed, true);
+    if (termsEvidence.length > 0) {
+      const otherTerms = address(String(termsEvidence[0].terms));
+      const mismatched = { ...resolution.instruction, accounts: resolution.instruction.accounts.map((meta, index) =>
+        index === 9 ? { ...meta, address: otherTerms } : meta) };
+      await execute(`cross-market sealed terms block ${outcome} resolution admission`, [mismatched], {});
+    }
+    termsEvidence.push({ marketId, terms: terms.terms, digest: digestHex, manifestLength: manifestBytes.length,
+      sourceSnapshotSha256: testSourceHash, acceptanceBits: 3, sealed: true, testOnly: true });
     watched.add(resolution.resolution);
     await execute(`freeze ${outcome} reviewers before first trade`, [resolution.instruction]);
     return { marketId, market: created.market, seats: created.seats, vault: created.vault, book,
-      resolution: resolution.resolution, payout, closesAt: commonClose, resolvesAt: commonResolve, outcome };
+      resolution: resolution.resolution, terms: terms.terms, payout, closesAt: commonClose, resolvesAt: commonResolve, outcome };
   }
 
   const markets = [
@@ -381,6 +458,8 @@ configuration, account injection and validator resets are refused.`);
     const before = await state(market);
     const built = await buildPlaceOrderInstruction({ programAddress: PROGRAM, marketId: market.marketId,
       seats: market.seats, wallet: actors[owner], expectedNonce: before.rows[owner].nonce, ...input, touches: 16 });
+    assert.equal(built.instruction.accounts[8].address, market.terms);
+    assert.equal(built.instruction.accounts[8].role, 0);
     await execute(`${expected ? "reject" : "place"} ${market.outcome} ${input.action} ${input.outcome} owner${owner}`,
       [built.instruction], expected);
     const after = await state(market);
@@ -631,7 +710,7 @@ configuration, account injection and validator resets are refused.`);
 
   console.log(JSON.stringify({ result: "PASS", scope: "Actual compiled-program YES/NO/VOID resolution RPC lifecycle",
     rpc: endpoint.toString(), genesis, program: PROGRAM, validator: await rpc("getVersion"),
-    transactionCaseCount: receipts.length, finalizedSignature: withdrawn.signature, preparedEvidence,
+    transactionCaseCount: receipts.length, finalizedSignature: withdrawn.signature, preparedEvidence, termsEvidence,
     funding: "authorized grants -> wallet claims -> wallet-signed deposits -> actual CLOB fills",
     checks: ["mandatory pre-trade resolution", "canonical post-close cleanup",
       ...(earlyResolutionTimingChecked ? ["pre-resolvesAt rejection"] : []), "frozen two-person review",

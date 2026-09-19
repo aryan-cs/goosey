@@ -1,13 +1,48 @@
 # Canonical market terms v1
 
 The codec, client builders/decoder and Rust initialize/accept/seal handlers are
-implemented. The handlers are wired into the program, with 41 passing crate
-tests including eight terms tests. They are **not yet a mandatory on-chain
-admission rule**. Existing Market/Seats layouts and trading ABIs are unchanged.
+implemented. The program now requires canonical sealed terms before new resolution
+activation and order placement, with 42 passing crate tests including nine terms
+tests. Activation binds both frozen reviewer identities to the accepted terms;
+placement rechecks that binding and prohibits either designated reviewer from
+trading. Existing Market/Seats layouts are unchanged. PlaceOrder appends terms as
+account nine; initialize_resolution appends terms after System as account ten.
 No fixture in the unit tests is a live market or source-availability claim.
 The integrated program built successfully for SBPFv3 with SHA-256
-`ec0a147a7b8474362dc9f65f7e140517149c0bf9bdb7e8a09814596864dd5d37`.
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
 This is compilation evidence, not validator execution or a web-backend cutover.
+
+Mandatory-admission runtime regression subsequently passed **153 exchange cases**
+(`/tmp/goosey-solana-runner-vNhlyf/`, genesis
+`8rQMw3NndpLMCdnkCjDsypkV1NCcLSNKJ2efAKjmyMEq`) and **112 cancellation cases**
+(`/tmp/goosey-solana-runner-jW2eCg/`, genesis
+`H2Ww2FpTWFi1RRCuSfrGgzGmXGbS26S2forXGBevUYtm`) against that exact artifact.
+These executed actual initialization, both signatures, sealing, missing/unsealed/
+foreign terms rejection, frozen-role mismatch, digest mismatch, and rejection of
+both reviewers' orders using their real registered seats. The exchange suite's
+18 finalized snapshots now include terms in the same ten-account batch; the
+shipping prepared order finalized at slot 355. Cancellation retained all 94
+prior cases plus eight terms setup transactions and ten admission cases.
+Canonical manifests are clearly labeled local test specifications, not live
+Hack the North market content. These checks do not prove browser display,
+independent content availability, legacy migration, or web financial cutover.
+
+The resolution regression also passed **147 actual transaction cases** on this
+same artifact (`/tmp/goosey-solana-runner-ADao7p/`, genesis
+`8N4LAmwmtdVrxMac4WW6Y7AqadJ3q76S6fBfa2CnuUCR`). All 127 earlier YES/NO/VOID,
+prepared claim, and deposit/withdrawal cases remain, plus 20 terms setup and
+admission cases. Each reviewer verifies retained canonical test-manifest bytes
+against the actual commitment before signing; missing, unsealed, and foreign
+market terms fail activation. This does not add a new browser-flow proof.
+
+The dedicated `npm run test:chain:terms` suite independently passed **72 actual
+transaction cases** with the same binary after loader/authority preconditions
+were strengthened (`/tmp/goosey-solana-runner-JqUQVH/`, genesis
+`3trMSeL2awhkWCaEDhsDfkQjAM4Y6zLJRL6ifoBfyp22`). It verifies exact commitment
+bytes, separate reviewer signatures, one-way sealing, rejected reinitialization,
+post-close rejection, reviewer trading exclusion and ordinary-user admission.
+A finalized ten-account read observes matching market/book/resolution/terms.
+This disposable isolated ledger is not the shared development deployment.
 
 The TypeScript implementation also includes unsigned initialize/accept/seal
 builders and a strict 240-byte account decoder. `readGooseyEscrow` can request
@@ -16,8 +51,10 @@ the book and resolution. It validates the commitment against that batch's market
 and frozen reviewer identities; a missing or malformed requested commitment
 fails, without a legacy fallback. It reports unsealed commitments as unsealed.
 This does not fetch or verify the manifest content, nor prove that the deployed
-program requires a commitment before trading. The existing callers remain on
-their explicitly selected read contracts until the program admission migration.
+program requires a commitment before trading. `prepareOrder` now requires the
+ten-account read, sealed dual acceptance and matching reviewers. Other read-only
+callers may explicitly request legacy snapshots; they cannot bypass program
+admission by omitting terms from a transaction.
 
 ## Exact bytes
 
@@ -65,7 +102,7 @@ Obtain expectations from a coherent finalized chain snapshot—not this same
 untrusted document. No RPC, signature, eligibility, source truth or finality is
 proved by a successful codec call.
 
-## Terms account ABI and pending admission integration
+## Terms account ABI and admission integration
 
 Keep Market/Seats/vault layouts unchanged. Canonical PDA seeds:
 `[b"market_terms", market_pubkey_bytes]` under the exchange program.
@@ -94,12 +131,15 @@ Implemented handlers (actual validator execution is still a verification gate):
 
 Reviewers must retrieve and validate the manifest before signing acceptance;
 on-chain signatures bind their consent to the commitment, not objective truth.
-Add canonical sealed terms readonly to initialize_resolution and all new-order
-admission (including replacement) and result proposal/review contexts. Cross-check
-the frozen reviewer identities and market. Bind proposal records/fingerprints to
-the digest. Finalized readers must batch terms with market/book/resolution;
-client preparation verifies retrieved bytes against that account before approval.
-Re-measure message size/CU; do not assume the manifest fits in one transaction.
+Canonical sealed terms are readonly in initialize_resolution and place_order,
+with market and frozen reviewer equality enforced. The manifest commitment is
+immutable for that market PDA. Existing proposal/review, payout, withdrawal and
+cancellation instructions remain available to legacy markets; a missing terms
+account must never be displayed as verified rules. Any future replacement-order
+instruction must apply the same admission guard. Finalized readers batch terms
+with market/book/resolution. Fetching and validating retained manifest bytes in
+the UI before approval remains an integration gate. Re-measure message size/CU;
+do not assume the manifest fits in one transaction.
 
 No-fallback policy is explicit: designated proposer plus distinct approver,
 wait if unavailable, no replacement and no automatic timeout VOID. Objective VOID

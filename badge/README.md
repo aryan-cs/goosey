@@ -214,3 +214,7 @@ balances and holdings are read unchanged; new positions start at zero, and the
 next successful trade saves the expanded record. The initial three-slug prefix
 and full append-only order are checked at build time. No live database is changed
 by a build, and the seed does not remove existing markets.
+
+### September 19 catalog compatibility (0.10.1)
+
+The USB exporter fetches up to 50 database catalog records, then enforces the existing 16-market Lua memory bound. It omits only the explicitly retired original/first-dance contracts when PAUSED with zero volume and zero traders. Any such contract with activity stays in the snapshot. The verified production snapshot contains 14 markets, including the new independent dances. A larger remaining catalog still fails explicitly rather than silently truncating. No change to wallet data, server rules, or authentication; this release has not been flashed or memory-tested on hardware.

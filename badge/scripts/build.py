@@ -35,7 +35,7 @@ code = code.replace('__CLOUD_READER__', 'local readCloudFrame=require("cloud_rea
 # literals and statement boundaries intact; smaller source reduces load buffers.
 code = '\n'.join(line.lstrip() for line in code.splitlines()
                  if line.strip() and not line.lstrip().startswith('--')) + '\n'
-manifest = 'slug=goosey_base\nname=Goosey\nicon=GSY\napi=2\nheap_kb=96\nversion=0.10.0\nauthor=Goosey\n'
+manifest = 'slug=goosey_base\nname=Goosey\nicon=GSY\napi=2\nheap_kb=96\nversion=0.10.1\nauthor=Goosey\n'
 out = args.output
 out.mkdir(parents=True, exist_ok=True)
 (out / 'goosey.lua').write_text('--[==[badge-app\n' + manifest + ']==]\n\n' + code)
@@ -50,4 +50,4 @@ if snapshot:
         (out / (module+'.lua')).write_text(module_code)
     (out / 'snapshot.json').write_text(json.dumps(snapshot, indent=2))
 assert (out / 'goosey.lua').stat().st_size < 48 * 1024
-print(f'Built {len(markets)} markets; bundle {(out / "goosey.lua").stat().st_size} bytes')
+print(f'Built {len(snapshot["markets"]) if snapshot else len(markets)} markets; bundle {(out / "goosey.lua").stat().st_size} bytes')

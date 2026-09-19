@@ -27,10 +27,18 @@ def fetch_snapshot(origin):
             raise ValueError('API response exceeds badge exporter limit')
         return json.loads(raw)
 
-    catalog = get('/api/markets?limit=16')
+    catalog = get('/api/markets?limit=50')
     if catalog.get('nextCursor'):
         raise ValueError('Catalog has another page; refusing to silently omit markets')
-    items = catalog['items']
+    # Explicitly retired, untouched contracts remain in the database for audit.
+    # Keep any with activity: never hide a participant's old contract/holdings.
+    retired = {'htn-2026-winner-stage-dance'} | {
+        'htn-2026-winner-first-dance-' + option for option in ('worm', 'dab', 'floss', 'none')
+    }
+    items = [market for market in catalog['items'] if not (
+        market.get('slug') in retired and market.get('status') == 'PAUSED'
+        and market.get('volumeMilli') == '0' and market.get('traderCount') == 0
+    )]
     if not 1 <= len(items) <= 16:
         raise ValueError('Badge snapshot requires 1–16 markets; refusing a truncated catalog')
     result = []

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { address, createNoopSigner, getSignersFromInstruction } from "@solana/kit";
+import { address, createNoopSigner, getSignersFromInstruction, getProgramDerivedAddress, getAddressEncoder } from "@solana/kit";
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";
 import { describe, expect, it } from "vitest";
 import { buildBookSetupInstruction, buildPlaceOrderInstruction, buildCancelOrderInstruction, buildCleanupOrderInstruction,
@@ -15,6 +15,13 @@ const input = (): ChainOrderInput => ({ programAddress, marketId: 90071992547409
 const discriminator = (name: string) => createHash("sha256").update(`global:${name}`).digest().subarray(0, 8);
 
 describe("exchange instruction ABI", () => {
+  it("derives readonly ninth terms account and ignores arbitrary caller overrides", async () => {
+    const plan = await buildPlaceOrderInstruction({ ...input(), terms: seats } as ChainOrderInput);
+    const [canonical] = await getProgramDerivedAddress({ programAddress, seeds: ["market_terms", getAddressEncoder().encode(plan.market)] });
+    expect(plan.terms).toBe(canonical); expect(plan.instruction.accounts).toHaveLength(9);
+    expect(plan.instruction.accounts[8]).toEqual({ address: canonical, role: 0 });
+    expect((await buildPlaceOrderInstruction({ ...input(), marketId: 8n })).terms).not.toBe(canonical);
+  });
   it("encodes owner cancel with exact nonce, target and signer", async () => {
     const plan = await buildCancelOrderInstruction({ ...input(), target: { orderId: 9007199254740997n, side: "ASK", heapIndex: 1023 } });
     const bytes = Buffer.from(plan.instruction.data);
@@ -72,7 +79,7 @@ describe("exchange instruction ABI", () => {
     expect(bytes.readBigUInt64LE(24)).toBe(7n);
     expect([...bytes.subarray(32)]).toEqual([0, 0, 0, 0, 0, 0, 0]);
     expect(plan.instruction.accounts.map(m => [m.address, m.role])).toEqual([
-      [wallet.address, 2], [plan.config, 0], [plan.market, 1], [seats, 1], [plan.locator, 0], [plan.vault, 0], [plan.book, 1], [plan.resolution, 0],
+      [wallet.address, 2], [plan.config, 0], [plan.market, 1], [seats, 1], [plan.locator, 0], [plan.vault, 0], [plan.book, 1], [plan.resolution, 0], [plan.terms, 0],
     ]);
     expect(getSignersFromInstruction(plan.instruction)).toEqual([wallet]);
   });

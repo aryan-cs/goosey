@@ -70,13 +70,14 @@ export async function buildInitializeResolutionInstruction(input: Base & {
   if (proposer === SYSTEM_PROGRAM_ADDRESS || approver === SYSTEM_PROGRAM_ADDRESS || proposer === approver
     || proposer === creator.address || approver === creator.address) throw new Error("Reviewers must be distinct nonzero wallets other than creator");
   const a = await deriveGooseyResolutionAddresses(base);
+  const [terms] = await pda(base.programAddress, "market_terms", a.market);
   const [proposerEnrollment, approverEnrollment] = await Promise.all([
     enrollment(base.programAddress, a.config, proposer), enrollment(base.programAddress, a.config, approver),
   ]);
   const instruction = { programAddress: base.programAddress, accounts: [creator, meta(a.config), meta(a.market, true), meta(base.seats),
-    meta(a.book, true), meta(proposerEnrollment), meta(approverEnrollment), meta(a.resolution, true), meta(SYSTEM_PROGRAM_ADDRESS)],
+    meta(a.book, true), meta(proposerEnrollment), meta(approverEnrollment), meta(a.resolution, true), meta(SYSTEM_PROGRAM_ADDRESS), meta(terms)],
     data: await encode("initialize_resolution") } satisfies Instruction;
-  return { ...a, proposerEnrollment, approverEnrollment, instruction };
+  return { ...a, terms, proposerEnrollment, approverEnrollment, instruction };
 }
 async function keeperInstruction(input: Base & { keeper: TransactionSigner }, name: string) {
   const base = capture(input), keeper = signer(input.keeper, false);

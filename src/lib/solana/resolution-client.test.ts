@@ -23,6 +23,14 @@ async function derive(seed: string, market: Address, suffix?: Uint8Array) {
 }
 
 describe("resolution Anchor builders (offline ABI fixtures)", () => {
+  it("derives terms after System without accepting caller terms overrides", async () => {
+    const args = { ...base, creator, proposer: reviewer.address, approver, terms: base.seats };
+    const a = await buildInitializeResolutionInstruction(args);
+    expect(a.instruction.accounts).toHaveLength(10);
+    expect(a.instruction.accounts[8]).toEqual({ address: SYSTEM_PROGRAM_ADDRESS, role: 0 });
+    expect(a.instruction.accounts[9]).toEqual({ address: await derive("market_terms", a.market), role: 0 });
+    expect(a.terms).not.toBe(base.seats);
+  });
   it("derives canonical resolution/book and separates markets", async () => {
     const a = await deriveGooseyResolutionAddresses(base);
     expect(a.resolution).toBe(await derive("resolution", a.market));
@@ -34,8 +42,9 @@ describe("resolution Anchor builders (offline ABI fixtures)", () => {
     for (const [wallet, enrollment] of [[reviewer.address, a.proposerEnrollment], [approver, a.approverEnrollment]]) {
       expect(enrollment).toBe((await getProgramDerivedAddress({ programAddress, seeds: ["enrollment", key(a.config), key(wallet)] }))[0]);
     }
-    expect(a.instruction.accounts.map(m => m.address)).toEqual([creator.address, a.config, a.market, base.seats, a.book, a.proposerEnrollment, a.approverEnrollment, a.resolution, SYSTEM_PROGRAM_ADDRESS]);
-    expect(a.instruction.accounts.map(m => m.role)).toEqual([3, 0, 1, 0, 1, 0, 0, 1, 0]);
+    expect(a.instruction.accounts.map(m => m.address)).toEqual([creator.address, a.config, a.market, base.seats, a.book, a.proposerEnrollment, a.approverEnrollment, a.resolution, SYSTEM_PROGRAM_ADDRESS, a.terms]);
+    expect(a.terms).toBe(await derive("market_terms", a.market));
+    expect(a.instruction.accounts.map(m => m.role)).toEqual([3, 0, 1, 0, 1, 0, 0, 1, 0, 0]);
     expect(Buffer.from(a.instruction.data)).toEqual(disc("initialize_resolution"));
     expect(getSignersFromInstruction(a.instruction)).toEqual([creator]);
   });
