@@ -1,8 +1,10 @@
-.home:global(.page-shell) { padding-top: clamp(156px, 18vh, 196px); }
-.home :global(.hero-intro) { min-height: 0; gap: 24px; padding-bottom: 64px; }
+.home:global(.page-shell) { --hero-top: clamp(156px, 18svh, 196px); padding-top: var(--hero-top); }
+/* Leave the search toolbar visible, with the featured section just below the fold.
+   min-height lets the content grow naturally on short screens and at larger zoom. */
+.home :global(.hero-intro) { min-height: calc(100svh - var(--hero-top) - 80px); justify-content: center; gap: 24px; padding-bottom: 64px; }
 .home :global(.hero-mark) { display: none; }
 .home :global(.hero-copy) { width: min(100%, 1060px); }
-.home :global(.hero-intro h1) { font-size: clamp(40px, 4.1vw, 56px); line-height: 1.04; }
+.home :global(.hero-intro h1) { max-width: 18ch; text-wrap: balance; font-size: clamp(40px, 4.1vw, 56px); line-height: 1.04; }
 .home :global(.hero-intro > .hero-copy > p) { max-width: 1000px; margin-top: 24px; font-size: 16px; line-height: 23px; }
 .home :global(.hero-actions) { margin-top: 28px; }
 .home :global(.hero-actions .button) { min-height: 44px; }
@@ -22,7 +24,7 @@
 .home :global(.dense-market-section) { margin-top: 32px; }
 
 @media (max-width: 809.98px) {
-  .home:global(.page-shell) { padding-top: 124px; }
+  .home:global(.page-shell) { --hero-top: 124px; padding-top: var(--hero-top); }
   .home :global(.hero-intro) { gap: 24px; padding: 0 20px 48px; }
   .home :global(.hero-intro h1) { font-size: clamp(34px, 8.8vw, 44px); line-height: 1.05; }
   .home :global(.hero-intro > .hero-copy > p) { font-size: 16px; line-height: 23px; }
