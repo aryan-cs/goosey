@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SearchLauncher } from "./search-launcher";
 import { Suspense, type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Bell, ChartNoAxesColumnIncreasing, ChevronDown, CircleHelp, Menu, Search, UserRound, X } from "lucide-react";
@@ -152,10 +153,10 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
             {signedIn && !verificationRequired && <Link href="/watchlist" aria-current={isCurrentPath(pathname, "/watchlist") ? "page" : undefined}>Watchlist</Link>}
           </nav>
           <div className="header-actions">
-            <Link className="search-trigger" href="/search" aria-label="Search markets">
+            <SearchLauncher className="search-trigger">
               <Search size={18} />
               <span>Search markets</span>
-            </Link>
+            </SearchLauncher>
             {signedIn ? (
               verificationRequired ? <Link className="button button-primary header-verify" href="/verify-email">Verify email</Link> : <>
                 <Link className="balance-chip" href="/portfolio" aria-label={`${balance ?? 0} feathers available`}>
@@ -187,7 +188,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
         <nav aria-label="More destinations">
           <Link href="/" aria-current={isCurrentPath(pathname, "/") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Explore</Link>
           <Link href="/markets" aria-current={isCurrentPath(pathname, "/markets") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Markets</Link>
-          <Link href="/search" aria-current={isCurrentPath(pathname, "/search") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Search</Link>
+          <SearchLauncher className="button mobile-search-trigger" onOpen={() => setMoreOpen(false)}>Search</SearchLauncher>
           <Link href="/leaderboard" aria-current={isCurrentPath(pathname, "/leaderboard") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Ranks</Link>
           <Link href="/community" aria-current={isCurrentPath(pathname, "/community") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Social</Link>
           {signedIn ? verificationRequired ? <>

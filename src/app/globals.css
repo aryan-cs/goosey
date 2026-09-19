@@ -745,3 +745,16 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .search-hero-form > svg { justify-self: center; }
 .search-hero-form { min-height: 62px; }
 .search-hero-form input { height: 44px; min-width: 0; }
+
+/* Search surfaces stay borderless; keyboard focus remains visible on controls. */
+.search-hero-form, .search-hero-form:focus-within { border: 0; box-shadow: none; transform: none; }
+.search-hero-form input:focus-visible { outline: 0; }
+.search-hero-form:has(input:focus-visible) { background: var(--surface-sunken); }
+.search-results { animation: none; }
+.search-result-row { animation: search-result-enter 240ms var(--ease-emphasized) both; }
+.search-result-row:focus-visible { animation: none; }
+.mobile-more-panel nav .mobile-search-trigger { justify-content: flex-start; padding-inline: 14px; color: var(--ink-secondary); background: var(--surface-raised); }
+@keyframes search-result-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .search-result-row { animation: none; } }
+
+.search-result-row strong { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }

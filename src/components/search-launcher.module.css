@@ -1,0 +1,34 @@
+.dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(740px, calc(100dvh - min(8dvh, 64px) - 24px));
+  margin: min(8dvh, 64px) auto auto;
+  padding: 0;
+  color: var(--ink);
+  background: var(--panel-glass-solid);
+  border: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+  animation: search-open 200ms var(--ease-emphasized) both;
+}
+.dialog::backdrop { background: rgb(0 0 0 / .3); backdrop-filter: blur(8px); animation: backdrop-open 200ms ease both; }
+.closing { animation: search-close 160ms ease both; }
+.closing::backdrop { animation: backdrop-close 160ms ease both; }
+.content { padding: 20px; }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.heading h2 { margin: 0; font-size: 22px; letter-spacing: -.03em; }
+.heading button { width: 44px; height: 44px; border: 0; }
+.dialog :global(.search-experience) { min-height: 180px; }
+.dialog :global(.search-results) { margin-top: 20px; gap: 20px; }
+@supports (backdrop-filter: blur(1px)) { .dialog { background: var(--panel-glass); backdrop-filter: blur(48px); -webkit-backdrop-filter: blur(48px); } }
+@keyframes search-open { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes search-close { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes backdrop-open { from { opacity: 0; } to { opacity: 1; } }
+@keyframes backdrop-close { from { opacity: 1; } to { opacity: 0; } }
+@media (max-width: 600px) {
+  .dialog { margin: 16px auto auto; max-height: calc(100dvh - 32px); }
+  .content { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .dialog, .dialog::backdrop { animation-duration: 1ms; } }

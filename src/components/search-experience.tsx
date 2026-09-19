@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { CalendarDays, Search, UserRound, X } from "lucide-react";
 
 type MarketResult = {
@@ -43,7 +43,8 @@ function SearchSkeleton() {
   return <div className="search-skeleton" aria-hidden="true">{[0, 1, 2, 3].map((item) => <span key={item} />)}</div>;
 }
 
-export function SearchExperience({ initialQuery = "" }: { initialQuery?: string }) {
+export function SearchExperience({ initialQuery = "", syncUrl = true }: { initialQuery?: string; syncUrl?: boolean }) {
+  const inputId = useId();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState(initialQuery);
@@ -59,15 +60,17 @@ export function SearchExperience({ initialQuery = "" }: { initialQuery?: string 
       try {
         const response = await fetch(`/api/search?q=${encodeURIComponent(normalized)}&limit=8`, { signal: controller.signal });
         if (!response.ok) throw new Error("Search is unavailable.");
-        setResults(await response.json() as SearchResponse);
+        const nextResults = await response.json() as SearchResponse;
+        if (controller.signal.aborted) return;
+        setResults(nextResults);
         setStatus("ready");
-        router.replace(`/search?q=${encodeURIComponent(normalized)}`, { scroll: false });
+        if (syncUrl) router.replace(`/search?q=${encodeURIComponent(normalized)}`, { scroll: false });
       } catch (error) {
         if ((error as Error).name !== "AbortError") setStatus("error");
       }
     }, retry ? 0 : 240);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [query, retry, router]);
+  }, [query, retry, router, syncUrl]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,15 +81,15 @@ export function SearchExperience({ initialQuery = "" }: { initialQuery?: string 
     setQuery(value);
     setResults(null);
     setStatus(value.trim().length >= 2 ? "loading" : "idle");
-    if (!value.trim()) router.replace("/search", { scroll: false });
+    if (syncUrl && !value.trim()) router.replace("/search", { scroll: false });
   }
 
   const count = results ? results.markets.length + results.events.length + results.profiles.length : 0;
   return <div className="search-experience">
     <form className="search-hero-form" role="search" onSubmit={submit}>
       <Search aria-hidden="true" />
-      <label className="sr-only" htmlFor="site-search">Search Goosey</label>
-      <input ref={inputRef} id="site-search" type="search" value={query} onChange={(event) => updateQuery(event.target.value)} placeholder="Search markets, events, or people" autoComplete="off" autoFocus />
+      <label className="sr-only" htmlFor={inputId}>Search Goosey</label>
+      <input ref={inputRef} id={inputId} type="search" value={query} onChange={(event) => updateQuery(event.target.value)} placeholder="Search markets, events, or people" autoComplete="off" autoFocus />
       {query && <button type="button" className="search-clear" onClick={() => { updateQuery(""); inputRef.current?.focus(); }} aria-label="Clear search"><X /></button>}
     </form>
 
@@ -98,10 +101,10 @@ export function SearchExperience({ initialQuery = "" }: { initialQuery?: string 
       {status === "ready" && count === 0 && <div className="search-empty"><Search /><h2>No matches for “{results?.query}”</h2><p>Try a shorter phrase or a different spelling.</p></div>}
     </div>
 
-    {status === "ready" && count > 0 && <div className="search-results" aria-label={`Search results for ${results?.query}`}>
-      {!!results?.markets.length && <section><div className="search-group-heading"><h2>Markets</h2><Link href={`/markets?q=${encodeURIComponent(results.query)}`}>See all</Link></div><div className="search-result-list">{results.markets.map((market) => <Link className="search-result-row" href={`/markets/${market.slug}`} key={market.id}><span className="search-result-icon market"><Search aria-hidden="true" /></span><span><strong>{market.shortTitle || market.title}</strong><small>{market.category} · {market.status.toLocaleLowerCase()}</small></span><b>{market.probabilityYesBps === null ? "No price" : `${(market.probabilityYesBps / 100).toFixed(0)}%`} <small>YES</small></b></Link>)}</div></section>}
-      {!!results?.events.length && <section><div className="search-group-heading"><h2>Events</h2><Link href="/events">See all</Link></div><div className="search-result-list">{results.events.map((event) => <Link className="search-result-row" href={`/events/${event.slug}`} key={event.id}><span className="search-result-icon"><CalendarDays aria-hidden="true" /></span><span><strong>{event.shortTitle || event.title}</strong><small>{event.marketCount} market{event.marketCount === 1 ? "" : "s"} · {event.category}</small></span></Link>)}</div></section>}
-      {!!results?.profiles.length && <section><div className="search-group-heading"><h2>People</h2></div><div className="search-result-list">{results.profiles.map((profile) => <Link className="search-result-row" href={`/users/${profile.username}`} key={profile.id}><span className="search-result-icon"><UserRound aria-hidden="true" /></span><span><strong>{profile.displayName}</strong><small>@{profile.username}{profile.bio ? ` · ${profile.bio}` : ""}</small></span></Link>)}</div></section>}
+    {status === "ready" && count > 0 && <div className="search-results" key={`${results?.query}-${retry}`} aria-label={`Search results for ${results?.query}`}>
+      {!!results?.markets.length && <section><div className="search-group-heading"><h2>Markets</h2><Link href={`/markets?q=${encodeURIComponent(results.query)}`}>See all</Link></div><div className="search-result-list">{results.markets.map((market, index) => <Link className="search-result-row" style={{ animationDelay: `${Math.min(index, 7) * 45}ms` }} href={`/markets/${market.slug}`} key={market.id}><span className="search-result-icon market"><Search aria-hidden="true" /></span><span><strong>{market.shortTitle || market.title}</strong><small>{market.category} · {market.status.toLocaleLowerCase()}</small></span><b>{market.probabilityYesBps === null ? "No price" : `${(market.probabilityYesBps / 100).toFixed(0)}%`} <small>YES</small></b></Link>)}</div></section>}
+      {!!results?.events.length && <section><div className="search-group-heading"><h2>Events</h2><Link href="/events">See all</Link></div><div className="search-result-list">{results.events.map((event, index) => <Link className="search-result-row" style={{ animationDelay: `${Math.min((results.markets.length + index), 10) * 45}ms` }} href={`/events/${event.slug}`} key={event.id}><span className="search-result-icon"><CalendarDays aria-hidden="true" /></span><span><strong>{event.shortTitle || event.title}</strong><small>{event.marketCount} market{event.marketCount === 1 ? "" : "s"} · {event.category}</small></span></Link>)}</div></section>}
+      {!!results?.profiles.length && <section><div className="search-group-heading"><h2>People</h2></div><div className="search-result-list">{results.profiles.map((profile, index) => <Link className="search-result-row" style={{ animationDelay: `${Math.min((results.markets.length + results.events.length + index), 12) * 45}ms` }} href={`/users/${profile.username}`} key={profile.id}><span className="search-result-icon"><UserRound aria-hidden="true" /></span><span><strong>{profile.displayName}</strong><small>@{profile.username}{profile.bio ? ` · ${profile.bio}` : ""}</small></span></Link>)}</div></section>}
     </div>}
   </div>;
 }
