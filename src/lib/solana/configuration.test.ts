@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { address, getAddressEncoder } from "@solana/kit";
+import { address, getAddressEncoder, type Address } from "@solana/kit";
 import { TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import { describe, expect, it } from "vitest";
 import { deriveGooseyProgramAddresses } from "./program-client";
@@ -27,7 +27,7 @@ async function fixture() {
   mint.set(encode.encode(pda.mintAuthority), 4);
   mint.writeBigUInt64LE(1_000_000n, 36);
   mint[44] = 3; mint[45] = 1;
-  const account = (data: Buffer, owner = runtime.programAddress) => ({ owner, executable: false, data: [data.toString("base64"), "base64"] as const });
+  const account = (data: Buffer, owner: Address = runtime.programAddress) => ({ owner, executable: false, data: [data.toString("base64"), "base64"] as const });
   return { config, mint, account, verify: () => verifyGooseyConfiguration(runtime, account(config), account(mint, TOKEN_PROGRAM_ADDRESS)) };
 }
 describe("finalized configuration codec constraints (not execution proof)", () => {
