@@ -50,6 +50,20 @@
   flex-wrap: wrap;
 }
 
+.replyActions .replyIconButton {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.replyIconButton svg {
+  width: 20px;
+  height: 20px;
+}
+
 .content > .replyCount {
   color: var(--ink-muted);
   font-size: 12px;
@@ -91,7 +105,4 @@
     font-family: var(--font-sans, inherit);
   }
 
-  .replyActions button {
-    padding-inline: 10px;
-  }
 }
