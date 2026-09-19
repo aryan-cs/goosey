@@ -1,3 +1,4 @@
+import { requireDatabaseFinancialMarket } from "../../src/lib/market-backend";
 import { randomUUID } from "node:crypto";
 
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
@@ -176,7 +177,7 @@ test("advanced order controls preserve IOC, FOK, post-only, expiration, and retr
           where: { ownerType_ownerId_purpose: { ownerType: "USER", ownerId: primary.id, purpose: "USER_FEATHERS" } },
           select: { balanceMilli: true },
         }),
-        db.ledgerAccount.findUniqueOrThrow({ where: { id: market.collateralAccountId }, select: { balanceMilli: true } }),
+        db.ledgerAccount.findUniqueOrThrow({ where: { id: requireDatabaseFinancialMarket(market).collateralAccountId }, select: { balanceMilli: true } }),
         db.position.findUnique({
           where: { userId_marketId: { userId: primary.id, marketId: market.id } },
           select: { yesShares: true, noShares: true, yesCostBasisMilli: true, noCostBasisMilli: true, netCostMilli: true },

@@ -41,6 +41,8 @@ const FUTURE = new Date("2026-09-20T12:00:00.000Z");
 function market(overrides: Record<string, unknown> = {}) {
   return {
     id: "market_depth",
+    executionBackend: "DATABASE",
+    collateralAccountId: "collateral_depth",
     slug: "venue-wifi",
     status: "OPEN",
     pricingModel: "ORDER_BOOK",
@@ -76,6 +78,8 @@ describe("public order-book depth", () => {
     expect(mocks.findMarket).toHaveBeenCalledWith({
       where: { slug: "venue-wifi" },
       select: {
+        executionBackend: true,
+        collateralAccountId: true,
         id: true,
         slug: true,
         status: true,

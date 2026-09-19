@@ -153,7 +153,7 @@ describe("hostile admin service authorization", () => {
     const findUnique = vi.fn().mockResolvedValue(null);
     const market = {
       id: MARKET_ID,
-      createdById: "different-admin",
+      executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: "different-admin",
       status: "OPEN",
       closesAt: new Date(Date.now() + 86_400_000),
       resolvesAt: new Date(Date.now() + 172_800_000),
@@ -192,7 +192,7 @@ describe("hostile admin service authorization", () => {
           approvalIdempotencyKey: KEY,
           approvalRequestHash: "not-relevant-to-cross-user-check",
           settlementRun: { id: "run-hostile" },
-          market: {},
+          market: { executionBackend: "DATABASE", collateralAccountId: "collateral_hostile" },
         }),
       },
     });
@@ -208,7 +208,7 @@ describe("hostile admin service authorization", () => {
     const creatorTx = {
       user: { findUnique: vi.fn().mockResolvedValue(activeAdmin(ADMIN_A)) },
       marketResolutionProposal: { findUnique: vi.fn().mockResolvedValue(null) },
-      market: { findUnique: vi.fn().mockResolvedValue({ id: MARKET_ID, createdById: ADMIN_A }) },
+      market: { findUnique: vi.fn().mockResolvedValue({ id: MARKET_ID, executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: ADMIN_A }) },
     };
     runWith(creatorTx);
     await expect(createResolutionProposal({
@@ -231,7 +231,7 @@ describe("hostile admin service authorization", () => {
           evidence: "Source record",
           status: "PENDING",
           settlementRun: null,
-          market: { createdById: "different-admin" },
+          market: { executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: "different-admin" },
         }),
       },
       marketSettlementRun: { create: runCreate },
@@ -258,7 +258,7 @@ describe("hostile admin service authorization", () => {
           evidence: "Source record",
           status: "PENDING",
           settlementRun: null,
-          market: { createdById: ADMIN_A },
+          market: { executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: ADMIN_A },
         }),
       },
       marketSettlementRun: { create: runCreate },
@@ -279,7 +279,7 @@ describe("hostile admin service authorization", () => {
       market: {
         findUnique: vi.fn().mockResolvedValue({
           id: MARKET_ID,
-          createdById: "different-admin",
+          executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: "different-admin",
           status: "CLOSED",
           closesAt: new Date(Date.now() - 7_200_000),
           resolvesAt: new Date(Date.now() - 3_600_000),
@@ -321,7 +321,7 @@ describe("hostile admin service authorization", () => {
           market: {
             id: MARKET_ID,
             version: 3,
-            createdById: "different-admin",
+            executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: "different-admin",
             status: "CLOSED",
             closesAt: new Date(Date.now() - 7_200_000),
             resolvesAt: new Date(Date.now() - 3_600_000),

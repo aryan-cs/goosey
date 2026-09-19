@@ -1,3 +1,4 @@
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 import type { NextRequest } from "next/server";
 import { assertMutationSession } from "@/lib/mutation-session";
 import { createHash, randomUUID } from "node:crypto";
@@ -192,6 +193,7 @@ async function requireParticipantAndMarket(tx: Tx, userId: string, marketId: str
     throw new ApiError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before trading.");
   }
   if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+  assertDatabaseFinancialMarket(market);
   if (market.pricingModel !== "ORDER_BOOK") {
     throw new ApiError(422, "ORDER_BOOK_UNAVAILABLE", "This market does not use the order-book engine.");
   }
@@ -212,6 +214,7 @@ async function acquireCommandSequence(
     where: {
       id: marketId,
       commandSequence: expected,
+      ...DATABASE_MARKET_FILTER,
       pricingModel: "ORDER_BOOK",
       ...(requireOpen
         ? { status: "OPEN", acceptingOrders: true, closesAt: { gt: operationAt } }
@@ -291,6 +294,7 @@ export async function drainMarketOrderBook(
   const { marketId, actorUserId, reason } = input;
   const market = await tx.market.findUnique({ where: { id: marketId } });
   if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+  assertDatabaseFinancialMarket(market);
   if (market.pricingModel !== "ORDER_BOOK") {
     return { canceledOrders: 0, canceledQuantity: 0, commandSequence: null };
   }
@@ -999,7 +1003,7 @@ async function createEvent(
  * A multi-level sweep intentionally produces no synthetic intermediate points.
  */
 export async function appendAuthoritativeFillSnapshot(
-  tx: Pick<Tx, "marketPriceSnapshot">,
+  tx: Pick<Tx, "market" | "marketPriceSnapshot">,
   marketId: string,
   payoutMilli: bigint,
   fills: readonly { priceMilli: bigint }[],
@@ -1007,6 +1011,9 @@ export async function appendAuthoritativeFillSnapshot(
 ) {
   const finalFill = fills.at(-1);
   if (!finalFill) return null;
+  const market = await tx.market.findUnique({ where: { id: marketId } });
+  if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+  assertDatabaseFinancialMarket(market);
   const probability = impliedProbabilityBps(finalFill.priceMilli, payoutMilli);
   if (probability > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new RangeError("Final fill probability exceeds the snapshot integer range.");
@@ -1038,6 +1045,7 @@ export async function expireOrders(
       status: { in: [...ACTIVE_ORDER_STATUSES] },
       remainingQuantity: { gt: 0 },
       expiresAt: { lte: operationAt },
+      market: DATABASE_MARKET_FILTER,
     },
     orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
     take: EXPIRATION_BATCH_SIZE,
@@ -1063,6 +1071,7 @@ export async function expireOrders(
           !order.expiresAt ||
           order.expiresAt > operationAt
         ) return false;
+        assertDatabaseFinancialMarket(order.market);
         if (!order.reservation) throw new Error("Live expiring order has no reservation.");
 
         const sequence = await acquireCommandSequence(tx, order.market.id, order.market.commandSequence, false, operationAt);
@@ -1394,6 +1403,7 @@ export async function cancelOrder(raw: {
       include: { reservation: true, market: { include: { collateralAccount: true } }, user: true },
     });
     if (!order) throw new ApiError(404, "ORDER_NOT_FOUND", "Order not found.");
+    assertDatabaseFinancialMarket(order.market);
     if (order.user.status !== "ACTIVE") throw new ApiError(403, "ACCOUNT_INACTIVE", "Account is not active.");
     if (order.user.role !== "USER") throw new ApiError(403, "PARTICIPANT_REQUIRED", "Privileged accounts cannot trade.");
     if (requiresEmailVerification(order.user)) throw new ApiError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before trading.");
@@ -1514,12 +1524,17 @@ export async function cancelAllOrders(raw: {
         expiresAt: new Date(operationAt.getTime() + 24 * 60 * 60 * 1_000),
       },
     });
+    if (request.marketSlug) {
+      const requestedMarket = await tx.market.findUnique({ where: { slug: request.marketSlug } });
+      if (!requestedMarket) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+      assertDatabaseFinancialMarket(requestedMarket);
+    }
     const orders = await tx.marketOrder.findMany({
       where: {
         userId: envelope.userId,
         status: { in: [...ACTIVE_ORDER_STATUSES] },
         remainingQuantity: { gt: 0 },
-        market: { pricingModel: "ORDER_BOOK", ...(request.marketSlug ? { slug: request.marketSlug } : {}) },
+        market: { ...DATABASE_MARKET_FILTER, pricingModel: "ORDER_BOOK", ...(request.marketSlug ? { slug: request.marketSlug } : {}) },
       },
       include: { reservation: true, market: { include: { collateralAccount: true } } },
       orderBy: [{ marketId: "asc" }, { prioritySequence: "asc" }, { id: "asc" }],
@@ -1536,6 +1551,7 @@ export async function cancelAllOrders(raw: {
 
     const ordersByMarket = new Map<string, typeof orders>();
     for (const order of orders) {
+      assertDatabaseFinancialMarket(order.market);
       const marketOrders = ordersByMarket.get(order.marketId) ?? [];
       marketOrders.push(order);
       ordersByMarket.set(order.marketId, marketOrders);
@@ -1546,6 +1562,7 @@ export async function cancelAllOrders(raw: {
 
     for (const [marketId, marketOrders] of ordersByMarket) {
       const market = marketOrders[0]!.market;
+      assertDatabaseFinancialMarket(market);
       const commandSequence = await acquireCommandSequence(tx, marketId, market.commandSequence, false, operationAt);
       for (const [effectIndex, order] of marketOrders.entries()) {
         if (!order.reservation) {

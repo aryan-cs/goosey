@@ -1,3 +1,4 @@
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 import { createHash } from "node:crypto";
 import { Prisma, type Market } from "@prisma/client";
 import { z } from "zod";
@@ -214,6 +215,7 @@ export async function createAdminMarket(input: {
       }
       const market = await tx.market.findUnique({ where: { id: previous.referenceId } });
       if (!market) throw new Error("Idempotent market journal references a missing market");
+      assertDatabaseFinancialMarket(market);
       const replay = {
         market: publicMarket(market),
         subsidyMilli: BigInt(metadata.subsidyMilli ?? "0"),
@@ -256,6 +258,7 @@ export async function createAdminMarket(input: {
     const market = await tx.market.create({
       data: {
         ...marketData,
+        executionBackend: "DATABASE",
         event: eventId ? { connect: { id: eventId } } : undefined,
         createdBy: { connect: { id: input.actorUserId } },
         collateralAccount: {
@@ -269,6 +272,7 @@ export async function createAdminMarket(input: {
       },
       include: { collateralAccount: true },
     });
+    assertDatabaseFinancialMarket(market);
     await tx.ledgerAccount.update({
       where: { id: market.collateralAccountId },
       data: { ownerId: market.id },
@@ -333,6 +337,7 @@ export async function transitionAdminMarket(input: {
     await requireActiveAdmin(tx, input.actorUserId);
     const market = await tx.market.findUnique({ where: { id: input.marketId } });
     if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+    assertDatabaseFinancialMarket(market);
     if (market.version !== input.expectedVersion) {
       throw new ApiError(409, "STALE_MARKET_VERSION", "The market changed after this lifecycle request was prepared. Refresh and review it again.");
     }
@@ -345,7 +350,7 @@ export async function transitionAdminMarket(input: {
       throw new ApiError(422, "MARKET_ALREADY_CLOSED", "A market past its close time cannot resume.");
     }
     const changed = await tx.market.updateMany({
-      where: { id: market.id, status: market.status, version: market.version },
+      where: { id: market.id, ...DATABASE_MARKET_FILTER, status: market.status, version: market.version },
       data: {
         status: rule.to,
         acceptingOrders: input.action === "RESUME",
@@ -397,6 +402,7 @@ export async function createResolutionProposal(input: {
     }
     let market = await tx.market.findUnique({ where: { id: input.marketId } });
     if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+    assertDatabaseFinancialMarket(market);
     if (market.createdById === input.actorUserId) {
       throw new ApiError(403, "CREATOR_CANNOT_PROPOSE", "A market creator cannot propose its resolution.");
     }
@@ -432,8 +438,9 @@ export async function rejectResolutionProposal(input: { actorUserId: string; pro
   const operationAt = new Date();
   return runSerializableTransaction(prisma, async (tx) => {
     await requireActiveAdmin(tx, input.actorUserId);
-    const proposal = await tx.marketResolutionProposal.findUnique({ where: { id: input.proposalId } });
+    const proposal = await tx.marketResolutionProposal.findUnique({ where: { id: input.proposalId }, include: { market: true } });
     if (!proposal) throw new ApiError(404, "PROPOSAL_NOT_FOUND", "Resolution proposal not found.");
+    assertDatabaseFinancialMarket(proposal.market);
     if (proposal.proposerId === input.actorUserId) throw new ApiError(403, "SELF_APPROVAL_FORBIDDEN", "A proposer cannot review their own proposal.");
     if (proposal.status !== "PENDING") throw new ApiError(409, "PROPOSAL_ALREADY_REVIEWED", "This proposal has already been reviewed.");
     const updated = await tx.marketResolutionProposal.update({ where: { id: proposal.id }, data: { status: "REJECTED", pendingKey: null, approverId: input.actorUserId, reviewNote: input.note, decidedAt: operationAt } });
@@ -452,6 +459,7 @@ export async function approveResolutionProposal(input: { actorUserId: string; pr
       include: { market: true, settlementRun: true },
     });
     if (!proposal) throw new ApiError(404, "PROPOSAL_NOT_FOUND", "Resolution proposal not found.");
+    assertDatabaseFinancialMarket(proposal.market);
 
     const approvalRequestHash = createHash("sha256")
       .update(jsonStringify({
@@ -508,6 +516,7 @@ export async function approveResolutionProposal(input: { actorUserId: string; pr
       where: {
         id: proposal.marketId,
         status: "CLOSED",
+        ...DATABASE_MARKET_FILTER,
         version: proposal.market.version,
         settlementRun: null,
       },

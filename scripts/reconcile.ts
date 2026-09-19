@@ -1,4 +1,5 @@
 import { db, requireDatabaseStartup } from "../src/lib/db";
+import { assertDatabaseFinancialMarket } from "../src/lib/market-backend";
 import {
   assertActiveReservationConsistency,
   assertOrderBookMarketAccounting,
@@ -31,6 +32,7 @@ async function main() {
     else if (wallet.balanceMilli !== user.balanceMilli) errors.push(`user ${user.id} cache does not match wallet`);
   }
   for (const market of markets) {
+    assertDatabaseFinancialMarket(market);
     const yes = market.positions.reduce((total, position) => total + position.yesShares, 0);
     const no = market.positions.reduce((total, position) => total + position.noShares, 0);
     if (yes !== market.yesShares || no !== market.noShares) errors.push(`market ${market.id} share totals do not match positions`);

@@ -1,3 +1,4 @@
+import { requireDatabaseFinancialMarket } from "../src/lib/market-backend";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -190,7 +191,7 @@ async function createScenario(
   assert(
     marketAfterMatch.yesShares === contractQuantity &&
       marketAfterMatch.noShares === contractQuantity &&
-      marketAfterMatch.collateralAccount.balanceMilli === 200_000n,
+      requireDatabaseFinancialMarket(marketAfterMatch).collateralAccount.balanceMilli === 200_000n,
     `${outcome} mint did not create participant-backed complete sets`,
   );
 
@@ -433,8 +434,8 @@ async function settleScenario(
   assert(
     market.yesShares === 0 &&
       market.noShares === 0 &&
-      market.collateralAccount.balanceMilli === 0n &&
-      market.collateralAccount.status === "CLOSED",
+      requireDatabaseFinancialMarket(market).collateralAccount.balanceMilli === 0n &&
+      requireDatabaseFinancialMarket(market).collateralAccount.status === "CLOSED",
     `${scenario.outcome} terminal market retained shares or collateral`,
   );
   assert(

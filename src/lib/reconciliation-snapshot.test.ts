@@ -63,6 +63,7 @@ describe("reconciliation snapshot reader", () => {
     });
     expect(state.tx.user.findMany).toHaveBeenCalledWith({ where: { role: "USER" } });
     expect(state.tx.market.findMany).toHaveBeenCalledWith({
+      where: { executionBackend: "DATABASE" },
       include: {
         collateralAccount: true,
         positions: true,

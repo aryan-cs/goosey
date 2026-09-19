@@ -78,7 +78,7 @@ describe("portfolio order activity", () => {
       where: {
         userId: USER_ID,
         status: { in: ["OPEN", "PARTIALLY_FILLED"] },
-        market: { pricingModel: "ORDER_BOOK" },
+        market: { executionBackend: "DATABASE", collateralAccountId: { not: null }, pricingModel: "ORDER_BOOK" },
       },
       take: 26,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],

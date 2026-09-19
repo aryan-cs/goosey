@@ -1,3 +1,4 @@
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 import { randomUUID } from "node:crypto";
 
 import { Prisma, type MarketSettlementRun } from "@prisma/client";
@@ -100,8 +101,9 @@ export async function claimSettlementRun(input: {
   const claimToken = randomUUID();
   return runSerializableTransaction(prisma, async (tx) => {
     await requireActiveSettlementOperator(tx, input.actorUserId);
-    const run = await tx.marketSettlementRun.findUnique({ where: { id: input.runId } });
+    const run = await tx.marketSettlementRun.findUnique({ where: { id: input.runId }, include: { market: true } });
     if (!run) throw new ApiError(404, "SETTLEMENT_RUN_NOT_FOUND", "Settlement run not found.");
+    assertDatabaseFinancialMarket(run.market);
     if (run.status === "COMPLETED") return { run: publicRun(run), claimToken: null, replayed: true };
     if (!["READY", "RUNNING", "FINALIZING"].includes(run.status)) {
       throw new ApiError(409, "SETTLEMENT_RUN_UNAVAILABLE", "Settlement run is not available for processing.");
@@ -143,6 +145,7 @@ export async function processClaimedBatch(input: {
       include: { market: { include: { collateralAccount: true } } },
     });
     if (!run) throw new ApiError(404, "SETTLEMENT_RUN_NOT_FOUND", "Settlement run not found.");
+    assertDatabaseFinancialMarket(run.market);
     if (
       run.claimToken !== input.claimToken ||
       !run.leaseExpiresAt ||
@@ -371,6 +374,7 @@ async function finalizeClaimedRun(input: { actorUserId: string; runId: string; c
       include: { market: { include: { collateralAccount: true } } },
     });
     if (!run) throw new ApiError(404, "SETTLEMENT_RUN_NOT_FOUND", "Settlement run not found.");
+    assertDatabaseFinancialMarket(run.market);
     if (run.status === "COMPLETED") return { run: publicRun(run), replayed: true };
     if (
       run.status !== "FINALIZING" ||
@@ -472,7 +476,7 @@ async function finalizeClaimedRun(input: { actorUserId: string; runId: string; c
     const resolvedAt = operationAt;
     const terminalStatus = run.outcome === "VOID" ? "VOID" : "RESOLVED";
     const terminal = await tx.market.updateMany({
-      where: { id: run.marketId, status: "RESOLVING", resolution: run.outcome },
+      where: { id: run.marketId, ...DATABASE_MARKET_FILTER, status: "RESOLVING", resolution: run.outcome },
       data: {
         status: terminalStatus,
         resolvedAt,
@@ -537,7 +541,7 @@ async function releaseFailedClaim(runId: string, claimToken: string, error: unkn
   const run = await prisma.marketSettlementRun.findUnique({ where: { id: runId }, select: { status: true } });
   if (!run || run.status === "COMPLETED") return;
   await prisma.marketSettlementRun.updateMany({
-    where: { id: runId, claimToken },
+    where: { id: runId, claimToken, market: DATABASE_MARKET_FILTER },
     data: {
       status: run.status === "FINALIZING" ? "FINALIZING" : "READY",
       claimToken: null,

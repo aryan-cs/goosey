@@ -1,3 +1,4 @@
+import { requireDatabaseFinancialMarket } from "../../src/lib/market-backend";
 import { randomBytes } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
@@ -254,7 +255,7 @@ test("complete participant and administrator journey", async ({ page, request, b
       await expect(create.getByLabel("Slug", { exact: true })).toHaveValue("");
       const created = await db.market.findUniqueOrThrow({ where: { slug }, include: { collateralAccount: true } });
       expect(created.pricingModel).toBe("ORDER_BOOK");
-      expect(created.collateralAccount.balanceMilli).toBe(0n);
+      expect(requireDatabaseFinancialMarket(created).collateralAccount.balanceMilli).toBe(0n);
       expect(await db.marketPriceSnapshot.count({ where: { marketId: created.id } })).toBe(0);
       const lifecycle = page.locator("form").filter({ has: page.getByRole("combobox", { name: "Market", exact: true }) });
       await expect(lifecycle.getByRole("combobox", { name: "Market", exact: true })).toHaveValue(created.id);

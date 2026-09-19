@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { assertDatabaseFinancialMarket } from "../src/lib/market-backend";
 import { hash } from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 
@@ -164,6 +165,7 @@ async function main() {
         },
         include: { collateralAccount: true },
       });
+      assertDatabaseFinancialMarket(market);
 
       if (pricingModel === "LMSR") {
         await tx.ledgerAccount.update({ where: { id: treasury.id }, data: { balanceMilli: { decrement: subsidy } } });

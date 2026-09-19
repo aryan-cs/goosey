@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "./market-backend";
 import { randomUUID } from "node:crypto";
 
 import { Prisma, type PrismaClient } from "@prisma/client";
@@ -138,7 +139,7 @@ async function closeExpiredMarkets(input: {
 }): Promise<{ closed: number; failures: string[] }> {
   if (input.shouldStop?.()) return { closed: 0, failures: [] };
   const markets = await input.client.market.findMany({
-    where: { status: "OPEN", closesAt: { lte: input.now } },
+    where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { lte: input.now } },
     orderBy: [{ closesAt: "asc" }, { id: "asc" }],
     take: MARKET_BATCH_SIZE,
     select: { id: true, version: true },
@@ -152,7 +153,7 @@ async function closeExpiredMarkets(input: {
       if (input.shouldStop?.()) break;
       const changed = await runSerializableTransaction(input.client, async (tx) => {
         const update = await tx.market.updateMany({
-          where: { id: market.id, status: "OPEN", version: market.version, closesAt: { lte: input.now } },
+          where: { id: market.id, ...DATABASE_MARKET_FILTER, status: "OPEN", version: market.version, closesAt: { lte: input.now } },
           data: { status: "CLOSED", acceptingOrders: false, version: { increment: 1 } },
         });
         if (update.count !== 1) return false;
@@ -190,7 +191,7 @@ async function processAvailableRuns(input: {
 }): Promise<{ attempted: number; completed: number; busy: number; failures: string[] }> {
   if (input.shouldStop?.()) return { attempted: 0, completed: 0, busy: 0, failures: [] };
   const runs = await input.client.marketSettlementRun.findMany({
-    where: { status: { in: ["READY", "RUNNING", "FINALIZING"] } },
+    where: { market: DATABASE_MARKET_FILTER, status: { in: ["READY", "RUNNING", "FINALIZING"] } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: RUN_BATCH_SIZE,
     select: { id: true },

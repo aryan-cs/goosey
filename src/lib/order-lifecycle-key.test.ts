@@ -23,7 +23,7 @@ describe("market lifecycle command keys", () => {
       const tx = {
         market: {
           findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({
-            id: where.id, pricingModel: "ORDER_BOOK", version, commandSequence: 3n, bookSequence: 5n,
+            executionBackend: "DATABASE", collateralAccountId: "collateral_lifecycle", id: where.id, pricingModel: "ORDER_BOOK", version, commandSequence: 3n, bookSequence: 5n,
           })),
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           update: vi.fn().mockResolvedValue({}),

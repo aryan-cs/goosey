@@ -153,6 +153,15 @@ describe("settlement worker cycle", () => {
       failedRuns: 0,
     });
     expect(drain).toHaveBeenCalledOnce();
+    expect(fixture.client.market.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ executionBackend: "DATABASE", collateralAccountId: { not: null } }),
+    }));
+    expect(fixture.healthyTx.market.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ executionBackend: "DATABASE", collateralAccountId: { not: null } }),
+    }));
+    expect(fixture.client.marketSettlementRun.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ market: { executionBackend: "DATABASE", collateralAccountId: { not: null } } }),
+    }));
     expect(processRun).toHaveBeenCalledWith({ actorUserId: "system_user", runId: "approved_run", batchSize: 100 });
     const failureUpdate = fixture.workerState.updateMany.mock.calls.find(([call]) => call.data.lastCycleFailedAt);
     expect(failureUpdate?.[0].data.lastError).toContain("MARKET_CLOSE:broken_market:Error");
