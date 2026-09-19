@@ -1,18 +1,18 @@
-.details { display: inline-flex; align-items: baseline; gap: 16px; font-size: inherit; line-height: inherit; white-space: nowrap; }
-.contract { display: inline-flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
-.volume { display: inline-flex; align-items: baseline; gap: 6px; }
+.details { display: contents; font-size: inherit; line-height: inherit; }
+.contract { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.volume { justify-self: end; margin-inline-start: 24px; text-align: right; white-space: nowrap; }
 .volume > span:last-child { color: var(--ink-muted); }
 :global(.activity-panel):has(.details) { min-width: 0; }
 :global(.trade-feed):has(.details) { min-width: 0; max-width: 100%; overflow-x: auto; }
 :global(.trade-feed) li:has(.details) {
-  display: flex; align-items: center; gap: 12px;
-  width: max-content; min-width: 100%; padding: 16px 0;
+  display: grid; grid-template-columns: 8px minmax(0, 1fr) 140px; align-items: center; gap: 12px;
+  width: 100%; min-width: 760px; padding: 16px 0;
   font-size: 14px; line-height: 22px; white-space: nowrap;
 }
-:global(.trade-feed) li:has(.details) > span:nth-child(2) { display: inline-flex; align-items: baseline; gap: 10px; }
+:global(.trade-feed) li:has(.details) > span:nth-child(2) { display: grid; grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) max-content; align-items: baseline; column-gap: .3em; min-width: 0; }
 :global(.trade-feed) li:has(.details) > span:nth-child(2) > strong { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 :global(.trade-feed) li:has(.details) > :global(.activity-dot) { flex: none; margin: 0; align-self: center; }
-:global(.trade-feed) li:has(.details) > time { margin-inline-start: auto; padding-inline-start: 16px; font-size: 12px; line-height: 22px; }
+:global(.trade-feed) li:has(.details) > time { margin: 0; padding: 0; grid-column: 3; text-align: right; font-size: 12px; line-height: 22px; }
 .amount { display: inline-block; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: baseline; }
 .amount > svg { width: 1em; height: 1em; margin-inline-end: .25em; vertical-align: -.125em; }
 .positive, .negative, .option { font-weight: 700; }
