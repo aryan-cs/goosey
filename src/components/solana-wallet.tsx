@@ -202,6 +202,11 @@ function WalletAccount({ runtime, wallet, snapshot }: { runtime: SolanaRuntime; 
           const result = await trackTransactionStatus(rpc, { ...receipt, signal, onObservation: value => { if (!controller.signal.aborted) observe(receipt, value.status); } });
           if (!controller.signal.aborted) observe(receipt, result.status);
         }));
+        // A receipt can finalize after the initial balance snapshot on reload.
+        // Read the finalized wallet again so recovery updates balances as well.
+        const reconciledBalance = await readGooseyWalletBalance({ runtime, wallet: address(account), signal });
+        signal.throwIfAborted();
+        setBalance(reconciledBalance);
       } catch (reason) { if (!controller.signal.aborted) { setErrorScope("balance"); setError(errorMessage(reason)); } }
     }
     void load();
