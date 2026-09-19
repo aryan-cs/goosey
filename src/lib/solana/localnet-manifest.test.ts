@@ -1,12 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { address, getAddressEncoder } from "@solana/kit";
-import { elfHash, localnetManifestSchema, privateDirectory, verifyLocalnetProgramData } from "./localnet-manifest";
+import { elfHash, localnetManifestSchema, localnetLedgerArguments, parseLocalnetLedgerShreds, privateDirectory, verifyLocalnetProgramData } from "./localnet-manifest";
 
 const admin = "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q";
 const enrollment = "SysvarRent111111111111111111111111111111111";
 const manifest = { version: 1, program: admin, admin, enrollment, validatorVersion: "test-only",
   artifactSha256: "a".repeat(64), rpcPort: 31000, perWalletCap: "1000", campaignCap: "10000" };
 describe("localnet operator manifest (pure fixtures, not chain evidence)", () => {
+  it("interprets legacy manifests with bounded million-shred retention without mutating input", () => {
+    const original = JSON.stringify(manifest);
+    expect(localnetLedgerArguments(localnetManifestSchema.parse(manifest))).toEqual(["--limit-ledger-size", "1000000"]);
+    expect(JSON.stringify(manifest)).toBe(original);
+    expect(parseLocalnetLedgerShreds(undefined)).toBe(1_000_000);
+  });
+  it.each([10_000, 250_000, 1_000_000, 10_000_000])("retains explicit %s shreds on repeated manifest reads", ledgerShredLimit => {
+    const parsed = localnetManifestSchema.parse({ ...manifest, ledgerShredLimit });
+    expect(localnetLedgerArguments(localnetManifestSchema.parse(JSON.parse(JSON.stringify(parsed)))))
+      .toEqual(["--limit-ledger-size", String(ledgerShredLimit)]);
+    expect(parseLocalnetLedgerShreds(String(ledgerShredLimit))).toBe(ledgerShredLimit);
+  });
+  it.each(["0", "9999", "10000001", "-1", "010000", "1e6", "10000.0", " 10000", "10000 ", "", "999999999999999999999999"])("rejects unsafe CLI retention %s", value => {
+    expect(() => parseLocalnetLedgerShreds(value)).toThrow();
+  });
+  it.each([0, 9999, 10000001, -1, 10000.5, "1000000", null, Infinity])("rejects unsafe stored retention %s", ledgerShredLimit => {
+    expect(() => localnetManifestSchema.parse({ ...manifest, ledgerShredLimit })).toThrow();
+  });
   it("retains exact u64 caps and explicit port", () => {
     expect(localnetManifestSchema.parse({ ...manifest, campaignCap: "18446744073709551615" }).campaignCap).toBe("18446744073709551615");
   });
