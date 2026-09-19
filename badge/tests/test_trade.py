@@ -1,4 +1,8 @@
 from harness import *
+import json,sys
+sys.path.insert(0,str(root/'badge/scripts'))
+from cloud_snapshot import mailbox_frame
+g.mailbox=mailbox_frame(json.loads((output/'snapshot.json').read_text())).decode()
 challenge='a'*64
 
 def account(gen,state='READY'):
@@ -9,7 +13,7 @@ def response(state,qid='c123456789012345678901234',amount='50001',ttl=20,message
     g.files['appdata/response.txt']=f'GR1\t{rid}\t{challenge}\t{state}\t{qid}\t{amount}\t0\t{ttl}\t{message}\tEND\n'
 account(1);g.fresh();has('Preparing sign-in');snapshot('trade-link')
 account(2);tick(2000);has('@badge_test');has('1000.000')
-press('A');has('BUY YES');press('UP');has('x2');snapshot('trade-amount')
+press('A','A','A');has('BUY YES');press('UP');has('x2');snapshot('trade-amount')
 press('A');has('Getting a live quote');assert '\tQUOTE\t' in g.files['appdata/request.txt']
 response('QUOTE');tick(4000);has('Pay 50.001');snapshot('trade-review')
 press('A');has('Trade submitted');assert '\tTRADE\t' in g.files['appdata/request.txt']

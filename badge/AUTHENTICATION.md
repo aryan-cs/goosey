@@ -91,3 +91,22 @@ image, so the UI relies on the stamp written only after successful asset upload.
 This QR build still needs the Mac gateway for internet access. QR scanning does
 not add wireless transport to the participant badge. No password is stored on
 or broadcast by the badge. Account activation remains a user action on the phone.
+
+### Startup memory correction
+
+The physical badge reported an `on_enter` allocator failure at 50,898 Lua bytes
+with a 67,547-byte peak, despite a 98,304-byte quota. The system allocator, not
+just the Lua quota, was exhausted. The client no longer embeds a second complete
+market snapshot in its Lua source or parses stored market history during the
+sign-in screen. History is loaded from the authoritative gateway mailbox when
+needed, with a streaming row parser rather than a full duplicate token table.
+No saved history, holdings or account data are reset.
+
+The installed correction displayed the small QR and the saved Waterloo market
+chart on the physical device. Observed free system memory was about 18 KB on
+sign-in and 10 KB with the market screen loaded; this is not a guarantee for all
+future catalog sizes. Account API access returned READY after the user's link.
+The later repeated-start check was interrupted by a USB transfer left incomplete
+when its host process was stopped. Console uploads now defer Ctrl-C until the
+announced payload and final prompt complete. A badge restart is still needed to
+clear the already-interrupted old transfer before further hardware checks.

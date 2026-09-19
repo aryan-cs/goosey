@@ -1,4 +1,4 @@
-local cloud=__CLOUD__
+local cloud={markets={},capturedAt=""}
 __CLOUD_READER__
 local trade,qr,uiRoot
 local C={bg=0xc5d99b,panel=0x91ad65,text=0x1c3524,muted=0x4f6b3e}
@@ -29,7 +29,7 @@ local function refresh(initial)
   local nextCloud=readCloudFrame(data)
   if not nextCloud or nextCloud.generation==cloud.generation then return false end
   if cloud.generation and (#nextCloud.generation<#cloud.generation or (#nextCloud.generation==#cloud.generation and nextCloud.generation<cloud.generation)) then return false end
-  local slug=cloud.markets[selected].slug
+  local slug=cloud.markets[selected] and cloud.markets[selected].slug
   cloud=nextCloud;selected=1
   for i,m in ipairs(cloud.markets) do if m.slug==slug then selected=i end end
   if not initial then lastRx=badge.sys.ms() end
@@ -45,6 +45,9 @@ local function render()
   if trade then local user,balance=trade.header();status:set_text(user);stamp:set_text(balance) end
   if page=="link" and trade.pairing_challenge() then header:set_text("Sign in");status:set_text("");stamp:set_text("") end
   local m=cloud.markets[selected]
+  if not m and (page=="list" or page=="detail") then
+    text(1,"Loading markets",10,70,300,20);return
+  end
   if page=="list" then
     local first=math.floor((selected-1)/3)*3+1
     for row=0,2 do
@@ -98,9 +101,9 @@ function on_enter(root)
   badge.sys.gc_step()
   page,selected,side,setting="list",1,1,1
   lastRead,lastRx,lastGC=0,nil,0
-  refresh(true)
   badge.sys.gc_step()
   trade=require("trade");trade.init()
+  badge.sys.gc_step()
   local function box(x,y,w,h,color)
     local b=badge.ui.box(root,w,h);b:set_pos(x,y)
     b:style({bg_color=color,border_width=0,pad_all=0,radius=0});return b
@@ -118,13 +121,16 @@ function on_enter(root)
   chart:style({line_color=C.text,line_width=2})
   labels={};for i=1,10 do labels[i]=badge.ui.label(root,"") end
   badge.led.clear();badge.led.show()
-  if not trade.name then page="link";local m=cloud.markets[selected];trade.open(m.slug,"YES",m.title) end
+  if not trade.name then page="link" end
   initialized=true;render()
 end
 function on_button(button,kind)
   if not initialized or kind~=badge.input.KIND.PRESSED then return end
   local B=badge.input.BUTTON
-  if page=="link" then
+  if #cloud.markets==0 and page~="link" and button~=B.START and button~=B.B then return end
+  if page=="link" and trade.phase=="account" and trade.name and button==B.A then
+    page="list"
+  elseif page=="link" then
     if trade.button(button) then page="detail" end
   elseif button==B.START then page=page=="settings" and "list" or "settings";setting=1
   elseif page=="list" then
@@ -146,10 +152,11 @@ function on_tick()
   if now-lastGC>=600 then badge.sys.gc_step();lastGC=now end
   if now-lastRead>=2000 then
     lastRead=now
-    local changed=refresh(false)
-    if trade.tick() then changed=true end
+    local changed=trade.tick()
+    badge.sys.gc_step()
+    if trade.name or page~="link" then if refresh(false) then changed=true end end
     if lastRx and now-lastRx>=45000 then lastRx=nil;changed=true end
-    if changed then render() end
+    if changed then badge.sys.gc_step();render() end
   end
 end
 function on_exit()
