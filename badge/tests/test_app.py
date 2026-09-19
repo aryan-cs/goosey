@@ -80,7 +80,7 @@ def settings_item(n):
 
 g.fresh();has('10000.00');snapshot('01-markets')
 # A opens; B backs out; Start settings never places an order.
-press('A');has('57.4%');snapshot('02-market')
+press('A');has('50.0%');snapshot('02-market')
 press('START');has('Settings');press('B');has('Market')
 press('A');has('Order');press('DOWN','DOWN','RIGHT','RIGHT');has('< 3 >');snapshot('03-ticket')
 press('DOWN','A');has('Buy 3 YES shares');snapshot('04-review')
@@ -89,17 +89,17 @@ press('B','A');has('Order saved');assert g.writes==1;snapshot('05-receipt')
 # The next A leaves receipt, a repeated A only opens a ticket.
 press('A','A');assert g.writes==1
 press('RIGHT','DOWN','DOWN','RIGHT','RIGHT','DOWN','A','A');has('Sold 3 YES');assert g.writes==2
-parts=[int(x) for x in g.saved['paper_v1'].split(',')];assert parts[1]<=1000000 and parts[2:]==[0]*22
+parts=[int(x) for x in g.saved['paper_v2'].split(',')];assert parts[1]<=1000000 and parts[2:]==[0]*6
 press('A','A','RIGHT');review();has('Not enough shares');assert g.writes==2
 # Buy NO, then verify saved portfolio and account.
-press('B','RIGHT','A');review();press('A');has('Bought 1 NO');saved=g.saved['paper_v1']
+press('B','RIGHT','A');review();press('A');has('Bought 1 NO');saved=g.saved['paper_v2']
 g.on_exit();assert len(list(g.leds.values()))==0
-g.fresh();assert g.saved['paper_v1']==saved
+g.fresh();assert g.saved['paper_v2']==saved
 settings_item(2);has('0Y\n1N');snapshot('08-portfolio')
 press('B','DOWN','A');has('TEST-BADGE-001');snapshot('06-account')
 press('A');has('not available');snapshot('09-linking')
 # Failed persistence never applies a trade.
-g.fresh();press('A','A');review();g.fail_save=True;press('A');has('Save failed');assert g.saved['paper_v1']==saved
+g.fresh();press('A','A');review();g.fail_save=True;press('A');has('Save failed');assert g.saved['paper_v2']==saved
 g.fail_save=False
 # Every full title appears in the list and detail, with no ellipsis.
 import json
@@ -113,9 +113,9 @@ for i,m in enumerate([m for m in catalog if not m['orderBook']]):
     if m['orderBook']:
         press('A');has('View only');assert 'Review order' not in g.visible()
     press('B','DOWN')
-has('closing ceremony')
+has('white person')
 before=g.visible();g.on_button(g.badge.input.BUTTON.DOWN,2);assert g.visible()==before
-g.saved['paper_v1']='1,0,-5';g.fresh();has('10000.00')
+g.saved['paper_v2']='1,0,-5';g.fresh();has('10000.00')
 g.badge.me.badge_id=lua.eval('function() return nil end');settings_item(3);has('Not provisioned')
 assert len(list(g.widgets.values()))<=20
 assert 'BOOK' not in g.visible()
@@ -123,14 +123,14 @@ widget_count=len(list(g.widgets.values()));saved_writes=g.writes
 for tick in range(120):g.clock=tick*100;g.on_tick()
 assert len(list(g.widgets.values()))==widget_count and g.writes==saved_writes
 g.on_exit();assert len(list(g.leds.values()))==0
-g.saved['paper_v1']=None;g.fresh();press('A')
+g.saved['paper_v2']=None;g.fresh();press('A')
 for i in range(14):
     g.clock=i*1000
     buy();press('A')
 snapshot('07-paper-history')
 assert max(len(list(w.points.values())) for w in g.widgets.values() if w.kind=='line')==12
-g.saved['paper_v1']='1,0,'+','.join(['0']*22);g.fresh();press('A','A');review();has('Not enough paper feathers')
-g.saved['paper_v1']='1,,20,'+','.join(['0']*22);g.fresh();has('10000.00')
+g.saved['paper_v2']='1,0,'+','.join(['0']*6);g.fresh();press('A','A');review();has('Not enough paper feathers')
+g.saved['paper_v2']='1,,20,'+','.join(['0']*6);g.fresh();has('10000.00')
 assert (output/'goosey.lua').stat().st_size<48*1024
 print('PASS: A/B navigation, settings return without trading, all full titles, list/detail layout,')
 print('buy/sell accounting, repeated button safety, saved portfolio, failed/malformed saves,')
@@ -138,7 +138,7 @@ print('balance/share limits, order-book hidden, graph cap, <=20 widgets, idle wi
 print('Host preview uses approximate fonts; physical badge verification is separate.')
 
 # Two samples span the chart; one sample never fabricates a second point.
-g.saved['paper_v1']=None;g.fresh();press('A')
+g.saved['paper_v2']=None;g.fresh();press('A')
 line=next(w for w in g.widgets.values() if w.kind=='line')
 assert line.hide
 assert 'Vol --' in g.visible() and 'Closes --' in g.visible()
@@ -147,5 +147,14 @@ assert not line.hide
 assert line.points[1][1]==0 and line.points[2][1]==170
 assert 'pts' in g.visible()
 # Hidden order-book slot remains in save schema; visible list wraps among ten.
-g.fresh();press('UP','A');has('every finalist')
+g.fresh();press('UP','A');has('Waterloo team')
 assert 'order book' not in g.visible().lower()
+
+# Legacy save is untouched and never interpreted under new market identities.
+legacy='1,12345,'+','.join(['2']*22)
+g.saved['paper_v1']=legacy;g.saved['paper_v2']=None;g.fresh()
+has('10000.00');assert g.saved['paper_v1']==legacy
+# The final market can hold shares (it is no longer a view-only order book).
+press('UP','A');buy();g.on_exit();g.fresh()
+assert g.saved['paper_v1']==legacy
+settings_item(2);press('UP');has('1Y')
