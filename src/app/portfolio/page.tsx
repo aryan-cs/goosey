@@ -28,7 +28,7 @@ export default async function PortfolioPage() {
   const totalValue = user.balanceMilli + positionValue;
 
   return <div className="page-shell portfolio-page">
-    <header className="page-header"><span className="eyebrow">Your account</span><h1>Portfolio</h1><p>Values show what you could cash out now after price changes and fees.</p></header>
+    <header className="page-header"><span className="eyebrow">Your account</span><h1>Portfolio</h1><p>Values show what you could cash out now after price changes and fees.</p><Link className="button button-secondary" href="/portfolio/activity">Orders and fills</Link></header>
     <section className="metric-grid"><MetricCard label="Total value" value={<>🪶 {formatFeathers(totalValue, 2)}</>} detail="Balance plus open positions" icon={<ChartNoAxesCombined />} /><MetricCard label="Available" value={<>🪶 {formatFeathers(user.balanceMilli, 2)}</>} detail="Ready to trade" icon={<WalletCards />} /><MetricCard label="Position value" value={<>🪶 {formatFeathers(positionValue, 2)}</>} detail={`${positions.length} open market${positions.length === 1 ? "" : "s"}`} icon={<Feather />} /><MetricCard label="Open profit/loss" value={<>🪶 {formatFeathers(unrealized, 2)}</>} trend={cost > 0n ? Number(unrealized * 10_000n / cost) / 100 : 0} icon={<HandCoins />} /></section>
     <section><SectionHeader eyebrow="Open positions" title="Positions" description="These values include price changes and fees." />{values.length ? <div className="position-list">{values.map(({ position }) => {
       const probability = marketProbabilityBps(position.market) / 100;
