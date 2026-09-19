@@ -8,24 +8,14 @@ import {
   assertUniqueFillJournalLinkage,
 } from "../src/lib/invariants";
 import { requiredCollateralMilli } from "../src/lib/market-maker";
+import { reconcileReservationCash } from "../src/lib/reservation-reconciliation";
+import { readReconciliationSnapshot } from "../src/lib/reconciliation-snapshot";
 
 async function main() {
   await requireDatabaseStartup();
   const errors: string[] = [];
-  const [journals, accounts, users, markets] = await Promise.all([
-    db.journalEntry.findMany({ include: { postings: true } }),
-    db.ledgerAccount.findMany({ include: { postings: { include: { journalEntry: { select: { status: true } } } } } }),
-    db.user.findMany({ where: { role: "USER" } }),
-    db.market.findMany({
-      include: {
-        collateralAccount: true,
-        positions: true,
-        orders: { include: { reservation: true } },
-        orderFills: { select: { id: true, journalEntryId: true } },
-        orderReservations: true,
-      },
-    }),
-  ]);
+  const { journals, accounts, users, markets } = await readReconciliationSnapshot(db);
+  errors.push(...reconcileReservationCash(accounts, markets.flatMap((market) => market.orderReservations)));
   for (const journal of journals) {
     const sum = journal.postings.reduce((total, posting) => total + posting.amountMilli, 0n);
     if (sum !== 0n) errors.push(`journal ${journal.id} is unbalanced by ${sum}`);

@@ -19,6 +19,8 @@ export interface OrderReservationLike {
 export interface ReservableOrderLike {
   userId: string;
   marketId: string;
+  action: string;
+  outcome: string;
   status: string;
   remainingQuantity: number;
   reservedCashMilli: bigint;
@@ -140,6 +142,16 @@ export function assertActiveReservationConsistency(
   const hasReservation = reservationCash > 0n || reservationShares > 0;
   if (active && !hasReservation) throw new Error("Active order has an empty reservation.");
   if (!active && hasReservation) throw new Error("Inactive order retains an active reservation.");
+  if (active && order.action === "SELL") {
+    if (order.outcome !== "YES" && order.outcome !== "NO") {
+      throw new Error("Active SELL order has an invalid outcome.");
+    }
+    const selected = order.outcome === "YES" ? reservation.reservedYesQuantity : reservation.reservedNoQuantity;
+    const opposite = order.outcome === "YES" ? reservation.reservedNoQuantity : reservation.reservedYesQuantity;
+    if (selected !== order.remainingQuantity || opposite !== 0) {
+      throw new Error("Active SELL reservation must exactly back the remaining quantity on its selected outcome only.");
+    }
+  }
 }
 
 export function assertPositionReservationConsistency(

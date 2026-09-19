@@ -61,6 +61,8 @@ describe("ledger invariants", () => {
     const order = {
       userId: "user-1",
       marketId: "market-1",
+      action: "BUY",
+      outcome: "YES",
       status: "OPEN",
       remainingQuantity: 4,
       reservedCashMilli: 202_000n,
@@ -85,6 +87,45 @@ describe("ledger invariants", () => {
       { ...order, status: "FILLED", remainingQuantity: 0 },
       reservation,
     )).toThrow(/Inactive/);
+  });
+
+  describe.each(["YES", "NO"])("SELL %s backing", (outcome) => {
+    function fixture(selected: number, opposite = 0, status = "OPEN") {
+      return {
+        order: {
+          userId: "user-1", marketId: "market-1", action: "SELL", outcome, status,
+          originalQuantity: 10, filledQuantity: status === "PARTIALLY_FILLED" ? 6 : 0,
+          canceledQuantity: 0, remainingQuantity: status === "PARTIALLY_FILLED" ? 4 : 10,
+          reservedCashMilli: 0n, reservedFeeMilli: 0n, reservedShares: selected + opposite,
+        },
+        reservation: {
+          userId: "user-1", marketId: "market-1", reservedPrincipalMilli: 0n, reservedFeeMilli: 0n,
+          reservedYesQuantity: outcome === "YES" ? selected : opposite,
+          reservedNoQuantity: outcome === "NO" ? selected : opposite,
+        },
+      };
+    }
+
+    it("accepts exact open and partially-filled backing for only the unfilled quantity", () => {
+      for (const [quantity, status] of [[10, "OPEN"], [4, "PARTIALLY_FILLED"]] as const) {
+        const { order, reservation } = fixture(quantity, 0, status);
+        expect(() => assertOrderQuantityConservation(order)).not.toThrow();
+        expect(() => assertActiveReservationConsistency(order, reservation)).not.toThrow();
+      }
+    });
+
+    it.each([
+      ["under-reserved", 1, 0], ["over-reserved", 11, 0],
+      ["wrong outcome", 0, 10], ["both outcomes", 10, 1],
+    ] as const)("rejects %s backing even when the reservation caches agree", (_label, selected, opposite) => {
+      const { order, reservation } = fixture(selected, opposite);
+      expect(() => assertActiveReservationConsistency(order, reservation)).toThrow(/Active SELL reservation/);
+    });
+
+    it("rejects partial-fill backing that still reserves the original quantity", () => {
+      const { order, reservation } = fixture(10, 0, "PARTIALLY_FILLED");
+      expect(() => assertActiveReservationConsistency(order, reservation)).toThrow(/Active SELL reservation/);
+    });
   });
 
   it("reconciles reserved shares to positions without overselling", () => {
