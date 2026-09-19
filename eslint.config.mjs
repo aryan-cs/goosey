@@ -5,5 +5,6 @@ import nextTs from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", ".next-dev/**", "node_modules/**", "coverage/**", "prisma/dev.db*", "src/generated/**"]),
+  // Sandbox builds and local QA captures are generated artifacts, not source.
+  globalIgnores([".next/**", ".next-dev/**", ".next-sandbox/**", "output/**", "node_modules/**", "coverage/**", "prisma/dev.db*", "src/generated/**"]),
 ]);
