@@ -18,6 +18,8 @@ vi.mock("./market-terms-store", () => ({ readRetainedMarketTerms: boundary.terms
 vi.mock("@solana/kit", async original => ({ ...await original<typeof import("@solana/kit")>(),
   createSolanaRpc: () => ({ getGenesisHash: () => ({ send: boundary.genesis }) }) }));
 import { publishSolanaMarket, registerSolanaMarket } from "./market-catalog";
+import { readSolanaCatalog } from "./catalog-read";
+import { deriveGooseyMarketAddresses } from "./escrow-client";
 
 const program = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const genesis = "Bax5P2GmYBb2P6UjJFmEVys7cpRzY4A85ncAJqtgvSsm";
@@ -78,6 +80,39 @@ afterEach(async () => {
 });
 
 describe("catalog registration with real isolated SQLite and mocked chain/store boundaries", () => {
+  it("actual discovery hides drafts, exposes published canonical links, and never returns SQL financial defaults", async () => {
+    const request = input();
+    const canonical = await deriveGooseyMarketAddresses({ programAddress: program, marketId: request.chainMarketId });
+    boundary.read.mockResolvedValue({ ...snapshot(), market: canonical.market });
+    await registerSolanaMarket(request, db());
+    expect(await readSolanaCatalog(request.runtime, { limit: 25 }, db())).toEqual({ items: [], hasMore: false, nextCursor: null });
+    await publishSolanaMarket(request, db());
+    const result = await readSolanaCatalog(request.runtime, { limit: 25 }, db());
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ href: "/chain/markets/7", title: retained().terms.question,
+      chain: { marketId: "7", marketAddress: canonical.market, programAddress: program, genesisHash: genesis } });
+    for (const key of ["volumeMilli", "yesShares", "noShares", "probabilityYesBps", "collateralAccountId", "balanceMilli", "acceptingOrders"]) {
+      expect(result.items[0]).not.toHaveProperty(key);
+    }
+    expect(await readSolanaCatalog({ ...request.runtime, genesisHash: "AjRRXmyGBFhUtVWWp5xYXYKAP4Ha8vyTDRNVrkTVA2DE" }, { limit: 25 }, db()))
+      .toEqual({ items: [], hasMore: false, nextCursor: null });
+  });
+  it("actual catalog pagination preserves same-time rows without duplicates", async () => {
+    for (const id of [7n, 8n, 9n]) {
+      const request = input(); request.chainMarketId = id; request.metadata.slug = `isolated-market-${id}`;
+      const canonical = await deriveGooseyMarketAddresses({ programAddress: program, marketId: id });
+      boundary.read.mockResolvedValue({ ...snapshot(), market: canonical.market });
+      await registerSolanaMarket(request, db()); await publishSolanaMarket(request, db());
+    }
+    await db().market.updateMany({ data: { createdAt: new Date("2026-01-01T00:00:00.000Z") } });
+    const request = input(), financial = await financialState();
+    const first = await readSolanaCatalog(request.runtime, { limit: 2 }, db());
+    expect(first.items).toHaveLength(2); expect(first.hasMore).toBe(true); expect(first.nextCursor).toBeTruthy();
+    const second = await readSolanaCatalog(request.runtime, { limit: 2, cursor: first.nextCursor! }, db());
+    expect(second.items).toHaveLength(1); expect(second.hasMore).toBe(false); expect(second.nextCursor).toBeNull();
+    expect(new Set([...first.items, ...second.items].map(row => row.chain.marketId)).size).toBe(3);
+    expect(await financialState()).toEqual(financial);
+  });
   it("publishes only an existing exact verified entry and replays without duplicate writes", async () => {
     const registered = await registerSolanaMarket(input(), db());
     const financial = await financialState();
