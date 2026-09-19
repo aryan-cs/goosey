@@ -1,5 +1,10 @@
 # Badge account access (0.10.0)
 
+**Product direction:** participants must not need USB. The implemented flow below
+is a development transport. See [wireless identity findings](WIRELESS-IDENTITY.md)
+for the existing provisioned identity/token system, Lua API boundary, and the
+organizer integration needed for cable-free automatic account access.
+
 The user now permits one-time sign-in as an alternative to automatic Socials
 email authentication. Stock Lua does not expose Socials email or an organizer
 identity proof. A mutable contact email or badge ID is not a login credential.
