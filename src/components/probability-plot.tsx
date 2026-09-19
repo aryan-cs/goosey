@@ -1,4 +1,5 @@
 "use client";
+import { withOpeningBaseline, type OpeningBaseline } from "@/lib/chart-opening";
 import rangeStyles from "./chart-range.module.css";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -15,7 +16,7 @@ function dateLabel(timestamp: number) {
 
 export function ProbabilityPlot({ points, compact = false, positive = true, startAt, endAt, label = "YES probability", emptyLabel = "No probability history yet", onInspect }: {
   points: ChartPoint[]; compact?: boolean; positive?: boolean; startAt?: number; endAt?: number; label?: string; emptyLabel?: string;
-  onInspect?: (point: { timestamp: number; probability: number } | null) => void;
+  onInspect?: (point: { timestamp: number; probability: number; opening?: boolean } | null) => void;
 }) {
   const series = useMemo(() => normalizeChartPoints(points), [points]);
   const [index, setIndex] = useState<number | null>(null);
@@ -62,7 +63,7 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
       <span className="probability-dot" style={{ left: `${selectedX}%`, top: `${y(selected.probability)}%` }} aria-hidden="true" />
       <span className="probability-tooltip" style={{ left: `clamp(0px, ${selectedX}% - 110px, max(0px, 100% - 220px))` }} role="tooltip" aria-hidden={index === null}>
         <time dateTime={new Date(selected.timestamp).toISOString()}>{dateLabel(selected.timestamp)}</time>
-        <strong><i />{label === "YES probability" || label === "YES execution price" ? "Yes" : label}<b>{probabilityLabel(selected.probability)}</b></strong>
+        <strong><i />{selected.opening ? "Opening price" : label === "YES probability" || label === "YES execution price" ? "Yes" : label}<b>{probabilityLabel(selected.probability)}</b></strong>
       </span>
       {!compact && <span className="probability-point-label" style={{ left: `clamp(0px, ${selectedX}% + 10px, max(0px, 100% - 120px))`, top: `${y(selected.probability)}%` }} aria-hidden="true">YES {probabilityLabel(selected.probability)}</span>}
     </div>
@@ -70,9 +71,9 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
   </div>;
 }
 
-export function ProbabilityChart({ points, label = "YES probability", height = 300, asOf, marketSlug, executionPrices = false }: { points: ChartPoint[]; label?: string; height?: number; asOf?: number; marketSlug?: string; executionPrices?: boolean }) {
+export function ProbabilityChart({ points, label = "YES probability", height = 300, asOf, marketSlug, executionPrices = false, openingBaseline }: { points: ChartPoint[]; label?: string; height?: number; asOf?: number; marketSlug?: string; executionPrices?: boolean; openingBaseline?: OpeningBaseline }) {
   const [range, setRange] = useState<"1D" | "1W" | "1M" | "ALL">("ALL");
-  const [inspected, setInspected] = useState<{ timestamp: number; probability: number } | null>(null);
+  const [inspected, setInspected] = useState<{ timestamp: number; probability: number; opening?: boolean } | null>(null);
   // The first client render must use the same domain as the server render.
   // Advance to wall time only after the history request finishes below.
   const [clock, setClock] = useState(() => asOf ?? Math.max(0, ...normalizeChartPoints(points).map(point => point.timestamp)));
@@ -97,14 +98,14 @@ export function ProbabilityChart({ points, label = "YES probability", height = 3
   }, [marketSlug, points, retry, range]);
   const observations = history?.range === range && history.slug === marketSlug ? history.points : points;
   const now = Math.max(clock, ...normalizeChartPoints(observations).map(point => point.timestamp));
-  const series = useMemo(() => selectChartRange(observations, range, now), [observations, range, now]);
+  const series = useMemo(() => selectChartRange(withOpeningBaseline(observations, openingBaseline, now), range, now), [observations, openingBaseline, range, now]);
   const latest = series.at(-1);
   const selected = inspected ?? latest;
   const change = latest && series[0] ? (latest.probability - series[0].probability) * 100 : null;
   const duration = range === "1D" ? 86400000 : range === "1W" ? 604800000 : range === "1M" ? 2592000000 : null;
   return <figure className="probability-chart" style={{ minHeight: height }}>
     {historyError && <p className="chart-history-error" role="status">Full history could not load. <button type="button" onClick={() => setRetry(value => value + 1)}>Try again</button></p>}
-    <figcaption><div><span className="eyebrow">{executionPrices ? inspected ? "Historical execution" : "Last execution" : inspected ? "Historical probability" : "Current forecast"}</span><strong>{selected ? probabilityLabel(selected.probability) : "N/A"}</strong>{inspected && <small className="chart-inspected-time">{dateLabel(inspected.timestamp)}</small>}</div>
+    <figcaption><div><span className="eyebrow">{selected?.opening ? "Opening price" : executionPrices ? inspected ? "Historical execution" : "Last execution" : inspected ? "Historical probability" : "Current forecast"}</span><strong>{selected ? probabilityLabel(selected.probability) : "N/A"}</strong>{inspected && <small className="chart-inspected-time">{dateLabel(inspected.timestamp)}</small>}</div>
       {change !== null && <span className={`chart-change ${change < 0 ? "movement-down" : change > 0 ? "movement-up" : ""}`}>{change > 0 ? "+" : ""}{Number(change.toFixed(2))} pts <small>in this period</small></span>}
     </figcaption>
     <ProbabilityPlot key={`${range}-${revision}`} points={series} label={label} emptyLabel={executionPrices ? "No executions yet" : "No probability history yet"} startAt={duration === null ? undefined : now - duration} endAt={now} onInspect={setInspected} />

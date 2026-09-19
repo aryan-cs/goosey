@@ -41,11 +41,16 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
     },
     });
     if (!market || (market.status === "DRAFT" && user?.role !== "ADMIN")) return null;
-    return { market, mark: (await loadMarketMarks(tx, [market])).get(market.id)! };
+    const [firstTrade, firstSnapshot] = market.pricingModel === "ORDER_BOOK" ? [null, null] : await Promise.all([
+      tx.trade.findFirst({ where: { marketId: market.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { createdAt: true, priceBeforeBps: true } }),
+      tx.marketPriceSnapshot.findFirst({ where: { marketId: market.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { createdAt: true, yesProbabilityBps: true } }),
+    ]);
+    return { market, firstTrade, firstSnapshot, mark: (await loadMarketMarks(tx, [market])).get(market.id)! };
   });
   if (!data) notFound();
   const { market, mark } = data;
   const yesBps = mark.probabilityYesBps;
+  const openingBps = data.firstTrade?.priceBeforeBps ?? data.firstSnapshot?.yesProbabilityBps ?? yesBps;
   const open = market.status === "OPEN" && market.acceptingOrders && market.closesAt > new Date();
   const orderBookMarket = market.pricingModel === "ORDER_BOOK";
   const points = orderBookMarket
@@ -61,7 +66,10 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
           <div className="market-header-actions"><WatchlistButton marketId={market.id} signedIn={Boolean(user)} icon={<Bookmark />} /><ShareButton title={market.title} icon={<Share2 />} /></div>
         </header>
 
-        <ProbabilityChart points={points} marketSlug={market.slug} label={orderBookMarket ? "YES execution price" : "YES probability"} executionPrices={orderBookMarket} height={260} />
+        <ProbabilityChart openingBaseline={orderBookMarket || openingBps === null ? undefined : {
+          probability: openingBps / 10_000,
+          until: (data.firstTrade?.createdAt ?? new Date()).getTime(),
+        }} points={points} marketSlug={market.slug} label={orderBookMarket ? "YES execution price" : "YES probability"} executionPrices={orderBookMarket} height={260} />
 
       </article>
       {orderBookMarket

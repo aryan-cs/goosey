@@ -1,11 +1,13 @@
 export interface ChartPoint {
   timestamp: string | number | Date;
   probability: number;
+  opening?: boolean;
 }
 
 export interface NormalizedChartPoint {
   timestamp: number;
   probability: number;
+  opening?: boolean;
 }
 
 export type ChartRange = "1D" | "1W" | "1M" | "ALL";
@@ -17,7 +19,7 @@ export function normalizeChartPoints(points: readonly ChartPoint[]): NormalizedC
     const timestamp = new Date(point.timestamp).getTime();
     if (!Number.isFinite(timestamp) || !Number.isFinite(point.probability)
       || point.probability < 0 || point.probability > 1) continue;
-    byTime.set(timestamp, { timestamp, probability: point.probability });
+    byTime.set(timestamp, { timestamp, probability: point.probability, ...(point.opening ? { opening: true } : {}) });
   }
   return [...byTime.values()].sort((left, right) => left.timestamp - right.timestamp);
 }
