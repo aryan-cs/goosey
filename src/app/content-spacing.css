@@ -22,6 +22,20 @@
 .page-shell .market-grid,
 .page-shell .home-sidebar { gap: 20px; }
 
+/* Keep the value and unit equally inset from the curved ends of the field. */
+.trade-ticket .quantity-input { padding-inline: 24px; gap: 12px; }
+.trade-ticket .quantity-input input {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 0;
+  padding: 0;
+}
+.trade-ticket .quantity-input > span {
+  flex: 0 0 auto;
+  padding: 0;
+  line-height: 1;
+}
+
 @media (max-width: 809.98px) {
   :root { --content-panel-inset: 20px; }
   .page-shell .featured-grid,
