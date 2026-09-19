@@ -1,11 +1,11 @@
-# Goosey badge 0.7.0
+# Goosey badge 0.7.1
 
-The installable app is an offline practice app using the three requested
+The installable app is an offline practice app using the six requested
 markets in `prisma/selected-markets.json`, shared with the web database seed.
-Arm wrestling is deferred. Version 0.7.0 uses a separate `paper_v2` save and
+Arm wrestling is deferred. Version 0.7.1 uses a separate `paper_v2` save and
 fresh 10,000 local balance; the old `paper_v1` wallet and holdings stay untouched.
 It does not transfer old positions into unrelated questions or modify cloud
-accounts. All three start at a neutral 50%, not a researched probability.
+accounts. All six start at a neutral 50%, not a researched probability.
 Database-backed history/account integration remains pending.
 
 ## Build and install
@@ -131,3 +131,9 @@ the open app session; balance and holdings persist across launches.
 
 Version 0.7 supersedes the legacy-catalog pin described above. The old catalog
 is retained for recovery only; new builds use the shared selected-markets file.
+
+The three stage markets append to the initial paper_v2 catalog. Existing
+three-market balances and holdings are read unchanged; new positions start at
+zero, and the next successful trade saves the expanded record. The initial
+three-slug prefix is checked at build time. No live database is changed by a
+build, and the seed does not remove existing markets.

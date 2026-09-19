@@ -192,12 +192,12 @@ function on_enter(root)
   local data=badge.store.get_str("paper_v2","")
   local vals={}
   for v in string.gmatch(data,"[^,]+") do vals[#vals+1]=tonumber(v) or -1 end
-  if table.concat(vals,",")==data and #vals==2+2*#markets and vals[1]==1 and vals[2]>=0 and vals[2]<=100000000 and vals[2]%1==0 then
+  if table.concat(vals,",")==data and (#vals==8 or #vals==2+2*#markets) and vals[1]==1 and vals[2]>=0 and vals[2]<=100000000 and vals[2]%1==0 then
     local valid=true
     for j=3,#vals do if vals[j]<0 or vals[j]>999 or vals[j]%1~=0 then valid=false end end
     if valid then
       cash=vals[2]
-      for i=1,#markets do positions[i]={vals[2*i+1],vals[2*i+2]} end
+      for i=1,(#vals-2)/2 do positions[i]={vals[2*i+1],vals[2*i+2]} end
     end
   end
   for i=1,#markets do histories[i]={{prob(i),badge.sys.ms()}} end
