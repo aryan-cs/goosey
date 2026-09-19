@@ -35,9 +35,10 @@ each person must approve their own link and run their own USB gateway. Stock Lua
 has no HTTP client or Socials email API. Wireless relay support is not included.
 
 The gateway checks requests every two seconds, accounts every ten seconds and
-public markets/history every thirty seconds. Confirmations take priority over
-chart downloads. Data is private appdata, excluded from native sharing. History
-is bounded to 32 points per market and 96 total; no history is fabricated. More
+public markets every thirty seconds. Opening a market requests its real four-hour
+history separately, bounded to 32 observations and refreshed every thirty seconds.
+Confirmations take priority over chart downloads. Data is private appdata, excluded
+from native sharing; no history is fabricated. More
 than 16 open markets fails visibly rather than silently truncating the catalog.
 All displayed dates/times are UTC. Polling is used because there is no supported
 badge event stream. The old `usb_market_sync.py` remains a public-only option.

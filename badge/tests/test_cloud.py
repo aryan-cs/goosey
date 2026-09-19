@@ -1,8 +1,8 @@
 """Exercise cloud UI using mailbox data and a fresh simulated gateway account."""
 from harness import *
-import copy,json,sys
+import json,sys
 sys.path.insert(0,str(root/'badge/scripts'))
-from cloud_snapshot import mailbox_frame
+from cloud_snapshot import detail_mailbox_frame,mailbox_frame
 source=json.loads((output/'snapshot.json').read_text())
 g.saved['paper_v2']='1,76543,2,1,0,0,0,0,0,0,0,0,0,0'
 g.saved['username_v1']='old_local'
@@ -17,6 +17,12 @@ def load(data, generation):
     data=dict(data,generation=str(generation))
     g.mailbox=mailbox_frame(data).decode()
     g.files['appdata/market_generation.txt']=str(generation)
+    tick(g.clock+2000)
+
+def load_detail(market,generation,points):
+    start=1234567890000
+    detail=dict(generation=str(generation),slug=market['slug'],rangeStart=start,rangeEnd=start+14400000,history=points)
+    g.files['appdata/detail_history.txt']=detail_mailbox_frame(detail).decode()
     tick(g.clock+2000)
     tick(g.clock+2000)
 
@@ -34,15 +40,25 @@ assert '765.43' not in g.visible() and '@old_local' not in g.visible()
 g.files['appdata/account.txt']=f'GA1\t1\t{challenge}\tREADY\tbadge_test\t1000000\tEND\n'
 load(source,100)
 has('@badge_test');press('A');has('Markets');snapshot('cloud-list')
-for market in source['markets']:
-    press('A');has('Market');has(f"{market['probability']:.1f}%");has(market['closes'])
+for index,market in enumerate(source['markets']):
+    press('A');has('Market');has(f"{market['probability']:.0f}%");has('Loading 4H')
+    assert g.files['appdata/detail_request.txt']==f"GD1\t{market['slug']}\n"
+    points=[[market['probability'],1234567880000]]
+    if index==0: points=[[50,1234567880000],[61.23,1234575090000],[market['probability'],1234578690000]]
+    load_detail(market,1000+index,points)
+    has('Past 4 hours');has(market['closes']);has('Vol '+market['volume'])
+    if index==0:
+        has(f"{market['probability']-50:+.0f} pts")
+        ticks=[w for w in g.widgets.values() if not w.hide and w.text.endswith('%') and w.x==7]
+        assert len(ticks)==3 and all(w.styles['text_align']=='right' for w in ticks)
+        line=next(w for w in g.widgets.values() if w.kind=='line')
+        assert line.points[1][1]==0 and line.points[len(line.points)][1]==132
     snapshot('cloud-'+market['slug']);press('B','DOWN')
 assert dict(g.saved.items())==before and g.writes==0
 assert g.files['appdata/request.txt'] in (None,'')
-# Real mailbox histories, not embedded Lua literals, drive empty/single charts.
-for generation,points in ((101,[]),(102,[[50,1234567890000]])):
-    changed=copy.deepcopy(source);changed['markets'][0]['history']=points
-    load(changed,generation);press('A')
+# Real selected-market mailbox histories, not the catalog frame, drive charts.
+for generation,points in ((2000,[]),(2001,[[50,1234567890000]])):
+    press('A');load_detail(source['markets'][0],generation,points)
     if not points:has('No history')
     snapshot('cloud-empty' if not points else 'cloud-single');press('B')
 # Reopening cannot trust a cached account frame as a fresh login.

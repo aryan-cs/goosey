@@ -134,6 +134,7 @@ before opening an unchanged market file. Both USB publishers write that marker
 only after the complete frame. Snapshot validation is incremental (one market per
 tick), releases the previous in-memory catalog before reading its replacement, and remains
 bounded. The UI briefly shows Loading markets during replacement; the database
-and on-device snapshot file remain intact, and account/trade state is separate. The exporter requests at most 32 history points across all markets to
-leave headroom for both old and new snapshots; all points still come from the
-repository database. This reduces chart detail, not market coverage.
+and on-device snapshot file remain intact, and account/trade state is separate.
+Catalog refreshes no longer retain every market's chart. Opening a market requests
+up to 32 real observations from the same four-hour history API as the web UI, in a
+separate bounded mailbox. Returning to the list releases that selected detail.

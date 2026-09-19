@@ -36,7 +36,25 @@ class SnapshotTest(unittest.TestCase):
         with patch.object(module,'urlopen',side_effect=get):
             result=module.fetch_snapshot('https://getgoosey.vercel.app')
         self.assertEqual(len(result['markets']),13)
-        self.assertTrue(all(url.endswith('limit=2') for url in paths[1:]))
+        self.assertEqual(len(paths),1)
+        self.assertTrue(all(m['history']==[] for m in result['markets']))
+
+    def test_selected_market_gets_real_four_hour_history(self):
+        payload={'range':'4H','rangeStart':'2026-09-19T18:00:00.000Z','snapshots':[
+            {'createdAt':'2026-09-19T17:00:00.000Z','yesProbabilityBps':5000},
+            {'createdAt':'2026-09-19T20:00:00.000Z','yesProbabilityBps':6123},
+        ]}
+        with patch.object(module,'urlopen',return_value=BytesIO(json.dumps(payload).encode())) as get:
+            detail=module.fetch_market_history('https://getgoosey.vercel.app','market-one')
+        self.assertIn('/history?range=4H&limit=32',get.call_args.args[0])
+        self.assertEqual(detail['rangeEnd']-detail['rangeStart'],14_400_000)
+        self.assertEqual(detail['history'],[[50,1789837200000],[61.23,1789848000000]])
+        self.assertIn('\tmarket-one\t',module.detail_mailbox_frame(detail).decode())
+
+    def test_selected_history_rejects_wrong_range(self):
+        payload={'range':'1D','rangeStart':'2026-09-19T18:00:00.000Z','snapshots':[]}
+        with patch.object(module,'urlopen',return_value=BytesIO(json.dumps(payload).encode())):
+            with self.assertRaises(ValueError): module.fetch_market_history('https://getgoosey.vercel.app','market-one')
 
     def test_bad_probability_and_volume(self):
         for data in ({'probabilityYesBps': 10001}, {'probabilityYesBps': True}, {'volumeMilli': '-1'}):

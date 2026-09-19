@@ -23,7 +23,7 @@ local function readCloudFrame(data,incremental)
   i=i+1
   if i<=count then
     local row=nextRow()
-    if not row or #row~=8 or row[1]~="M" or #row[2]>120 or not row[2]:match("^[%w_-]+$") or seen[row[2]] or #row[3]<1 or #row[3]>240 or #row[5]>12 or not row[5]:match("^%d+k?$") or #row[6]>20 then return nil end
+    if not row or #row~=8 or row[1]~="M" or #row[2]>120 or not row[2]:match("^[%w_-]+$") or seen[row[2]] or #row[3]<1 or #row[3]>240 or #row[5]>20 or not row[5]:match("^%d[%d,]*$") or row[5]:find(",,") or row[5]:sub(-1)=="," or #row[6]>20 then return nil end
     local bps,n=tonumber(row[4]),tonumber(row[8])
     if not bps or bps%1~=0 or bps<0 or bps>10000 or not n or n%1~=0 or n<0 or n>32 then return nil end
     totalPoints=totalPoints+n;if totalPoints>96 then return nil end

@@ -18,7 +18,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlparse, quote
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from badge_console import Console
-from cloud_snapshot import fetch_snapshot, mailbox_frame
+from cloud_snapshot import detail_mailbox_frame, fetch_market_history, fetch_snapshot, mailbox_frame
 from pairing_qr import make_qr
 
 PRIVATE = '/littlefs/appdata/goosey_base/'
@@ -72,6 +72,12 @@ def parse_request(raw):
     if side not in ('YES','NO') or action not in ('BUY','SELL') or not quantity.isdigit() or not 1<=int(quantity)<=20: return None
     if kind=='TRADE' and (not re.fullmatch(r'c[a-z0-9]{20,40}',qid) or not re.fullmatch(r'\d{1,18}',bound)): return None
     return dict(id=rid,challenge=challenge,kind=kind,slug=slug,side=side,action=action,quantity=int(quantity),quoteId=qid,bound=bound)
+
+def parse_detail_request(raw):
+    lines=[line for line in raw.replace('\r','').split('\n') if line.startswith('GD1\t')]
+    if len(lines)!=1: return None
+    parts=lines[0].split('\t')
+    return parts[1] if len(parts)==2 and re.fullmatch(r'[a-z0-9-]{1,120}',parts[1]) else None
 
 def response_frame(request, state, message='-', qid='-', amount='0', fee='0', ttl=0):
     return ('\t'.join(['GR1',request['id'],request['challenge'],state,qid,str(amount),str(fee),str(ttl),clean(message),'END'])+'\n').encode()
@@ -162,8 +168,8 @@ def main():
         console.put(PRIVATE+'qr_challenge.txt',gateway.challenge.encode())
         print('Scan the badge QR or open this link and approve the matching code:',flush=True)
         print(origin+'/badge#'+gateway.challenge,flush=True)
-        account_at=market_at=0;last_response=None;last_auth=None
-        snapshots=ThreadPoolExecutor(max_workers=1);snapshot_job=None
+        account_at=market_at=detail_at=0;last_response=None;last_auth=None;detail_slug=None
+        workers=ThreadPoolExecutor(max_workers=2);snapshot_job=detail_job=None
         while True:
             now=time.monotonic()
             if now>=account_at:
@@ -187,6 +193,9 @@ def main():
                 if response!=last_response:
                     console.put(PRIVATE+'response.txt',response);last_response=response
                     if b'\tDONE\t' in response: account_at=0
+            requested_slug=parse_detail_request(console.cmd('cat '+PRIVATE+'detail_request.txt'))
+            if requested_slug and requested_slug!=detail_slug:
+                detail_slug=requested_slug;detail_at=0
             if snapshot_job is not None and snapshot_job.done():
                 try:
                     snapshot=snapshot_job.result()
@@ -194,9 +203,18 @@ def main():
                     console.put(PRIVATE+'market_generation.txt',snapshot['generation'].encode())
                 except (OSError,ValueError): print('Market update unavailable; keeping previous snapshot.',flush=True)
                 snapshot_job=None
+            if detail_job is not None and detail_job.done():
+                try:
+                    detail=detail_job.result()
+                    if detail['slug']==detail_slug: console.put(PRIVATE+'detail_history.txt',detail_mailbox_frame(detail))
+                except (OSError,ValueError): print('Four-hour history unavailable; keeping previous detail.',flush=True)
+                detail_job=None
             if now>=market_at and snapshot_job is None and not (request and request['kind']=='TRADE'):
                 market_at=now+30
-                snapshot_job=snapshots.submit(fetch_snapshot,origin)
+                snapshot_job=workers.submit(fetch_snapshot,origin)
+            if detail_slug and now>=detail_at and detail_job is None and not (request and request['kind']=='TRADE'):
+                detail_at=now+30
+                detail_job=workers.submit(fetch_market_history,origin,detail_slug)
             time.sleep(2)
 
 if __name__=='__main__': main()

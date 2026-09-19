@@ -4,6 +4,7 @@ No sessions, account balances, credentials or local practice data are exported.
 """
 import json
 import math
+import re
 import time
 from datetime import datetime, timezone
 from urllib.request import urlopen
@@ -14,20 +15,24 @@ def timestamp(value):
     return int(datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp() * 1000)
 
 
-def fetch_snapshot(origin):
+def validated_origin(origin):
     parsed = urlparse(origin)
     if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.path not in ('', '/') or parsed.query or parsed.fragment:
         raise ValueError('Cloud origin must be an HTTPS origin without credentials or a path')
-    origin = origin.rstrip('/')
+    return origin.rstrip('/')
 
-    def get(path):
-        with urlopen(origin + path, timeout=15) as response:
-            raw = response.read(262145)
-        if len(raw) > 262144:
-            raise ValueError('API response exceeds badge exporter limit')
-        return json.loads(raw)
 
-    catalog = get('/api/markets?limit=50')
+def public_json(origin, path):
+    with urlopen(origin + path, timeout=15) as response:
+        raw = response.read(262145)
+    if len(raw) > 262144:
+        raise ValueError('API response exceeds badge exporter limit')
+    return json.loads(raw)
+
+
+def fetch_snapshot(origin):
+    origin = validated_origin(origin)
+    catalog = public_json(origin, '/api/markets?limit=50')
     if catalog.get('nextCursor'):
         raise ValueError('Catalog has another page; refusing to silently omit markets')
     # Explicitly retired, untouched contracts remain in the database for audit.
@@ -43,8 +48,6 @@ def fetch_snapshot(origin):
         raise ValueError('Badge snapshot requires 1–16 markets; refusing a truncated catalog')
     result = []
     seen = set()
-    # Leave physical RAM for the old and new snapshot during atomic refresh.
-    sample_limit = min(32, 32 // len(items))
     for market in items:
         slug, title = market['slug'], market['title']
         if not isinstance(slug, str) or not 1 <= len(slug) <= 120 or slug in seen:
@@ -55,26 +58,50 @@ def fetch_snapshot(origin):
         bps = market['probabilityYesBps']
         if isinstance(bps, bool) or not isinstance(bps, int) or not 0 <= bps <= 10000:
             raise ValueError('Invalid probability')
-        history = get('/api/markets/' + quote(slug, safe='') + '/history?range=1D&limit=' + str(sample_limit))['snapshots']
-        if len(history) > sample_limit:
-            raise ValueError('History exceeds requested bound')
-        points = []
-        for point in history:
-            p = point['yesProbabilityBps']
-            t = timestamp(point['createdAt'])
-            if isinstance(p, bool) or not isinstance(p, int) or not 0 <= p <= 10000 or (points and t < points[-1][1]):
-                raise ValueError('Invalid or unordered history')
-            points.append([p / 100, t])
         volume = market['volumeMilli']
         if not isinstance(volume, str) or not volume.isascii() or not volume.isdigit() or len(volume) > 16:
             raise ValueError('Invalid volume')
-        # Market and history reads are independent. Retain both as received;
-        # do not manufacture a history point from the catalog price.
+        # Detail history is requested separately for the selected market; never
+        # manufacture a chart point from the catalog price.
+        whole_volume = (int(volume) + 500) // 1000
         result.append(dict(slug=slug, title=title, probability=bps / 100,
-                           history=points, volume=(str(int(volume) // 1000000) + 'k' if int(volume) >= 1000000 else str(int(volume) // 1000)),
+                           history=[], volume=f'{whole_volume:,}',
                            closes=datetime.fromisoformat(market['closesAt'].replace('Z', '+00:00')).strftime('%m/%d %H:%M UTC'),
                            status=market['status']))
     return dict(origin=origin, generation=str(time.time_ns()), capturedAt=datetime.now(timezone.utc).strftime('%m/%d %H:%M UTC'), markets=result)
+
+
+def fetch_market_history(origin, slug, limit=32):
+    origin = validated_origin(origin)
+    if not re.fullmatch(r'[a-z0-9-]{1,120}', slug) or not 1 <= limit <= 32:
+        raise ValueError('Invalid detail history request')
+    payload = public_json(origin, '/api/markets/' + quote(slug, safe='') + f'/history?range=4H&limit={limit}')
+    if payload.get('range') != '4H' or not isinstance(payload.get('rangeStart'), str):
+        raise ValueError('History response is missing its four-hour range')
+    start = timestamp(payload['rangeStart'])
+    end = start + 14_400_000
+    history = payload.get('snapshots')
+    if not isinstance(history, list) or len(history) > limit:
+        raise ValueError('History exceeds requested bound')
+    points = []
+    for point in history:
+        p = point.get('yesProbabilityBps')
+        t = timestamp(point.get('createdAt', ''))
+        if isinstance(p, bool) or not isinstance(p, int) or not 0 <= p <= 10000 or t > end or (points and t < points[-1][1]):
+            raise ValueError('Invalid or unordered history')
+        points.append([p / 100, t])
+    return dict(generation=str(time.time_ns()), slug=slug, rangeStart=start, rangeEnd=end, history=points)
+
+
+def detail_mailbox_frame(detail):
+    generation = detail['generation']
+    lines = [['GH1', generation, detail['slug'], str(detail['rangeStart']), str(detail['rangeEnd']), str(len(detail['history']))]]
+    lines.extend(['H', str(t), str(round(p * 100))] for p, t in detail['history'])
+    lines.append(['END', generation])
+    data = ('\n'.join('\t'.join(row) for row in lines) + '\n').encode()
+    if len(data) > 6000:
+        raise ValueError('Detail history frame exceeds badge file limit')
+    return data
 
 
 def mailbox_frame(snapshot):

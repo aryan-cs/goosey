@@ -44,7 +44,7 @@ out.mkdir(parents=True, exist_ok=True)
 shutil.copyfile(root / 'public/brand/goosey-mark.png', out / 'goosey-logo.png')
 (out / 'markets.json').write_text(json.dumps(snapshot['markets'] if snapshot else markets, indent=2))
 if snapshot:
-    for module in ('trade','cloud_reader'):
+    for module in ('trade','cloud_reader','detail_reader'):
         module_code=(root / 'badge/src' / (module+'.lua')).read_text()
         if module=='cloud_reader': module_code+='\nreturn readCloudFrame\n'
         (out / (module+'.lua')).write_text(module_code)

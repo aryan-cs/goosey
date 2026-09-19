@@ -46,4 +46,6 @@ class GatewayTests(unittest.TestCase):
         self.assertIsNone(gateway.parse_request(line[:-5]))
         self.assertIsNone(gateway.parse_request(line.replace('\t1\t-','\t999\t-')))
         self.assertIsNone(gateway.parse_request(line+line))
+        self.assertEqual(gateway.parse_detail_request('cat\r\nGD1\tmarket-one\nbadge> '),'market-one')
+        self.assertIsNone(gateway.parse_detail_request('GD1\t../market\n'))
 if __name__=='__main__':unittest.main()

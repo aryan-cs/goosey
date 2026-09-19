@@ -1,10 +1,12 @@
 local cloud={markets={},capturedAt=""}
 __CLOUD_READER__
+local readDetailFrame=require("detail_reader")
 local trade,qr,uiRoot,pendingCloud,refreshSlug
 local C={bg=0xc5d99b,panel=0x91ad65,text=0x1c3524,muted=0x4f6b3e}
 local page,selected,side,setting="list",1,1,1
 local labels,header,status,stamp,mark,chart,track,dot,midline
 local lastRead,lastRx,lastGC=0,nil,0
+local detail,detailGeneration
 local initialized=false
 local function wrap(s,limit)
   local line,out="",""
@@ -22,6 +24,23 @@ local function text(i,s,x,y,w,size,align)
 end
 local function focus(x,y,w,h)
   mark:set_pos(x,y);mark:set_size(w,h);mark:hidden(false)
+end
+local function requestDetail()
+  detail=nil;detailGeneration=nil
+  local m=cloud.markets[selected]
+  if m then badge.fs.write("appdata/detail_request.txt","GD1\t"..m.slug.."\n") end
+end
+local function refreshDetail()
+  local m=cloud.markets[selected]
+  if not m then return false end
+  local data=badge.fs.read("appdata/detail_history.txt")
+  if type(data)~="string" then return false end
+  local generation=data:match("^GH1\t(%d+)\t")
+  if not generation or generation==detailGeneration then return false end
+  local nextDetail=readDetailFrame(data)
+  if not nextDetail or nextDetail.slug~=m.slug then return false end
+  detail=nextDetail;detailGeneration=generation
+  return true
 end
 local function refresh(initial)
   if not pendingCloud then
@@ -80,22 +99,30 @@ local function render()
     end
   elseif page=="detail" then
     text(1,wrap(m.title,39),10,36,300,14)
-    text(2,string.format("%.1f%%",m.probability),222,87,88,24,"right")
-    local h=m.history
-    text(3,(#h>1 and string.format("%+.1f pts",h[#h][1]-h[1][1]) or "-- pts").."\nPast day",220,122,90,14,"right")
+    text(2,string.format("%.0f%%",m.probability),222,87,88,24,"right")
+    local h=detail and detail.slug==m.slug and detail.history or {}
+    text(3,(#h>0 and string.format("%+.0f pts",h[#h][1]-h[1][1]) or "-- pts").."\nPast 4 hours",212,122,98,14,"right")
     track:hidden(false);midline:hidden(false)
-    text(4,"100",190,85,28,14);text(5,"50",190,128,28,14);text(6,"0",190,168,28,14)
-    local span=#h>1 and h[#h][2]-h[1][2] or 0
+    local low,high=100,0
+    for j=1,#h do low=math.min(low,h[j][1]);high=math.max(high,h[j][1]) end
+    local domainSpan=math.min(100,math.max(10,high-low+4))
+    local domainLow=math.max(0,math.min(100-domainSpan,(low+high-domainSpan)/2))
+    local domainHigh=domainLow+domainSpan
+    text(4,string.format("%.0f%%",domainHigh),7,85,36,14,"right")
+    text(5,string.format("%.0f%%",(domainHigh+domainLow)/2),7,128,36,14,"right")
+    text(6,string.format("%.0f%%",domainLow),7,168,36,14,"right")
     local pts={}
     for j=1,#h do
-      local x=#h==1 and 0 or (span>0 and (h[j][2]-h[1][2])/span or (j-1)/(#h-1))
-      pts[j]={math.floor(x*170),math.floor(88-h[j][1]*0.88)}
+      local x=math.max(0,math.min(1,(h[j][2]-detail.startAt)/(detail.endAt-detail.startAt)))
+      pts[#pts+1]={math.floor(x*132),math.floor((domainHigh-h[j][1])/domainSpan*88)}
     end
+    if #pts>0 and pts[#pts][1]<132 then pts[#pts+1]={132,pts[#pts][2]} end
     if #pts>1 then chart:set_points(pts);chart:hidden(false) end
-    if #pts>0 then dot:set_pos(13+pts[#pts][1],89+pts[#pts][2]);dot:hidden(false)
-    else text(3,"No history",220,122,90,14,"right") end
-    text(7,"Vol "..m.volume,10,186,90,14)
-    text(8,m.closes,100,186,210,14,"right")
+    if #pts>0 then dot:set_pos(51+pts[#pts][1],89+pts[#pts][2]);dot:hidden(false)
+    else text(3,(detail and "No history" or "Loading 4H"),212,122,98,14,"right") end
+    local state=m.status:sub(1,1)..m.status:sub(2):lower()
+    text(7,state.."  Vol "..m.volume,10,186,125,14)
+    text(8,"Closes "..m.closes,135,186,175,14,"right")
     focus(side==1 and 7 or 164,207,149,28)
     text(9,string.format("YES  %.0f%%",m.probability),18,212,132,16)
     text(10,string.format("NO  %.0f%%",100-m.probability),176,212,132,16)
@@ -117,7 +144,7 @@ end
 function on_enter(root)
   -- These bindings are unused by Goosey; free their Lua tables before loading data.
   badge.nfc=nil;badge.radio=nil;badge.contacts=nil;badge.sensor=nil
-  uiRoot=root;qr=nil;pendingCloud=nil;refreshSlug=nil
+  uiRoot=root;qr=nil;pendingCloud=nil;refreshSlug=nil;detail=nil;detailGeneration=nil
   for i=1,32 do badge.sys.gc_step() end
   badge.sys.gc_step()
   page,selected,side,setting="list",1,1,1
@@ -137,8 +164,8 @@ function on_enter(root)
   status:style({text_font=14,text_color=C.text,text_align="right"})
   stamp=badge.ui.label(root,"");stamp:set_pos(149,16);stamp:set_size(161,17)
   stamp:style({text_font=14,text_color=C.text,text_align="right"})
-  track=box(10,86,178,97,C.panel);midline=box(10,134,178,1,C.muted);dot=box(0,0,3,3,C.text)
-  chart=badge.ui.line(root,{{0,0},{1,0}});chart:set_pos(14,90)
+  track=box(48,86,140,97,C.panel);midline=box(48,134,140,1,C.muted);dot=box(0,0,3,3,C.text)
+  chart=badge.ui.line(root,{{0,0},{1,0}});chart:set_pos(52,90)
   chart:style({line_color=C.text,line_width=2})
   labels={};for i=1,10 do labels[i]=badge.ui.label(root,"") end
   badge.led.clear();badge.led.show()
@@ -157,10 +184,11 @@ function on_button(button,kind)
   elseif page=="list" then
     if button==B.UP then selected=(selected-2)%#cloud.markets+1
     elseif button==B.DOWN then selected=selected%#cloud.markets+1
-    elseif button==B.A then page="detail";side=1 else return end
+    elseif button==B.A then page="detail";side=1;requestDetail() else return end
   elseif page=="detail" then
     if button==B.LEFT then side=1 elseif button==B.RIGHT then side=2
-    elseif button==B.B then page="list" elseif button==B.A then page="link";local m=cloud.markets[selected];trade.open(m.slug,side==1 and "YES" or "NO",m.title) else return end
+    elseif button==B.B then page="list";detail=nil;detailGeneration=nil;badge.sys.gc_step()
+    elseif button==B.A then page="link";local m=cloud.markets[selected];trade.open(m.slug,side==1 and "YES" or "NO",m.title) else return end
   elseif page=="settings" then
     if button==B.UP then setting=(setting-2)%3+1 elseif button==B.DOWN then setting=setting%3+1
     elseif button==B.B then page="list" elseif button==B.A then page=setting==1 and "list" or "link";if page=="link" then local m=cloud.markets[selected];if not m then page="list";render();return end;trade.open(m.slug,side==1 and "YES" or "NO",m.title);if setting==3 then trade.phase="account" end end else return end
@@ -181,6 +209,7 @@ function on_tick()
     local changed=trade.tick()
     badge.sys.gc_step()
     if trade.name or page~="link" then if refresh(false) then changed=true end end
+    if page=="detail" and refreshDetail() then changed=true end
     if lastRx and now-lastRx>=45000 then lastRx=nil;changed=true end
     if changed then badge.sys.gc_step();render() end
   end
