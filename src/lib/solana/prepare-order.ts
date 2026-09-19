@@ -78,7 +78,8 @@ export async function prepareOrder(input: PrepareOrderInput) {
     tx => setTransactionMessageFeePayerSigner(sender, tx),
     tx => setTransactionMessageLifetimeUsingBlockhash(lifetime, tx),
     tx => appendTransactionMessageInstructions([budget, plan.instruction], tx));
-  return { message, sender: senderAddress, cluster: runtime.cluster, genesisHash: runtime.genesisHash,
+  return { message, instructions: Object.freeze([budget, plan.instruction] as const), sender: senderAddress,
+    cluster: runtime.cluster, genesisHash: runtime.genesisHash,
     market: plan.market, book: plan.book, seats: snapshot.seats, expectedNonce: seat.nextNonce,
     observedSlot: snapshot.finalizedSlot, blockhashSlot: latest.context.slot, lifetime, bookRevision: orderBook.revision,
     requiredCash, availableCash: seat.availableCash, availablePosition, computeUnitLimit: ORDER_COMPUTE_UNIT_LIMIT,
