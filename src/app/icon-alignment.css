@@ -1,0 +1,73 @@
+/* Pair icons with their own text scale, rather than the page's heading scale.
+   Keep these rules scoped to UI icons; charts and brand artwork are separate. */
+.section-heading.compact h2,
+.reading-page h2 {
+  display: flex;
+  align-items: flex-start;
+  gap: .4em;
+  line-height: 1.3;
+}
+
+.section-heading.compact h2 { font-size: 20px; }
+.section-heading.compact h2 > svg,
+.reading-page h2 > svg {
+  width: 1em;
+  height: 1em;
+  margin-top: .15em;
+}
+
+/* Inline currency stays on the number's baseline, including large metrics. */
+.feather-icon { vertical-align: -.125em; }
+.metric-card > strong > .feather-icon { width: .85em; height: .85em; }
+.mini-leaderboard b,
+.market-list-meta > strong {
+  display: inline-flex;
+  align-items: center;
+  gap: .3em;
+}
+.trade-breakdown dd > .feather-icon { width: 1em; height: 1em; }
+
+/* Leading metadata icons stay beside the first line when dates wrap. */
+.market-meta > span:has(> svg),
+.status-row > span:has(> svg) {
+  align-items: flex-start;
+  gap: .4em;
+  line-height: 1.5;
+}
+.market-meta > span > svg,
+.status-row > span > svg {
+  width: 1.167em;
+  height: 1.167em;
+  margin-top: .167em;
+}
+
+.button > svg,
+.button > .lucide-arrow-right {
+  width: 1.125em;
+  height: 1.125em;
+}
+.input-with-icon > svg,
+.input-with-icon button > svg { width: 18px; height: 18px; }
+.field-note { align-items: center; }
+.field-note > svg { margin-top: 0; }
+.footer-links a > svg { width: 16px; height: 16px; }
+
+/* Notices use a first-line icon instead of centering against a paragraph. */
+.success-message:has(> svg),
+.form-error:has(> svg) { line-height: 1.5; }
+.success-message > svg,
+.form-error > svg {
+  width: 1.125em;
+  height: 1.125em;
+  margin-top: .1875em;
+}
+.form-error > span { min-width: 0; overflow-wrap: anywhere; }
+.error-state > svg { align-self: flex-start; margin-top: .125em; }
+.error-state > div { min-width: 0; }
+.trade-ticket-header > .lucide-shield-check { width: 22px; height: 22px; }
+
+/* Icon-only controls keep their larger hit area without stretching the glyph. */
+.icon-button > svg,
+.avatar-button > svg,
+.search-clear > svg,
+.notification-read > svg { display: block; }
