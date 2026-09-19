@@ -61,11 +61,22 @@ describe("signed transaction tracking", () => {
 
   it("expires only beyond last valid height, with a second absent status read", async () => {
     const m = mock([absent], 101n);
-    expect((await trackTransactionStatus(m.rpc, input)).status).toBe("expired");
+    expect(await trackTransactionStatus(m.rpc, input)).toMatchObject({ status: "expired", historicalOutcome: "unknown" });
     expect(m.statusSend).toHaveBeenCalledTimes(2);
-    expect(m.getBlockHeight).toHaveBeenCalledWith({ commitment: "finalized", minContextSlot: 500n });
+    expect(m.getBlockHeight).toHaveBeenCalledWith({ commitment: "finalized" });
     vi.useFakeTimers();
     expect((await finish(trackTransactionStatus(mock([absent], 100n).rpc, input))).status).toBe("unknown");
+  });
+
+  it("does not require the finalized bank to catch a moving processed status context", async () => {
+    const m = mock([absent], 101n);
+    const getBlockHeight = vi.fn((options: { minContextSlot?: bigint }) => ({ send: async () => {
+      if (options.minContextSlot !== undefined && options.minContextSlot > 468n) throw new Error("Minimum context slot has not been reached");
+      return 101n;
+    } }));
+    const rpc = { ...m.rpc, getBlockHeight } as unknown as TransactionStatusRpc;
+    expect(await trackTransactionStatus(rpc, input)).toMatchObject({ status: "expired", historicalOutcome: "unknown" });
+    expect(getBlockHeight).toHaveBeenCalledTimes(1);
   });
 
   it("handles landing between height/status reads without false expiration", async () => {

@@ -42,6 +42,10 @@ Mint: `EPXKTspQpNsYjw8khbTawjXeUJdVknL1iDrxVq7itvaw`. Final minted supply: 1,000
 
 The independent SPL token suite also passed twice with fresh ephemeral mints, covering exact signed-byte replay, wrong decimals/mint/owner, insufficient balance, missing/corrupted signatures, unauthorized minting and atomic ATA rollback. See [token evidence](solana-verification-plan.md#executed-token-integration-evidence).
 
+### Finality tracker follow-up
+
+A subsequent live RPC check reproduced `Minimum context slot has not been reached` when a finalized block-height request used the moving processed slot returned by signature status. The tracker now reads finalized height without that incompatible minimum and still rechecks signature history before declaring the signing lifetime expired. Nineteen tracker contract tests pass, including a lagging-finality regression. A live absent-history/past-height probe now returns `expired` with `historicalOutcome: unknown`, rather than starving until timeout. This does **not** establish that the original transfer failed: the local node no longer returned its historical status. Expiration never authorizes an automatic freshly signed replacement or a database refund; persisted receipts/reconciliation remain necessary.
+
 ## Reproduction and limitations
 
 Run `npm run test:chain:program` only against a fresh, already deployed and uninitialized program on a dedicated loopback validator. It requires explicit `GOOSEY_SOLANA_RPC_URL`, the actual `GOOSEY_SOLANA_GENESIS_HASH`, and `GOOSEY_SOLANA_TEST_ADMIN_KEYPAIR` pointing to a newly generated `goosey-admin-keypair.json` in a dedicated `/tmp/goosey-solana-*` directory. It checks the real loader upgrade authority before using that key. Do not use personal wallets. The script deliberately exhausts this test campaign and refuses to reinitialize an existing config; use a new isolated ledger for another full run, never reset the shared website/sandbox.

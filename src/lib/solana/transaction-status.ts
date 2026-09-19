@@ -7,6 +7,9 @@ export type TransactionStatusResult = {
   signature: string;
   commitment?: "processed" | "confirmed" | "finalized";
   error?: unknown;
+  /** Expiration proves the signed bytes cannot land now, not that an earlier
+   * execution did not happen (RPC history may have been pruned). */
+  historicalOutcome?: "unknown";
 };
 export type TrackTransactionInput = {
   signature: string;
@@ -96,15 +99,20 @@ export async function trackTransactionStatus(
       try {
         let response = await read();
         if (response.item === null) {
+          // Status context is the node's current (processed) bank, even when
+          // the signature is absent. Finality normally lags it by ~32 slots.
+          // Using that moving slot as a finalized minContextSlot can starve
+          // expiry forever. A finalized height is sufficient: stale heights
+          // can only delay expiry. Re-read status below before classifying it.
           const height = await abortable(rpc.getBlockHeight({
-            commitment: "finalized", minContextSlot: response.contextSlot,
+            commitment: "finalized",
           }).send({ abortSignal: signal }), signal);
           if (typeof height !== "bigint" || height < 0n) throw new Error("Malformed block height");
           if (height > input.lastValidBlockHeight) {
             const refreshed = await read();
             if (refreshed.contextSlot < response.contextSlot) throw new Error("Stale status response");
             response = refreshed;
-            if (response.item === null) return result("expired");
+            if (response.item === null) return result("expired", { historicalOutcome: "unknown" });
           }
         }
         observation = classify(response.item);
