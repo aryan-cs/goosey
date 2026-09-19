@@ -247,6 +247,16 @@ The private filesystem and ancestors remain operator-trusted. Every read verifie
 content again; this is not replication or a guarantee against disk loss. Twenty-
 three filesystem tests plus 28 route tests cover retention and delivery boundaries.
 
+The isolated compiled-program terms suite also retained/retrieved its actual
+manifest against the finalized sealed commitment at slot 70, preserving all 72
+transaction cases. Exact bytes/digest and idempotent replay passed; altered rules
+and a self-consistent conflicting digest were rejected without replacing the
+retained file. Evidence: `/tmp/goosey-solana-runner-BVsl8s/program-e2e.log`, genesis
+`EamEdnmL7coXj5XEqsSPXhTYqtL6BDUGr5DnbVCdiVfL`, artifact
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
+This proves store integration with real finalized commitments, not successful
+HTTP delivery from a published market on the shared development deployment.
+
 Market YES/NO positions should likewise have one representation. If positions are program-owned quantities, no second independently spendable outcome-token balance exists. If outcome tokens are later adopted, escrow/reserve or burn/mint them atomically and reconcile their supply against positions and collateral. Supporting arbitrary transfer-fee/hook extensions is not part of the initial contract.
 
 Transition the application in this order:

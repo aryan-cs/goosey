@@ -4,7 +4,7 @@
  * program instructions; this suite never injects or rewrites account data. */
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readFile, realpath } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, readdir } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -36,6 +36,8 @@ import {
   decodeMarketTerms, encodeMarketTerms, hashMarketTerms, verifyMarketTerms, type MarketTerms,
 } from "../src/lib/solana/market-terms";
 import { readGooseyEscrow } from "../src/lib/solana/escrow-read";
+import { retainMarketTerms, readRetainedMarketTerms, MarketTermsRetentionConflict,
+  type RetainedMarketTermsExpectation } from "../src/lib/solana/market-terms-store";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -370,6 +372,45 @@ injection are refused.`);
   assert.equal(snapshot.orderBook?.orders.length, 0);
   assert.equal(snapshot.orderBook?.reservesReconciled, true);
 
+  // Retain the EXISTING suite manifest, not a substitute. Every expectation
+  // below comes from the coherent finalized account snapshot or pinned domain.
+  assert(snapshot.marketTerms && snapshot.resolution);
+  assert(snapshot.finalizedSlot >= BigInt(sealedReceipt.receipt.slot));
+  const retainedExpectation: RetainedMarketTermsExpectation = {
+    digest: Buffer.from(snapshot.marketTerms.digest).toString("hex"),
+    manifestLength: snapshot.marketTerms.manifestLength,
+    binding: { cluster: runtime.cluster, genesisHash: runtime.genesisHash, program: runtime.programAddress,
+      config: snapshot.config, market: snapshot.market, marketId: snapshot.marketState.marketId.toString(),
+      creator: snapshot.marketState.creator, featherMint: snapshot.featherMint },
+    economics: { payoutMilli: snapshot.marketState.payoutMilli.toString(), feeBps: snapshot.marketState.feeBps.toString(),
+      closesAt: snapshot.marketState.closesAt.toString(), resolvesAt: snapshot.marketState.resolvesAt.toString(), decimals: 3 },
+    proposer: snapshot.marketTerms.proposer, approver: snapshot.marketTerms.approver,
+  };
+  assert.deepEqual(retainedExpectation.proposer, snapshot.resolution.proposer);
+  assert.deepEqual(retainedExpectation.approver, snapshot.resolution.approver);
+  // Retained beneath this runner's private evidence directory; no shared store,
+  // DB, endpoint or operator configuration is changed. Runner owns its lifetime.
+  const termsStore = await mkdtemp(path.join(path.dirname(adminPath), "market-terms-store-"));
+  assert.equal((await retainMarketTerms(termsStore, manifestBytes, retainedExpectation)).created, true);
+  const retrieved = await readRetainedMarketTerms(termsStore, retainedExpectation);
+  assert.deepEqual(retrieved.bytes, manifestBytes);
+  assert.deepEqual(retrieved.terms, manifest);
+  assert.equal(retrieved.digest, digestHex);
+  assert.equal(await hashMarketTerms(retrieved.bytes), retainedExpectation.digest);
+  assert.equal((await retainMarketTerms(termsStore, manifestBytes, retainedExpectation)).created, false);
+  const changedManifest = structuredClone(manifest);
+  changedManifest.question = "Altered isolated test manifest; must never replace finalized sealed terms.";
+  const changedBytes = encodeMarketTerms(changedManifest);
+  await assert.rejects(retainMarketTerms(termsStore, changedBytes, retainedExpectation));
+  // Even if a caller supplies a self-consistent NEW digest/length, the store's
+  // market identity is immutable. This candidate is never sent to the chain.
+  const conflictingExpectation = { ...retainedExpectation, digest: await hashMarketTerms(changedBytes), manifestLength: changedBytes.length };
+  await assert.rejects(retainMarketTerms(termsStore, changedBytes, conflictingExpectation), MarketTermsRetentionConflict);
+  await assert.rejects(readRetainedMarketTerms(termsStore, conflictingExpectation));
+  assert.deepEqual((await readRetainedMarketTerms(termsStore, retainedExpectation)).bytes, manifestBytes);
+  assert.equal((await readdir(termsStore)).length, 1, "No conflicting or pending manifest published");
+  console.log(`PASS finalized immutable terms retention/retrieval: ${retainedExpectation.digest} at slot ${snapshot.finalizedSlot}`);
+
   const missing = await createMarket(42n, longClose, longResolve);
   const missingResolution = await buildInitializeResolutionInstruction({ programAddress: PROGRAM,
     marketId: missing.marketId, seats: missing.seats, creator: admin,
@@ -422,12 +463,16 @@ injection are refused.`);
     transactionCaseCount: receipts.length, initializedSignature: initReceipt.signature,
     sealedSignature: sealedReceipt.signature, finalizedSlot: snapshot.finalizedSlot,
     manifest: { bytes: manifestBytes.length, digest: digestHex, verifiedAgainstActualAddresses: true },
+    retention: { directory: termsStore, verifiedFinalizedSlot: snapshot.finalizedSlot, digest: retainedExpectation.digest,
+      exactBytes: true, sameContentIdempotent: true, mutatedContentRejected: true, conflictingDigestRejected: true },
     checks: ["pristine ready-book initialization with real deposit", "strict account decoder",
       "canonical manifest binding", "two independent exact-digest acceptances", "unauthorized/mismatch/repeat rollback",
       "reinitialization rejection", "unaccepted seal rejection", "sealed commitment byte immutability",
       "missing/unsealed/mismatched terms fail-closed activation", "designated reviewer trading rejection",
       "ordinary participant admission", "post-close seal rejection",
-      "finalized same-batch market/book/resolution/terms read with matching frozen reviewers"],
+      "finalized same-batch market/book/resolution/terms read with matching frozen reviewers",
+      "exact canonical filesystem retention/retrieval against finalized sealed terms",
+      "idempotent same-content retention and mutated/conflicting manifest rejection"],
     admissionScope: "Mandatory sealed terms are enforced for new-order and resolution initialization; legacy settlement, withdrawal and cancellation are outside this suite.",
     receipts }, (_, value: unknown) => typeof value === "bigint" ? value.toString() : value, 2));
 }
