@@ -168,6 +168,17 @@ For a user-to-user send, derive both ATAs using the pinned mint and classic Toke
 
 Free issuance still needs an onchain claim receipt, authorized mint authority, immutable grant cap/policy, and concurrency/replay protection. Transferring all tokens away, closing an empty ATA, unlinking/relinking, or receiving tokens back cannot reset eligibility. Wallet-based limits alone cannot prevent Sybil identities; do not describe them as one grant per human. SPL Token rejects unauthorized mint authorities, but application grant caps require separate exchange/grant-program tests.
 
+The operator-only `prepareEnrollment` helper now builds the unsigned authorization
+from explicit issuer, wallet, identity digest, allowance and expiry inputs. It
+reads configuration, mint, both association PDAs and Clock in one finalized batch;
+rejects existing wallet/identity associations; checks lifetime authorized allowance
+against campaign/per-wallet caps; and requires expiry after that chain Clock.
+Burning feathers cannot replenish enrollment allowance. The configured issuer is
+the sole signer and fee payer. Preparation neither establishes human eligibility
+nor signs, sends, funds SOL, claims tokens or changes database balances. Its 55
+mocked tests prove preparation validation, not actual execution of this helper.
+Runtime proof and the explicit enrollment operator are separate integration gates.
+
 Market YES/NO positions should likewise have one representation. If positions are program-owned quantities, no second independently spendable outcome-token balance exists. If outcome tokens are later adopted, escrow/reserve or burn/mint them atomically and reconcile their supply against positions and collateral. Supporting arbitrary transfer-fee/hook extensions is not part of the initial contract.
 
 Transition the application in this order:
