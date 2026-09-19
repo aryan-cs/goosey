@@ -24,7 +24,7 @@ response('QUOTE');tick(4000);has('Pay 50.001');snapshot('trade-review')
 press('A');has('Trade submitted');assert '\tTRADE\t' in g.files['appdata/request.txt']
 saved=g.files['appdata/request.txt'];press('A','A','B','START');assert g.files['appdata/request.txt']==saved
 # Reopening never drops a confirmed order; cached account is not trusted fresh.
-g.on_exit();g.fresh();assert 'Account offline' not in g.visible() and 'USB required' not in g.visible();press('A','A');has('Trade submitted')
+g.on_exit();g.fresh();has('Account offline');has('USB required');press('A','A');has('Trade submitted')
 response('PENDING',message='Waiting for receipt');tick(6000);has('Waiting for receipt');snapshot('trade-pending')
 response('DONE');tick(8000);has('Trade complete');assert g.files['appdata/request.txt']=='';snapshot('trade-receipt')
 account(3);tick(10000);press('B','A','A');response('QUOTE',ttl=1);tick(12000);tick(14000);has('Quote expired')

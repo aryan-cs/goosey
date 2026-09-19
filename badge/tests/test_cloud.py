@@ -20,7 +20,13 @@ def load(data, generation):
     tick(g.clock+2000)
     tick(g.clock+2000)
 
-g.fresh();has('Reconnecting...')
+g.fresh();has('Reconnecting...');has('Account offline');has('USB required')
+texts=[w.text for w in g.widgets.values() if not w.hide and w.text]
+assert 'Account' not in texts
+offline=next(w for w in g.widgets.values() if w.text=='Account offline')
+usb=next(w for w in g.widgets.values() if w.text=='USB required')
+assert (offline.x,offline.y,offline.w)==(10,7,125)
+assert (usb.x,usb.y,usb.w)==(135,1,175) and usb.styles['text_align']=='right'
 assert 'Waiting for connection' not in g.visible()
 reconnecting=next(w for w in g.widgets.values() if w.text=='Reconnecting...')
 assert reconnecting.y==110 and reconnecting.styles['text_align']=='center'

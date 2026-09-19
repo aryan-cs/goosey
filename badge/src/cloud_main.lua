@@ -56,7 +56,11 @@ local function render()
   header:set_text(({list="Markets",detail="Market",settings="Settings",link="Account"})[page])
   status:set_text(lastRx and badge.sys.ms()-lastRx<45000 and "USB updated" or "Saved snapshot")
   stamp:set_text(cloud.capturedAt)
-  if trade then local user,balance=trade.header();status:set_text(user);stamp:set_text(balance) end
+  if trade then
+    local user,balance,offline=trade.header()
+    if page=="link" and offline then header:set_text(user);status:set_text(balance);stamp:set_text("")
+    else status:set_text(user);stamp:set_text(balance) end
+  end
   if page=="link" and trade.pairing_challenge() then header:set_text("Sign in");status:set_text("");stamp:set_text("") end
   local m=cloud.markets[selected]
   if not m and (page=="list" or page=="detail") then
@@ -127,9 +131,9 @@ function on_enter(root)
   end
   box(0,0,320,240,C.bg);box(10,34,300,1,C.panel)
   mark=box(7,47,307,58,C.panel);mark:style({border_width=1,border_color=C.text,radius=3})
-  header=badge.ui.label(root,"");header:set_pos(10,7);header:set_size(110,22)
+  header=badge.ui.label(root,"");header:set_pos(10,7);header:set_size(125,22)
   header:style({text_font=18,text_color=C.text})
-  status=badge.ui.label(root,"");status:set_pos(120,1);status:set_size(190,17)
+  status=badge.ui.label(root,"");status:set_pos(135,1);status:set_size(175,17)
   status:style({text_font=14,text_color=C.text,text_align="right"})
   stamp=badge.ui.label(root,"");stamp:set_pos(149,16);stamp:set_size(161,17)
   stamp:style({text_font=14,text_color=C.text,text_align="right"})
