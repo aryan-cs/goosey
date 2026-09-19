@@ -24,9 +24,10 @@ local function focus(x,y,w,h)
   mark:set_pos(x,y);mark:set_size(w,h);mark:hidden(false)
 end
 local function refresh(initial)
+  for i=1,16 do badge.sys.gc_step() end
   local data=badge.fs.read("appdata/market_snapshot.txt")
   if type(data)=="string" and cloud.generation and data:match("^GS1\t(%d+)\t")==cloud.generation then return false end
-  local nextCloud=readCloudFrame(data)
+  local nextCloud=readCloudFrame(data,badge.sys.gc_step)
   if not nextCloud or nextCloud.generation==cloud.generation then return false end
   if cloud.generation and (#nextCloud.generation<#cloud.generation or (#nextCloud.generation==#cloud.generation and nextCloud.generation<cloud.generation)) then return false end
   local slug=cloud.markets[selected] and cloud.markets[selected].slug
@@ -97,7 +98,10 @@ local function render()
   end
 end
 function on_enter(root)
+  -- These bindings are unused by Goosey; free their Lua tables before loading data.
+  badge.nfc=nil;badge.radio=nil;badge.contacts=nil;badge.sensor=nil
   uiRoot=root;qr=nil
+  for i=1,32 do badge.sys.gc_step() end
   badge.sys.gc_step()
   page,selected,side,setting="list",1,1,1
   lastRead,lastRx,lastGC=0,nil,0
