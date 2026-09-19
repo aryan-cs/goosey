@@ -118,6 +118,18 @@ No actual participant market is published by tests. Real end-to-end publication
 requires the operator-supplied canonical manifest and independent reviewer wallets.
 # Verified isolated operator rehearsal
 
+The extended suite subsequently passed 16 checks, including a real chain-to-SQL
+catalog registration on an exclusively created SQLite database. Evidence is
+`/private/tmp/goosey-solana-runner-fZhMI9/publication-evidence/catalog/result.json`.
+It used finalized RPC, actual retained canonical terms, the generated client and
+shipping registration service without mocked boundaries. The resulting single
+SOLANA draft, binding and audit exactly matched the verified chain commitment;
+replay changed no rows. All 36 non-catalog tables remained unchanged, with 108
+temporary database triggers forbidding INSERT/UPDATE/DELETE on those tables.
+The deployment genesis was `D7nsVwgCBsUDpvZJvffHTyajMexHBua7KgFL1cbGxPRX` and
+the catalog audit recorded finalized slot 566. This proof does not activate a
+shared market or claim the newer listing-publication endpoint was exercised.
+
 On 2026-09-19, `scripts/solana-publication-e2e.ts` completed 15 actual
 CLI/RPC checks against a fresh local ledger and the compiled artifact
 `d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.

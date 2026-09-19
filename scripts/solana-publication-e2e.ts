@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { chmod, mkdir, readFile, readdir, realpath, rename } from "node:fs/promises";
+import { chmod, mkdir, open, readFile, readdir, realpath, rename } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { address, appendTransactionMessageInstructions, createKeyPairSignerFromBytes, createSolanaRpc, createTransactionMessage,
@@ -166,10 +166,29 @@ async function main() {
   assert.equal(finalConfig.totalAuthorized, 2000n); assert.equal(finalConfig.totalMinted, 0n); assert.equal(finalConfig.supply, 0n);
   assert.equal(after.market?.marketState.accountedVault, 0n); // No fake participant funding; economics/payout remain positive.
   pass("fresh CLI process restarts preserve receipts, exact finalized state and admin balance; no duplicate transactions");
+  // New database only, after chain publication. The subprocess must not inherit
+  // a developer DB URL, signing secrets, SMTP configuration or NODE_OPTIONS.
+  const catalogDirectory = path.join(evidence, "catalog"); await mkdir(catalogDirectory, { mode: 0o700 });
+  const catalogDatabase = path.join(catalogDirectory, "catalog.db");
+  const catalogHandle = await open(catalogDatabase, "wx", 0o600); await catalogHandle.close();
+  const catalogEnv: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, LANG: process.env.LANG,
+    NODE_ENV: "test", DATABASE_PROVIDER: "sqlite", DATABASE_URL: `file:${catalogDatabase}`,
+    POSTGRES_DATABASE_URL: "", POSTGRES_DIRECT_DATABASE_URL: "", NEON_DATABASE_URL: "", NEXT_TELEMETRY_DISABLED: "1",
+    APP_URL: "https://publication-catalog.test.invalid", REQUIRE_EMAIL_VERIFICATION: "true",
+    GOOSEY_PUBLICATION_CATALOG_DIRECTORY: catalogDirectory, GOOSEY_SOLANA_CLUSTER: runtime.cluster,
+    GOOSEY_SOLANA_RPC_URL: runtime.rpcUrl, GOOSEY_SOLANA_PROGRAM_ID: runtime.programAddress, GOOSEY_SOLANA_GENESIS_HASH: runtime.genesisHash };
+  await executeFile(process.execPath, ["node_modules/prisma/build/index.js", "db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"],
+    { env: catalogEnv, encoding: "utf8", timeout: 45_000, maxBuffer: 2 * 1024 * 1024, signal });
+  const catalogProof = await executeFile(process.execPath, ["--import", "tsx", "scripts/lib/solana-publication-catalog-e2e.ts", catalogDirectory],
+    { env: catalogEnv, encoding: "utf8", timeout: 60_000, maxBuffer: 2 * 1024 * 1024, signal });
+  process.stdout.write(catalogProof.stdout);
+  const catalogResult = JSON.parse(await readFile(path.join(catalogDirectory, "result.json"), "utf8"));
+  assert.equal(catalogResult.status, "PASS"); assert.equal(catalogResult.marketAddress, canonical.market); assert.equal(catalogResult.digest, publication.digest);
+  pass("real chain-to-catalog service proof on NEW isolated SQLite database, no chain/store mocks");
   await writePublicationFile(evidence, "result.json", JSON.stringify({ status: "PASS", scope: "isolated TEST ONLY real CLI/RPC", checks: sequence,
     artifactSha256: runner.artifactSha256, genesisHash: runtime.genesisHash, market: canonical.market, digest: publication.digest,
     receiptCount: files.length, reviewerAcceptanceBits: after.terms?.acceptanceBits, resolutionPhase: after.resolution?.phase,
-    totalAuthorized: finalConfig.totalAuthorized.toString(), totalMinted: "0", supply: "0" }, null, 2));
+    totalAuthorized: finalConfig.totalAuthorized.toString(), totalMinted: "0", supply: "0", catalog: catalogResult }, null, 2));
   await chmod(evidence, 0o700);
   console.log(`PASS publication suite: ${sequence} checks; public evidence ${path.join(evidence, "result.json")}`);
 }
