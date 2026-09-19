@@ -89,7 +89,7 @@ export function PasswordResetFlow({ redirectTo = "/" }: { redirectTo?: string })
   }
 
   if (success) {
-    return <section className="auth-card verification-card"><div className="verification-state" role="status"><CheckCircle2 className="verification-success-icon" /><span className="eyebrow">Password updated</span><h1>Your account is secure</h1><p>All existing sessions were signed out. Use your new password to continue.</p><Link className="button button-primary" href={authPageHref("/login", redirectTo)}>Sign in</Link></div></section>;
+    return <section className="auth-card verification-card"><div className="verification-state" role="status"><CheckCircle2 className="verification-success-icon" /><span className="eyebrow">Password updated</span><h1>Password changed</h1><p>You&apos;re signed out everywhere. Sign back in with your new password.</p><Link className="button button-primary" href={authPageHref("/login", redirectTo)}>Sign in</Link></div></section>;
   }
 
   const confirming = token !== null;
@@ -97,12 +97,12 @@ export function PasswordResetFlow({ redirectTo = "/" }: { redirectTo?: string })
     <section className="auth-card verification-card" aria-labelledby="password-reset-heading">
       <span className="eyebrow">Account recovery</span>
       <h1 id="password-reset-heading">{confirming ? "Choose a new password" : "Reset your password"}</h1>
-      <p>{confirming ? "Use at least 12 characters. Completing this reset signs out every existing session." : "Enter your account email. We will send a time-limited, one-use reset link if the account is eligible."}</p>
+      <p>{confirming ? "Use at least 12 characters. Changing your password signs you out everywhere." : "Enter your email. If there's an account with that address, we'll send a reset link."}</p>
       <form onSubmit={confirming ? submitConfirmation : submitRequest}>
         {confirming ? <>
-          <label><span>New password</span><div className="input-with-icon"><LockKeyhole /><input name="newPassword" type="password" autoComplete="new-password" minLength={12} required /></div></label>
-          <label><span>Confirm new password</span><div className="input-with-icon"><LockKeyhole /><input name="confirmation" type="password" autoComplete="new-password" minLength={12} required /></div></label>
-        </> : <label><span>Email</span><div className="input-with-icon"><Mail /><input name="email" type="email" autoComplete="email" required /></div></label>}
+          <label><span>New password</span><div className="input-with-icon"><LockKeyhole /><input name="newPassword" placeholder="At least 12 characters" type="password" autoComplete="new-password" minLength={12} required /></div></label>
+          <label><span>Confirm new password</span><div className="input-with-icon"><LockKeyhole /><input name="confirmation" placeholder="Re-enter your new password" type="password" autoComplete="new-password" minLength={12} required /></div></label>
+        </> : <label><span>Email</span><div className="input-with-icon"><Mail /><input name="email" placeholder="you@example.com" type="email" autoComplete="email" required /></div></label>}
         {error ? <p className="form-error" role="alert"><AlertCircle /> {error}</p> : null}
         {message ? <p className="success-message" role="status"><CheckCircle2 /> {message}</p> : null}
         <button className="button button-primary auth-submit" disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : null}{confirming ? "Update password" : "Send reset link"}</button>
