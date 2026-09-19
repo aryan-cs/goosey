@@ -71,7 +71,9 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
 export function ProbabilityChart({ points, label = "YES probability", height = 300, asOf, marketSlug }: { points: ChartPoint[]; label?: string; height?: number; asOf?: number; marketSlug?: string }) {
   const [range, setRange] = useState<"1D" | "1W" | "1M" | "ALL">("ALL");
   const [inspected, setInspected] = useState<{ timestamp: number; probability: number } | null>(null);
-  const [clock, setClock] = useState(() => asOf ?? Date.now());
+  // The first client render must use the same domain as the server render.
+  // Advance to wall time only after the history request finishes below.
+  const [clock, setClock] = useState(() => asOf ?? Math.max(0, ...normalizeChartPoints(points).map(point => point.timestamp)));
   const [revision, setRevision] = useState(0);
   const [history, setHistory] = useState<{ range: string; slug: string; points: ChartPoint[] } | null>(null);
   const [historyError, setHistoryError] = useState(false);

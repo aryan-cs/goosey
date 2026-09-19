@@ -10,7 +10,9 @@ export default function configureNext(phase: string): NextConfig {
   return {
     // Keep `next build` from clearing a running dev server's client and HMR
     // artifacts. Next otherwise places both beneath `.next`.
-    distDir: development ? ".next-dev" : ".next",
+    distDir: development
+      ? (process.env.GOOSEY_DEVELOPMENT_SANDBOX === "1" ? ".next-sandbox" : ".next-dev")
+      : ".next",
     // Codex/AppShots and local QA address the same dev server through both
     // loopback hostnames. Next validates dev-only HMR origins separately.
     allowedDevOrigins: ["127.0.0.1"],
