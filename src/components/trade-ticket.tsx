@@ -3,7 +3,7 @@ import styles from "./trade-ticket.module.css";
 import { FeatherIcon } from "./brand";
 import { authPageHref } from "@/lib/auth-destination";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/client-api";
@@ -76,6 +76,7 @@ export function TradeTicket({
   const [quote, setQuote] = useState<TradeQuote | null>(null);
   const [state, setState] = useState<"editing" | "quoting" | "review" | "submitting" | "success">("editing");
   const [error, setError] = useState<string | null>(null);
+  const ticketRef = useRef<HTMLElement>(null);
   const executionKey = useRef<string | null>(null);
   const quoteUrl = quoteEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/quote`;
   const tradeUrl = tradeEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/trades`;
@@ -90,6 +91,12 @@ export function TradeTicket({
   const quotedTotal = quote ? (action === "BUY" ? milli(quote.totalDebitMilli ?? milli(quote.grossMilli) + milli(quote.feeMilli)) : milli(quote.netCreditMilli ?? milli(quote.grossMilli) - milli(quote.feeMilli))) : 0n;
   const maxPayoutMilli = tradePayoutMilli(quantity);
   const potentialProfitMilli = action === "BUY" ? maxPayoutMilli - quotedTotal : quotedTotal;
+
+  useEffect(() => {
+    if (state !== "success") return;
+    const scrollContainer = ticketRef.current?.closest(".ticket-shell") as HTMLElement | null;
+    if (scrollContainer) scrollContainer.scrollTop = 0;
+  }, [state]);
 
   function edit(next?: { action?: Action; outcome?: Outcome }) {
     if (next?.action) { setAction(next.action); onActionChange?.(next.action); }
@@ -131,11 +138,13 @@ export function TradeTicket({
   }
 
   return (
-    <section className={`trade-ticket ${styles.ticket}`} aria-labelledby="trade-ticket-title">
-      <div className="trade-ticket-header"><div><span className="eyebrow">Trade</span><h2 id="trade-ticket-title">{outcomeLabel ?? "Choose YES or NO"}</h2></div></div>
-      {!outcomeLabel && <p className="trade-market-title">{marketTitle}</p>}
+    <section ref={ticketRef} className={`trade-ticket ${styles.ticket}`} aria-labelledby="trade-ticket-title">
+      {state !== "success" && <>
+        <div className="trade-ticket-header"><div><span className="eyebrow">Trade</span><h2 id="trade-ticket-title">{outcomeLabel ?? "Choose YES or NO"}</h2></div></div>
+        {!outcomeLabel && <p className="trade-market-title">{marketTitle}</p>}
+      </>}
       {state === "success" ? (
-        <div className="trade-success" role="status"><CheckCircle2 /><h3>Trade placed</h3><button className="button button-secondary" onClick={() => edit()}><RotateCcw /> Make another trade</button></div>
+        <div className={`trade-success ${styles.successState}`} role="status"><CheckCircle2 /><h3 id="trade-ticket-title">Trade placed</h3><button className="button button-secondary" type="button" onClick={() => edit()}><RotateCcw /><span>Make another trade</span></button></div>
       ) : <>
         <div className="segmented" aria-label="Trade action">{(["BUY", "SELL"] as Action[]).map((value) => <button aria-pressed={action === value} className={action === value ? "active" : ""} onClick={() => edit({ action: value })} key={value}>{value === "BUY" ? "Buy" : "Sell"}</button>)}</div>
         {!outcomeLabel && <div className="side-grid" aria-label="Contract side">

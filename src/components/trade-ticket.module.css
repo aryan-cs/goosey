@@ -27,7 +27,47 @@
 .ticket :global(.trade-actions) { margin: 0; }
 .ticket :global(.trade-submit) { min-width: 0; white-space: normal; }
 
+.successState:global(.trade-success) {
+  min-height: 320px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  justify-items: center;
+  gap: 16px;
+  padding-block: 32px;
+}
+
+.successState:global(.trade-success) > svg {
+  width: 52px;
+  height: 52px;
+}
+
+.successState:global(.trade-success) h3 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+
+.successState:global(.trade-success) button {
+  width: min(100%, 280px);
+  min-height: 52px;
+  justify-content: center;
+  gap: 10px;
+  padding-inline: 20px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.successState:global(.trade-success) button > svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
 @media (max-width: 809.98px) {
   .ticket:global(.trade-ticket) { padding: var(--space-panel-mobile); }
   .quantityGroup :global(.quick-values button) { min-height: 44px; }
+  .successState:global(.trade-success) { min-height: 280px; padding-block: 24px; }
+  .successState:global(.trade-success) h3 { font-size: 22px; }
 }
