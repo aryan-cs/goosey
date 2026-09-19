@@ -188,7 +188,10 @@ def main():
                     console.put(PRIVATE+'response.txt',response);last_response=response
                     if b'\tDONE\t' in response: account_at=0
             if snapshot_job is not None and snapshot_job.done():
-                try: console.put(PRIVATE+'market_snapshot.txt',mailbox_frame(snapshot_job.result()))
+                try:
+                    snapshot=snapshot_job.result()
+                    console.put(PRIVATE+'market_snapshot.txt',mailbox_frame(snapshot))
+                    console.put(PRIVATE+'market_generation.txt',snapshot['generation'].encode())
                 except (OSError,ValueError): print('Market update unavailable; keeping previous snapshot.',flush=True)
                 snapshot_job=None
             if now>=market_at and snapshot_job is None and not (request and request['kind']=='TRADE'):

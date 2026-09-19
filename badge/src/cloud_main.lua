@@ -1,6 +1,6 @@
 local cloud={markets={},capturedAt=""}
 __CLOUD_READER__
-local trade,qr,uiRoot
+local trade,qr,uiRoot,pendingCloud,refreshSlug
 local C={bg=0xc5d99b,panel=0x91ad65,text=0x1c3524,muted=0x4f6b3e}
 local page,selected,side,setting="list",1,1,1
 local labels,header,status,stamp,mark,chart,track,dot,midline
@@ -24,13 +24,26 @@ local function focus(x,y,w,h)
   mark:set_pos(x,y);mark:set_size(w,h);mark:hidden(false)
 end
 local function refresh(initial)
-  badge.sys.gc_step()
-  local data=badge.fs.read("appdata/market_snapshot.txt")
-  if type(data)=="string" and cloud.generation and data:match("^GS1\t(%d+)\t")==cloud.generation then return false end
-  local nextCloud=readCloudFrame(data)
+  if not pendingCloud then
+    if cloud.generation then
+      local generation=badge.fs.read("appdata/market_generation.txt")
+      if not generation or not generation:match("^%d+$") or generation==cloud.generation then return false end
+      refreshSlug=cloud.markets[selected] and cloud.markets[selected].slug
+      cloud={markets={},capturedAt=""}
+      return true
+    end
+    local data=badge.fs.read("appdata/market_snapshot.txt")
+    if type(data)=="string" and cloud.generation and data:match("^GS1\t(%d+)\t")==cloud.generation then return false end
+    pendingCloud=readCloudFrame(data,true)
+    return false
+  end
+  local nextCloud=pendingCloud()
+  if nextCloud==false then return false end
+  pendingCloud=nil
   if not nextCloud or nextCloud.generation==cloud.generation then return false end
   if cloud.generation and (#nextCloud.generation<#cloud.generation or (#nextCloud.generation==#cloud.generation and nextCloud.generation<cloud.generation)) then return false end
-  local slug=cloud.markets[selected] and cloud.markets[selected].slug
+  local slug=refreshSlug or (cloud.markets[selected] and cloud.markets[selected].slug)
+  refreshSlug=nil
   cloud=nextCloud;selected=1
   for i,m in ipairs(cloud.markets) do if m.slug==slug then selected=i end end
   if not initial then lastRx=badge.sys.ms() end
@@ -100,7 +113,7 @@ end
 function on_enter(root)
   -- These bindings are unused by Goosey; free their Lua tables before loading data.
   badge.nfc=nil;badge.radio=nil;badge.contacts=nil;badge.sensor=nil
-  uiRoot=root;qr=nil
+  uiRoot=root;qr=nil;pendingCloud=nil;refreshSlug=nil
   for i=1,32 do badge.sys.gc_step() end
   badge.sys.gc_step()
   page,selected,side,setting="list",1,1,1
@@ -146,13 +159,18 @@ function on_button(button,kind)
     elseif button==B.B then page="list" elseif button==B.A then page="link";local m=cloud.markets[selected];trade.open(m.slug,side==1 and "YES" or "NO",m.title) else return end
   elseif page=="settings" then
     if button==B.UP then setting=(setting-2)%3+1 elseif button==B.DOWN then setting=setting%3+1
-    elseif button==B.B then page="list" elseif button==B.A then page=setting==1 and "list" or "link";if page=="link" then local m=cloud.markets[selected];trade.open(m.slug,side==1 and "YES" or "NO",m.title);if setting==3 then trade.phase="account" end end else return end
+    elseif button==B.B then page="list" elseif button==B.A then page=setting==1 and "list" or "link";if page=="link" then local m=cloud.markets[selected];if not m then page="list";render();return end;trade.open(m.slug,side==1 and "YES" or "NO",m.title);if setting==3 then trade.phase="account" end end else return end
   elseif button==B.B then page="list" else return end
   render()
 end
 function on_tick()
   if not initialized then return end
   local now=badge.sys.ms()
+  if pendingCloud then
+    badge.sys.gc_step()
+    if refresh(false) then render() end
+    return
+  end
   if now-lastGC>=600 then badge.sys.gc_step();lastGC=now end
   if now-lastRead>=2000 then
     lastRead=now

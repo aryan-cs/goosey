@@ -124,3 +124,16 @@ preservation and quote expiry; gateway tests pass. Installed on the connected ba
 and observed Reconnecting with no Lua error. The prior saved credential returned
 HTTP 401, so a fresh link was generated after preserving its local receipt journal.
 Phone approval and authenticated trading still require end-to-end confirmation.
+
+### Linked account and market-refresh stability
+
+The physical badge restored the participant account and real balance successfully.
+A later investigation captured a native reboot following Lua system-heap exhaustion
+while rereading market_snapshot.txt. The app now reads a small generation marker
+before opening an unchanged market file. Both USB publishers write that marker
+only after the complete frame. Snapshot validation is incremental (one market per
+tick), releases the previous in-memory catalog before reading its replacement, and remains
+bounded. The UI briefly shows Loading markets during replacement; the database
+and on-device snapshot file remain intact, and account/trade state is separate. The exporter requests at most 32 history points across all markets to
+leave headroom for both old and new snapshots; all points still come from the
+repository database. This reduces chart detail, not market coverage.

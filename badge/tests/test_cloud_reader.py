@@ -17,3 +17,10 @@ many=dict(snapshot,markets=[dict(snapshot['markets'][0],slug=str(i),history=[[50
 assert reader(mailbox_frame(many).decode()) is None
 print('Mailbox reader: truncation, invalid/reordered data, frame/footer mismatch, and total memory bounds passed.')
 
+
+step=reader(frame,True)
+assert step() is False
+assert step()['markets'][1]['title']=='A market?'
+step=reader(frame.replace('END\t123','END\t124'),True)
+assert step() is False
+assert step() is None

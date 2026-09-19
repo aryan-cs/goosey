@@ -26,6 +26,7 @@ def main():
         while True:
             frame = mailbox_frame(snapshot)
             console.put('/littlefs/appdata/goosey_base/market_snapshot.txt', frame)
+            console.put('/littlefs/appdata/goosey_base/market_generation.txt', snapshot['generation'].encode())
             print(f"Updated {len(snapshot['markets'])} public markets ({len(frame)} bytes), {snapshot['capturedAt']}", flush=True)
             if args.once:
                 return

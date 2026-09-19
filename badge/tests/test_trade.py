@@ -7,7 +7,9 @@ challenge='a'*64
 
 def account(gen,state='READY'):
     g.files['appdata/account.txt']=f'GA1\t{gen}\t{challenge}\t{state}\tbadge_test\t1000000\tEND\n'
-def tick(at): g.clock=at;g.on_tick()
+def tick(at):
+    g.clock=at;g.on_tick()
+    for _ in range(17):g.on_tick()
 def response(state,qid='c123456789012345678901234',amount='50001',ttl=20,message='Trade complete'):
     rid=g.files['appdata/request.txt'].split('\t')[1]
     g.files['appdata/response.txt']=f'GR1\t{rid}\t{challenge}\t{state}\t{qid}\t{amount}\t0\t{ttl}\t{message}\tEND\n'

@@ -1,5 +1,5 @@
 -- Public USB mailbox only. This is never an account or order channel.
-local function readCloudFrame(data)
+local function readCloudFrame(data,incremental)
   if type(data)~="string" or #data>16000 or data:sub(-1)~="\n" then return nil end
   local iter=data:gmatch("([^\n]*)\n")
   local lineCount=0
@@ -18,7 +18,10 @@ local function readCloudFrame(data)
   if not count or count%1~=0 or count<1 or count>16 then return nil end
   local result={generation=head[2],capturedAt=head[3],markets={}}
   local seen,totalPoints={},0
-  for i=1,count do
+  local i=0
+  local function step()
+  i=i+1
+  if i<=count then
     local row=nextRow()
     if not row or #row~=8 or row[1]~="M" or #row[2]>120 or not row[2]:match("^[%w_-]+$") or seen[row[2]] or #row[3]<1 or #row[3]>240 or #row[5]>12 or not row[5]:match("^%d+k?$") or #row[6]>20 then return nil end
     local bps,n=tonumber(row[4]),tonumber(row[8])
@@ -35,8 +38,12 @@ local function readCloudFrame(data)
       market.history[j]={p/100,t}
     end
     result.markets[i]=market
+    return false
   end
   local ending=nextRow()
   if iter()~=nil or not ending or #ending~=2 or ending[1]~="END" or ending[2]~=head[2] then return nil end
   return result
+  end
+  if incremental then return step end
+  while true do local value=step();if value~=false then return value end end
 end

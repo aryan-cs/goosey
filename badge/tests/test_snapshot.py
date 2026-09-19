@@ -26,6 +26,18 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(m['volume'], '12')
         self.assertEqual(m['closes'], '09/20 18:30 UTC')
 
+    def test_history_budget_scales_with_catalog(self):
+        catalog = [dict(slug=f'market-{i}',title='Market?',probabilityYesBps=5000,
+                        closesAt='2026-09-20T18:30:00.000Z',volumeMilli='0',status='OPEN') for i in range(13)]
+        paths=[]
+        def get(url,**kwargs):
+            paths.append(url)
+            return BytesIO(json.dumps({'items':catalog} if len(paths)==1 else {'snapshots':[]}).encode())
+        with patch.object(module,'urlopen',side_effect=get):
+            result=module.fetch_snapshot('https://getgoosey.vercel.app')
+        self.assertEqual(len(result['markets']),13)
+        self.assertTrue(all(url.endswith('limit=2') for url in paths[1:]))
+
     def test_bad_probability_and_volume(self):
         for data in ({'probabilityYesBps': 10001}, {'probabilityYesBps': True}, {'volumeMilli': '-1'}):
             with self.assertRaises(ValueError): self.fetch(**data)

@@ -43,7 +43,8 @@ def fetch_snapshot(origin):
         raise ValueError('Badge snapshot requires 1–16 markets; refusing a truncated catalog')
     result = []
     seen = set()
-    sample_limit = min(32, 96 // len(items))
+    # Leave physical RAM for the old and new snapshot during atomic refresh.
+    sample_limit = min(32, 32 // len(items))
     for market in items:
         slug, title = market['slug'], market['title']
         if not isinstance(slug, str) or not 1 <= len(slug) <= 120 or slug in seen:
