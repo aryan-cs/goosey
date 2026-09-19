@@ -11,6 +11,7 @@ import { MarketStatusLabel } from "@/components/market-status";
 import { notFound, redirect } from "next/navigation";
 import { Bookmark, CalendarClock, ChevronRight, Share2 } from "lucide-react";
 import { db } from "@/lib/db";
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { formatFeathers } from "@/lib/view-models";
 import { loadMarketMarks } from "@/lib/market-marks";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
@@ -22,6 +23,7 @@ import { WatchlistButton } from "@/components/watchlist-button";
 import { ShareButton } from "@/components/share-button";
 import { getServerUser } from "@/lib/server-session";
 import { OrderBookPanel } from "@/components/order-book-panel";
+import { MarketResolutionNote } from "@/components/market-resolution-note";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +37,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
   const user = await getServerUser();
   const data = await runSerializableTransaction(db, async (tx) => {
     const market = await tx.market.findUnique({
-    where: { slug },
+    where: { slug, AND: [DATABASE_MARKET_FILTER] },
     include: {
       _count: { select: { orders: true, orderFills: true, trades: true, settlements: true } },
       priceHistory: { orderBy: { createdAt: "desc" }, take: 500 },
@@ -93,7 +95,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
         : yesBps !== null && <MarketTradingPanel key={initialOutcome} marketId={market.slug} marketTitle={market.shortTitle} yesProbability={yesBps / 10_000} balanceMilli={user?.balanceMilli.toString()} signedIn={Boolean(user)} initialOutcome={initialOutcome} disabled={!open} quoteEndpoint={`/api/markets/${market.slug}/quote`} tradeEndpoint={`/api/markets/${market.slug}/trades`} />}
       <div className={styles.details}>
         <section className="market-copy"><span className="eyebrow">About this market</span><h2>What to know</h2><p>{market.description}</p></section>
-        <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow">How it is decided</span><h2 id="rules-heading">Market rules</h2></div></div><p>{market.rules}</p><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>{formatFeathers(market.payoutMilli)} feathers</dd></div></dl></section>
+        <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow">How it is decided</span><h2 id="rules-heading">Market rules</h2></div></div><p>{market.rules}</p><MarketResolutionNote /><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>{formatFeathers(market.payoutMilli)} feathers</dd></div></dl></section>
 
         <section className="activity-panel" aria-labelledby="activity-heading"><MarketActivityRefresh /><div className="section-heading"><h2 id="activity-heading">Recent activity</h2></div>{orderBookMarket ? market.orderFills.length ? <ul className="trade-feed">{market.orderFills.slice(0, 15).map((fill) => <li key={fill.id}><span className="activity-dot yes" /><span><strong>{fill.takerOrder.user.profilePublic ? <Link href={`/users/${encodeURIComponent(fill.takerOrder.user.username)}`}>@{fill.takerOrder.user.username}</Link> : `@${fill.takerOrder.user.username}`}</strong>{" · "}{fill.quantity} contract{fill.quantity === 1 ? "" : "s"} matched at YES {formatFeathers(fill.canonicalYesPriceMilli, 3)} feathers</span><time dateTime={fill.createdAt.toISOString()}>{fill.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No executions yet.</p> : market.trades.length ? <ul className="trade-feed" tabIndex={0} aria-label="Recent trades">{market.trades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><span><strong title={`@${trade.user.username}`}>{trade.user.profilePublic ? <Link href={`/users/${trade.user.username}`}>@{trade.user.username}</Link> : `@${trade.user.username}${trade.user.id === user?.id ? " (you)" : ""}`}</strong> <TradeActivityDetails trade={trade} /></span><time dateTime={trade.createdAt.toISOString()}>{trade.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No trades yet.</p>}</section>
         {focusedComment && !focusedComment.success

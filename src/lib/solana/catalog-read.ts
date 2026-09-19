@@ -66,6 +66,9 @@ const marketSelect = {
 
 type SelectedMarket = Prisma.MarketGetPayload<{ select: typeof marketSelect }>;
 
+// Shared projection and binding validation for the exact social-catalog lookup.
+export { marketSelect as solanaCatalogSelect, publicItem as projectSolanaCatalogItem };
+
 function invalidCursor(): never {
   throw new ApiError(400, "INVALID_CURSOR", "The chain catalog cursor is invalid.");
 }

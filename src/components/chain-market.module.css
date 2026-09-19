@@ -30,3 +30,4 @@
 .rules > div { display: grid; gap: 8px; }
 .rules details > p, .rules details > code { margin-top: 12px; display: block; }
 .review h2 { scroll-margin-top: 110px; }
+@media (max-width: 800px) { .layout > .column:last-child { order: -1; } }

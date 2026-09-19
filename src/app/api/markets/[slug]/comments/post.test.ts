@@ -42,11 +42,11 @@ const CREATED_ID = "cm12345678901234567890125";
 const visibleRoot = { marketId: "market-a", parentId: null, status: "VISIBLE", userId: "root-author" };
 const visibleReply = { ...visibleRoot, parentId: ROOT_ID, userId: "reply-author" };
 
-function post(parentId?: string, body = "My reply") {
+function post(parentId?: string, body = "My reply", disclosePosition = false) {
   return POST(new NextRequest("http://localhost:8080/api/markets/goose-market/comments", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ body, parentId }),
+    body: JSON.stringify({ body, parentId, disclosePosition }),
   }), { params: Promise.resolve({ slug: "goose-market" }) });
 }
 
@@ -54,7 +54,7 @@ describe("POST comment threading", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.requireUser.mockResolvedValue({ id: "writer", displayName: "Writer" });
-    mocks.tx.market.findUnique.mockResolvedValue({ id: "market-a", status: "OPEN" });
+    mocks.tx.market.findUnique.mockResolvedValue({ id: "market-a", status: "OPEN", executionBackend: "DATABASE" });
     mocks.tx.comment.findUnique.mockResolvedValue(visibleRoot);
     mocks.tx.comment.create.mockImplementation(async ({ data }) => ({
       ...data, id: CREATED_ID, status: "VISIBLE",
@@ -115,6 +115,23 @@ describe("POST comment threading", () => {
     await expect(response.json()).resolves.toMatchObject({ comment: { parentId: null } });
     expect(mocks.tx.comment.findUnique).not.toHaveBeenCalled();
     expect(mocks.tx.notification.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts ordinary comments on published Solana markets without consulting SQL positions", async () => {
+    mocks.tx.market.findUnique.mockResolvedValue({ id: "market-a", status: "OPEN", executionBackend: "SOLANA" });
+    const response = await post();
+    expect(response.status).toBe(201);
+    expect(mocks.tx.position.findUnique).not.toHaveBeenCalled();
+    expect(mocks.tx.comment.create).toHaveBeenCalledOnce();
+  });
+
+  it("rejects SQL-backed position disclosure on Solana markets before reading or writing a comment", async () => {
+    mocks.tx.market.findUnique.mockResolvedValue({ id: "market-a", status: "OPEN", executionBackend: "SOLANA" });
+    const response = await post(undefined, "Chain position claim", true);
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "CHAIN_POSITION_DISCLOSURE_UNAVAILABLE" } });
+    expect(mocks.tx.position.findUnique).not.toHaveBeenCalled();
+    expect(mocks.tx.comment.create).not.toHaveBeenCalled();
   });
 
   it.each(["", " ", "x".repeat(801), "invalid\u0000text"])("rejects invalid reply bodies", async (body) => {

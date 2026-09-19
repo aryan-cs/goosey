@@ -1,0 +1,15 @@
+.note {
+  margin-top: 18px;
+  padding: 14px 16px;
+  color: var(--ink-secondary);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.note strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+}

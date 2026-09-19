@@ -6,15 +6,30 @@ import { address, getAddressDecoder } from "@solana/kit";
 
 const key = z.string().refine(value => { try { address(value); return true; } catch { return false; } });
 const amount = z.string().regex(/^[1-9][0-9]*$/).refine(v => BigInt(v) <= (1n << 64n) - 1n);
+// Shreds are the validator's pruning unit, NOT a byte/age or total-disk quota.
+export const DEFAULT_LOCALNET_LEDGER_SHREDS = 1_000_000;
+export const MAX_LOCALNET_LEDGER_SHREDS = 10_000_000;
+const ledgerShredLimit = z.number().int().min(10_000).max(MAX_LOCALNET_LEDGER_SHREDS);
+export function parseLocalnetLedgerShreds(value: string | undefined): number {
+  if (value === undefined) return DEFAULT_LOCALNET_LEDGER_SHREDS;
+  if (!/^[1-9][0-9]{0,7}$/.test(value)) throw new Error("Expected canonical bounded ledger shred count");
+  return ledgerShredLimit.parse(Number(value));
+}
 export const localnetManifestSchema = z.object({
   version: z.literal(1), program: key, admin: key, enrollment: key,
   validatorVersion: z.string().min(1).max(200), artifactSha256: z.string().regex(/^[a-f0-9]{64}$/),
   rpcPort: z.number().int().min(1024).max(65495).refine(base =>
     ![8080, 18999, 19000, 19900].some(port => port >= base && port <= base + 40)),
   perWalletCap: amount, campaignCap: amount,
+  // Legacy v1 manifests omitted this field. Interpret them with the documented
+  // bounded default on restart; never rewrite their immutable manifest.
+  ledgerShredLimit: ledgerShredLimit.default(DEFAULT_LOCALNET_LEDGER_SHREDS),
 }).strict().refine(v => BigInt(v.campaignCap) >= BigInt(v.perWalletCap), "Campaign cap must cover per-wallet cap")
   .refine(v => v.admin !== v.enrollment, "Authorities must be separate");
 export type LocalnetManifest = z.infer<typeof localnetManifestSchema>;
+export function localnetLedgerArguments(manifest: LocalnetManifest): string[] {
+  return ["--limit-ledger-size", String(ledgerShredLimit.parse(manifest.ledgerShredLimit))];
+}
 export function privateDirectory(value: string) {
   if (!path.isAbsolute(value) || path.normalize(value) !== value || value.endsWith(path.sep) || value === path.parse(value).root
     || /[\r\n\0]/.test(value)) throw new Error("Use an explicit normalized absolute private directory");

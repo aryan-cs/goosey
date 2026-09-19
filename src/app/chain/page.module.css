@@ -1,0 +1,24 @@
+.page { max-width: 1120px; padding-top: 30px; padding-bottom: 48px; }
+.header { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 28px; }
+.header h1 { margin: 8px 0; font-size: clamp(28px, 4vw, 38px); letter-spacing: -.035em; }
+.eyebrow { display: flex; align-items: center; gap: 7px; color: var(--ink-secondary); font-size: 13px; font-weight: 600; }
+.intro { color: var(--ink-secondary); margin: 0; font-size: 15px; line-height: 1.55; }
+.notice { display: flex; gap: 13px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-raised); margin-bottom: 28px; }
+.notice > svg { flex-shrink: 0; margin-top: 2px; }
+.notice p { margin: 0; color: var(--ink-secondary); font-size: 14px; line-height: 1.6; }
+.network { display: block; margin-top: 6px; color: var(--ink); font-weight: 600; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.card { min-width: 0; display: flex; flex-direction: column; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.category { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--ink-secondary); font-weight: 600; }
+.card h2 { font-size: 20px; line-height: 1.35; letter-spacing: -.02em; margin: 18px 0 10px; overflow-wrap: anywhere; }
+.card h2 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.description { color: var(--ink-secondary); line-height: 1.55; font-size: 14px; margin: 0 0 20px; overflow-wrap: anywhere; }
+.details { margin: auto 0 20px; display: grid; gap: 10px; }
+.details > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; font-size: 13px; }
+.details dt { color: var(--ink-secondary); }
+.details dd { margin: 0; font-weight: 600; }
+.marketLink { display: flex; justify-content: space-between; align-items: center; padding-top: 15px; border-top: 1px solid var(--border); font-size: 14px; font-weight: 600; }
+.marketLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; }
+.footer { color: var(--ink-secondary); font-size: 12px; line-height: 1.6; margin-top: 28px; }
+@media (max-width: 640px) { .header { flex-direction: column; align-items: flex-start; gap: 18px; } .grid { grid-template-columns: 1fr; } .card { padding: 18px; } .notice { padding: 16px; } }

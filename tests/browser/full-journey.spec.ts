@@ -194,18 +194,11 @@ test("complete participant and administrator journey", async ({ page, request, b
       expect(await page.evaluate(async () => (await fetch("/api/admin/audit-logs")).status)).toBe(403);
     });
 
-    await test.step("participant can submit a suggestion and see its persisted history", async () => {
-      const title = `Will all scheduled workshops run? ${suffix}`;
-      await page.goto("/markets/suggest");
-      await page.getByLabel("What should people predict?").fill(title);
-      await page.getByRole("combobox", { name: /^Category/ }).selectOption("Workshops");
-      await page.getByLabel("How should this be decided?").fill("Check the official organizer workshop schedule after the event and count each session that ran.");
-      await page.getByRole("button", { name: "Send suggestion", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Suggestion sent" })).toBeVisible();
-      await expect(page.locator(".form-error")).toHaveCount(0);
-      await expect(page.locator("article.report-item").filter({ hasText: title })).toBeVisible();
-      await page.getByRole("button", { name: "Suggest another" }).click();
-      await expect(page.getByLabel("What should people predict?")).toHaveValue("");
+    await test.step("market suggestions use the external Google form", async () => {
+      await page.goto("/markets");
+      const suggestionLink = page.getByRole("link", { name: "Suggest a market (opens in a new tab)" });
+      await expect(suggestionLink).toHaveAttribute("href", "https://forms.gle/Kh5BjAx9qk5GPaWFA");
+      await expect(suggestionLink).toHaveAttribute("target", "_blank");
     });
 
     await test.step("administrator can sign in, issue, and revoke an invite", async () => {

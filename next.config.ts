@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 import { buildPublicBrowserRuntime } from "./src/lib/solana/browser-runtime";
 import { resolveSolanaRuntime } from "./src/lib/solana/runtime";
+import { MARKET_SUGGESTION_FORM_URL } from "./src/lib/market-suggestion";
 
 export default function configureNext(phase: string): NextConfig {
   const development = phase === PHASE_DEVELOPMENT_SERVER;
@@ -29,12 +30,16 @@ export default function configureNext(phase: string): NextConfig {
       root: process.cwd(),
     },
     async redirects() {
-      return ["goosey-test.vercel.app", "goosey-test-bowens-projects-b0c91e9e.vercel.app"].map((host) => ({
+      const canonicalHostRedirects = ["goosey-test.vercel.app", "goosey-test-bowens-projects-b0c91e9e.vercel.app"].map((host) => ({
         source: "/:path*",
         has: [{ type: "host" as const, value: host }],
         destination: "https://getgoosey.vercel.app/:path*",
         permanent: true,
       }));
+      return [
+        { source: "/markets/suggest", destination: MARKET_SUGGESTION_FORM_URL, permanent: false },
+        ...canonicalHostRedirects,
+      ];
     },
     async headers() {
       return [

@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { MarketActivityRefresh } from "./market-activity-refresh";
 import { TradeTicket } from "./trade-ticket";
+import { MarketResolutionNote } from "./market-resolution-note";
 import styles from "./dance-market-panel.module.css";
 
 export interface DanceMarketOption {
@@ -68,7 +69,7 @@ export function DanceMarketPanel({ title, independent = false, markets, signedIn
             const settled = market.status === "RESOLVED";
             return <article key={market.id} className={`${styles.option} ${active ? styles.selected : ""}`}>
               <div className={styles.optionIdentity}>
-                <div><h3>{market.label}</h3><span className={styles.status}>{market.status === "VOID" ? "Voided · contracts refunded" : settled ? market.resolution === "YES" ? "Winning option" : "Did not win" : !tradable ? "Trading closed" : market.probabilityStale ? "Last available forecast" : ""}</span></div>
+                <div><h3>{market.label}</h3><span className={styles.status}>{market.status === "VOID" ? "Voided · contracts pay 50%" : settled ? market.resolution === "YES" ? "Winning option" : "Did not win" : !tradable ? "Trading closed" : market.probabilityStale ? "Last available forecast" : ""}</span></div>
               </div>
               <div className={styles.actions}>
                 {(["BUY", "SELL"] as const).map(action => <button key={action} type="button" className={`button ${action === "BUY" ? styles.buy : styles.sell}`} aria-label={`${action === "BUY" ? "Buy" : "Sell"} ${market.label}`} aria-pressed={active && selection.action === action} onClick={() => choose(market.slug, action)} disabled={!tradable || market.probabilityYesBps === null}>
@@ -85,6 +86,7 @@ export function DanceMarketPanel({ title, independent = false, markets, signedIn
           <span className="eyebrow">How it is decided</span>
           <h2 id="dance-rules-heading">Resolution rules</h2>
           {selected && <><details className={styles.ruleDetails}><summary>{selected.label}: full resolution rules</summary><p className={styles.ruleText}>{selected.rules}</p></details><Link className={styles.detailLink} href={`/markets/${encodeURIComponent(selected.slug)}?details=1#discussion-heading`}>View {selected.label} history and discussion</Link></>}
+          <MarketResolutionNote />
         </section>
       </div>
       {selected && <div ref={ticket} className={styles.ticket} tabIndex={-1} aria-label={`Trade ${selected.label}`}>

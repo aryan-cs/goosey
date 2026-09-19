@@ -5,6 +5,7 @@ import { MarketCanvasToolbar } from "@/components/market-canvas-toolbar";
 import { ArrowRight, Radio, Sparkles, Trophy, Users } from "lucide-react";
 import { FeatherIcon, GooseMark } from "@/components/brand";
 import { db } from "@/lib/db";
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { marketSummary, formatFeathers } from "@/lib/view-models";
 import { MarketCard, MarketListRow } from "@/components/market";
 import { EmptyState } from "@/components/states";
@@ -19,7 +20,7 @@ export default async function HomePage() {
   const [markets, leaders, recentTrades] = await Promise.all([
     runSerializableTransaction(db, async (tx) => {
       const rows = await tx.market.findMany({
-      where: { status: "OPEN", closesAt: { gt: new Date() } },
+      where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: new Date() } },
       include: { priceHistory: { orderBy: { createdAt: "desc" }, take: 24 }, orderFills: { orderBy: { tradeSequence: "desc" }, take: 24, select: { canonicalYesPriceMilli: true, createdAt: true } } },
       orderBy: [{ featured: "desc" }, { volumeMilli: "desc" }, { closesAt: "asc" }],
       take: 12,

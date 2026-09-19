@@ -2,12 +2,14 @@ import Link from "next/link";
 import styles from "./markets.module.css";
 import { Filter, Search } from "lucide-react";
 import { db } from "@/lib/db";
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { marketSummary } from "@/lib/view-models";
 import { MarketListRow } from "@/components/market";
 import { EmptyState } from "@/components/states";
 import { MARKET_CATEGORIES } from "@/lib/market-categories";
 import { loadMarketMarks } from "@/lib/market-marks";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
+import { MARKET_SUGGESTION_FORM_URL } from "@/lib/market-suggestion";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,7 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
   const markets = await runSerializableTransaction(db, async (tx) => {
     const rows = await tx.market.findMany({
     where: {
+      ...DATABASE_MARKET_FILTER,
       ...(category ? { category } : {}),
       ...(query ? { OR: [{ title: { contains: query } }, { description: { contains: query } }] } : {}),
       status: "OPEN",
@@ -35,8 +38,8 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
   return <div className="page-shell browse-page">
     <div className="browse-layout">
       <div className={styles.intro}>
-        <header className={styles.header}><h1>Markets</h1><Link className={`button button-secondary ${styles.suggest}`} href="/markets/suggest">Suggest a market</Link></header>
-        <p><Link href="/events">Browse grouped events →</Link></p>
+        <header className={styles.header}><h1>Markets</h1><a className={`button button-secondary ${styles.suggest}`} href={MARKET_SUGGESTION_FORM_URL} target="_blank" rel="noreferrer" aria-label="Suggest a market (opens in a new tab)">Suggest a market</a></header>
+        <p><Link href="/events">Browse grouped events →</Link> · <Link href="/chain">On-chain markets →</Link></p>
       </div>
       <form className="market-filters" action="/markets">
         <label className="search-field"><Search /><span className="sr-only">Search markets</span><input type="search" name="q" defaultValue={query} placeholder="Search questions and topics" /></label>

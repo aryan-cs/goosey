@@ -13,7 +13,7 @@ import { appendTransactionMessageInstruction, createKeyPairSignerFromBytes, crea
   createTransactionMessage, getAddressDecoder, pipe,
   setTransactionMessageFeePayerSigner, setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners } from "@solana/kit";
-import { elfHash, localnetManifestSchema, privateDirectory, verifyLocalnetProgramData } from "../src/lib/solana/localnet-manifest";
+import { elfHash, localnetManifestSchema, localnetLedgerArguments, parseLocalnetLedgerShreds, privateDirectory, verifyLocalnetProgramData } from "../src/lib/solana/localnet-manifest";
 import { buildInitializeInstruction, deriveGooseyProgramAddresses } from "../src/lib/solana/program-client";
 import { readGooseyConfiguration } from "../src/lib/solana/configuration";
 import { resolveSolanaRuntime } from "../src/lib/solana/runtime";
@@ -23,11 +23,14 @@ import { trackTransactionStatus } from "../src/lib/solana/transaction-status";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 let stage = "arguments and validator";
 const help = `Usage:
-  node --import tsx scripts/solana-localnet.ts create --directory /absolute/new-directory --rpc-port PORT --per-wallet-cap BASE_UNITS --campaign-cap BASE_UNITS
+  node --import tsx scripts/solana-localnet.ts create --directory /absolute/new-directory --rpc-port PORT --per-wallet-cap BASE_UNITS --campaign-cap BASE_UNITS [--ledger-shreds COUNT]
   node --import tsx scripts/solana-localnet.ts start --directory /absolute/existing-directory
 Create retains private keys and an immutable ELF snapshot; it does not start a validator.
 Start resumes the private ledger, bootstraps only config/mint, and stays foreground until Ctrl-C.
 Uses GOOSEY_SOLANA_VALIDATOR_BIN or GOOSEY_SOLANA_BIN_DIR; artifact override GOOSEY_SOLANA_PROGRAM_ARTIFACT.
+Ledger retention: default 1000000 shreds, explicit range 10000..10000000; persisted on create.
+Legacy manifests without a limit use 1000000 on restart, without rewriting the manifest.
+Bounded rolling history, NOT archival storage or a total-disk quota. Pruned history cannot be restored.
 No participant funding, enrollment, markets, claims, resets, app changes, or public-network use.`;
 
 async function main() {
@@ -36,13 +39,15 @@ async function main() {
   const mode = args.shift();
   assert(mode === "create" || mode === "start", "Expected create or start; use --help");
   const options: Record<string, string> = {};
-  const allowed = mode === "create" ? ["--directory", "--rpc-port", "--per-wallet-cap", "--campaign-cap"] : ["--directory"];
+  const required = mode === "create" ? ["--directory", "--rpc-port", "--per-wallet-cap", "--campaign-cap"] : ["--directory"];
+  const allowed = mode === "create" ? [...required, "--ledger-shreds"] : required;
   while (args.length) {
     const name = args.shift()!, value = args.shift();
     assert(allowed.includes(name) && value && !options[name], "Unknown, repeated, or incomplete option");
     options[name] = value;
   }
-  assert(allowed.every(name => options[name]), "All mode options are required");
+  assert(required.every(name => options[name]), "All mode options are required");
+  const requestedLedgerShreds = parseLocalnetLedgerShreds(options["--ledger-shreds"]);
   const directory = privateDirectory(options["--directory"]);
   // Resolve ancestors before creation: do not follow symlinked state directories.
   assert.equal(await realpath(path.dirname(directory)), path.dirname(directory), "Directory parent must be canonical");
@@ -50,6 +55,9 @@ async function main() {
     ? path.join(process.env.GOOSEY_SOLANA_BIN_DIR, "solana-test-validator") : "solana-test-validator");
   const version = spawnSync(bin, ["--version"], { encoding: "utf8", timeout: 10_000 });
   assert.equal(version.status, 0, "Cannot query validator version");
+  const validatorHelp = spawnSync(bin, ["--help"], { encoding: "utf8", timeout: 10_000 });
+  assert(validatorHelp.status === 0 && /--limit-ledger-size\s+<SHRED_COUNT>/.test(validatorHelp.stdout),
+    "Validator must support explicit bounded ledger retention");
   async function syncDirectory() { const fd = await open(directory, constants.O_RDONLY); try { await fd.sync(); } finally { await fd.close(); } }
   async function exclusive(name: string, bytes: string | Uint8Array, permissions = 0o600) {
     const fd = await open(path.join(directory, name), "wx", permissions);
@@ -79,7 +87,7 @@ async function main() {
     const manifest = localnetManifestSchema.parse({ version: 1,
       program: "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q", admin: admin.address, enrollment: enrollment.address,
       validatorVersion: version.stdout.trim(), artifactSha256: elfHash(artifact), rpcPort: Number(options["--rpc-port"]),
-      perWalletCap: options["--per-wallet-cap"], campaignCap: options["--campaign-cap"] });
+      perWalletCap: options["--per-wallet-cap"], campaignCap: options["--campaign-cap"], ledgerShredLimit: requestedLedgerShreds });
     await mkdir(directory, { mode: 0o700 }); // No recursive creation/adoption/overwrite.
     try {
       await exclusive("admin.json", JSON.stringify([...admin.secret]));
@@ -138,6 +146,7 @@ async function main() {
         "--bind-address", "127.0.0.1", "--rpc-port", String(base), "--faucet-port", String(base + 2),
         "--gossip-port", String(base + 3), "--dynamic-port-range", `${base + 4}-${base + 40}`,
         "--mint", admin.address, "--upgradeable-program", manifest.program, path.join(directory, "program.so"), admin.address,
+        ...localnetLedgerArguments(manifest),
         "--quiet"], { cwd: directory, stdio: ["ignore", log.fd, log.fd] });
       child.once("error", cancel);
       done = new Promise(resolve => child!.once("close", () => { closed = true; resolve(); }));
@@ -194,6 +203,7 @@ async function main() {
     assert.equal(verified.perWalletCap, BigInt(manifest.perWalletCap)); assert.equal(verified.campaignCap, BigInt(manifest.campaignCap));
     console.log(`GOOSEY_SOLANA_CLUSTER=localnet\nGOOSEY_SOLANA_RPC_URL=${rpcUrl}\nGOOSEY_SOLANA_PROGRAM_ID=${manifest.program}\nGOOSEY_SOLANA_GENESIS_HASH=${genesis}`);
     console.log("Verified foundation only; no participants funded or markets created. Foreground validator: Ctrl-C to stop.");
+    console.log(`Rolling ledger retention: ${manifest.ledgerShredLimit} shreds. Start durable indexing before activity; this is not an archive and cannot restore pruned history.`);
     while (!abort.signal.aborted && !closed) await delay(250);
     if (!abort.signal.aborted) throw new Error("Owned validator exited unexpectedly");
   } finally {

@@ -275,7 +275,7 @@ Implemented product pages:
 - `/community` public discussion activity with stable cursor pagination, privacy/moderation filters, and links to individual discussion threads.
 - `/login`, `/signup`, `/verify-email`, `/reset-password`
 - `/search`, `/rules`
-- `/markets/suggest` authenticated market suggestions
+- `/markets/suggest` redirects to the external market-suggestion form
 - `/users/[username]` public forecaster profiles
 - `/notifications` persisted trade, reply, and resolution notifications with read state and cursor-paginated older history. Order-book matches notify both participants atomically with each fill; NO contracts use their own execution price, not the canonical YES price. Resting orders do not generate trade confirmations.
 - `/settings/profile`, `/settings/privacy` editable profile/visibility, active-session revocation, and privacy information. Profile saves refresh the account heading. Browser-session controls include loading, refresh, expired-session guidance, and revocation failure recovery; revoking other browsers preserves the current session. Session reads and errors use private no-store responses without exposing token hashes.
