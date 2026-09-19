@@ -136,12 +136,25 @@ test("complete participant and administrator journey", async ({ page, request, b
     });
 
     await test.step("market detail, two-sided trading, portfolio redemption, and comments", async () => {
+      const isMobile = testInfo.project.name.startsWith("mobile");
+      const originalViewport = page.viewportSize();
+      if (isMobile) {
+        await page.setViewportSize({ width: 375, height: 667 });
+      }
       await page.goto(`/markets/${seededMarket.slug}`);
       await expect(page.getByRole("heading", { level: 1, name: seededMarket.title, exact: true })).toBeVisible();
-      if (testInfo.project.name.startsWith("mobile")) {
+      if (isMobile) {
         await page.getByRole("button", { name: /^Trade Yes /i }).click();
+        const tradeDialog = page.getByRole("dialog", { name: `Trade ${seededMarket.title}` });
+        const reviewTrade = tradeDialog.getByRole("button", { name: "Review trade" });
+        await expect(tradeDialog).toBeVisible();
+        await expect(tradeDialog).toHaveCSS("overflow-y", "auto");
+        await expect(reviewTrade).toBeInViewport({ ratio: 1 });
       }
       await page.getByRole("button", { name: "Review trade" }).click();
+      if (isMobile) {
+        await expect(page.getByRole("button", { name: "Buy 1 YES" })).toBeInViewport({ ratio: 1 });
+      }
       await page.getByRole("button", { name: "Buy 1 YES" }).click();
       await expect(page.getByRole("heading", { name: "Trade placed" })).toBeVisible();
       await page.getByRole("button", { name: /Make another trade/i }).click();
@@ -149,8 +162,9 @@ test("complete participant and administrator journey", async ({ page, request, b
       await page.getByRole("button", { name: "Review trade" }).click();
       await page.getByRole("button", { name: "Buy 1 NO" }).click();
       await expect(page.getByRole("heading", { name: "Trade placed" })).toBeVisible();
-      if (testInfo.project.name.startsWith("mobile")) {
+      if (isMobile) {
         await page.getByRole("button", { name: "Close trade ticket" }).last().click();
+        if (originalViewport) await page.setViewportSize(originalViewport);
       }
 
       await page.getByLabel("Add a comment").fill(comment);
