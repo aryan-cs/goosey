@@ -14,5 +14,7 @@ test('backup and preservation checks are inside the schema transaction',()=>{
  assert.ok(sql.indexOf('Market data changed')<sql.indexOf('COMMIT;'));
  assert.equal((sql.match(/COMMIT;/g)||[]).length,1);
  assert.ok(sql.includes("DEFAULT 'DATABASE'"));
+ assert.ok(sql.includes('DO $$ BEGIN'));
+ assert.ok(sql.includes('END $$;'));
  assert.throws(()=>repairSql('DROP TABLE "Market";'));
 });

@@ -19,7 +19,7 @@ LOCK TABLE "Market" IN SHARE ROW EXCLUSIVE MODE;
 CREATE SCHEMA goosey_quote_repair_20260919;
 CREATE TABLE goosey_quote_repair_20260919."Market" AS TABLE public."Market";
 CREATE TABLE goosey_quote_repair_20260919.migration_history AS TABLE public."_prisma_migrations";
-`).replace('COMMIT;', `DO $$ BEGIN
+`).replace('COMMIT;', () => `DO $$ BEGIN
 IF EXISTS (SELECT to_jsonb(m) - 'executionBackend' FROM public."Market" m
            EXCEPT SELECT to_jsonb(b) FROM goosey_quote_repair_20260919."Market" b)
 OR EXISTS (SELECT to_jsonb(b) FROM goosey_quote_repair_20260919."Market" b
