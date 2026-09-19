@@ -6,7 +6,7 @@ import { loadTradingActivity } from "@/lib/trading-activity";
 export async function getLeaderboardRows(limit = 50) {
   return runSerializableTransaction(db, async (db) => {
   const users = await db.user.findMany({
-      where: { status: "ACTIVE", role: "USER", leaderboardVisible: true },
+      where: { status: "ACTIVE", role: "USER" },
       include: {
         positions: { where: { OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] }, include: { market: true } },
       },

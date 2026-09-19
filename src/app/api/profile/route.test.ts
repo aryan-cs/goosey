@@ -18,7 +18,7 @@ vi.mock("@/lib/auth", () => ({
 
 import { PATCH } from "./route";
 
-const profile = { username: "  HACKER_01 ", bio: "  Building at HTN.  ", profilePublic: true, leaderboardVisible: false };
+const profile = { username: "  HACKER_01 ", bio: "  Building at HTN.  ", profilePublic: true };
 function request(body: unknown, origin = "http://localhost:8080") {
   return new NextRequest("http://localhost:8080/api/profile", {
     method: "PATCH",
@@ -39,16 +39,16 @@ describe("PATCH /api/profile", () => {
     expect(response.status).toBe(200);
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "current-user" },
-      data: { username: "hacker_01", displayName: "hacker_01", bio: "Building at HTN.", profilePublic: true, leaderboardVisible: false },
+      data: { username: "hacker_01", displayName: "hacker_01", bio: "Building at HTN.", profilePublic: true },
     }));
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toMatchObject({ profile: { username: "hacker_01", displayName: "hacker_01" } });
   });
 
   it("preserves legacy display-name-only updates", async () => {
-    const response = await PATCH(request({ displayName: "  Legacy Name  ", bio: "", profilePublic: false, leaderboardVisible: true }));
+    const response = await PATCH(request({ displayName: "  Legacy Name  ", bio: "", profilePublic: false }));
     expect(response.status).toBe(200);
-    expect(mocks.update.mock.calls[0][0].data).toEqual({ displayName: "Legacy Name", bio: "", profilePublic: false, leaderboardVisible: true });
+    expect(mocks.update.mock.calls[0][0].data).toEqual({ displayName: "Legacy Name", bio: "", profilePublic: false });
   });
 
   it("uses username as the public name when both names are supplied", async () => {
@@ -64,9 +64,15 @@ describe("PATCH /api/profile", () => {
   });
 
   it("updates privacy without overwriting profile fields", async () => {
-    const response = await PATCH(request({ profilePublic: false, leaderboardVisible: false }));
+    const response = await PATCH(request({ profilePublic: false }));
     expect(response.status).toBe(200);
-    expect(mocks.update.mock.calls[0][0].data).toEqual({ profilePublic: false, leaderboardVisible: false });
+    expect(mocks.update.mock.calls[0][0].data).toEqual({ profilePublic: false });
+  });
+
+  it.each([false, true])("rejects leaderboard visibility changes (%s)", async (leaderboardVisible) => {
+    const response = await PATCH(request({ leaderboardVisible }));
+    expect(response.status).toBe(400);
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("allows clearing just the bio", async () => {

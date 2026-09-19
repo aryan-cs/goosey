@@ -10,12 +10,12 @@ Goosey is a working play-money prediction market for a University of Waterloo an
 
 ## Repository status
 
-This repository is a **working local, single-process implementation** with real SQLite-backed account, market, trading, comment/moderation, watchlist, suggestion review, notification, opt-in leaderboard, and administrator flows. It is not production-ready.
+This repository is a **working local, single-process implementation** with real SQLite-backed account, market, trading, comment/moderation, watchlist, suggestion review, notification, automatic leaderboard, and administrator flows. It is not production-ready.
 
 | Area | Current repository state |
 | --- | --- |
 | Framework | Next.js, React, TypeScript, Prisma, Zod, Recharts, and Vitest are configured. |
-| Application UI | Home, browse/search, multi-range probability charts, market detail/trading, portfolio, community, opt-in leaderboard, rules, complete signup/verification/login/password-recovery flows, suggestions, private-by-default editable profiles, dedicated watchlist, persisted notifications, comment reporting, and an admin market/moderation desk are implemented. |
+| Application UI | Home, browse/search, multi-range probability charts, market detail/trading, portfolio, community, automatic leaderboard, rules, complete signup/verification/login/password-recovery flows, suggestions, private-by-default editable profiles, dedicated watchlist, persisted notifications, comment reporting, and an admin market/moderation desk are implemented. |
 | API routes | Auth/session management/me, profile, health/readiness, discovery rails, grouped events, unified search, calendar, markets/history, slug-based quote/trade/complete-set redemption, versioned public order-book depth/trade tape and private order/fill-history reads, atomic order placement/cancel/replace/bulk-cancel, comments/replies/reports, portfolio, leaderboard, watchlist, suggestions, notifications, invitations, and admin market, resolution-approval, settlement-run, suggestion-review, and moderation endpoints are implemented. |
 | Authentication | Signup creates a usable session and grants welcome feathers atomically, without requiring email verification. Email ownership remains unverified until a real confirmation. Existing unverified accounts receive any missing grant on their next login. Set `REQUIRE_EMAIL_VERIFICATION=true` only to opt back into the verification gate. Password checks, persistent rate limits, session revocation, one-time recovery tokens, and SMTP-based password reset remain in place. |
 | Trading | Existing markets use LMSR quote/trade execution. The `ORDER_BOOK` engine has deterministic price-time matching, exact YES/NO normalization, bigint pricing/accounting, durable transactional placement/cancel/replace/bulk-cancel, sequenced GTC expiration, reservations, fills, commands/events, public trade tape, and cursor-paginated private history APIs. Existing LMSR markets are never converted in place. Atomic complete-set redemption and two-person, lease-fenced settlement remain implemented. Bounded PostgreSQL tests verify competing wallet reservations and simultaneous placement/cancellation retries. Production supervision and high-load verification remain outstanding. |
@@ -270,7 +270,7 @@ Implemented product pages:
 - Order-book tickets include GTC, IOC, FOK, post-only and optional local-time expiration under **Advanced order options**, with exact retry identity and fill/cancellation-aware feedback. See [order semantics and verification](docs/advanced-orders.md); existing LMSR markets retain their quote-based ticket.
 - `/portfolio/activity` private order/fill history with all/open/closed order filters, participant-side NO prices, and direct cancellation or replacement of remaining order quantities. The shared **Edit remaining order** form also appears on market pages. Replacement uses exact outcome prices, a displayed version, and retry-stable request identity; completed fills remain unchanged, queue priority is reset, and orders/balances refresh after confirmation. Rejected replacements preserve the original order; stale versions close the editor and refresh authoritative state. Desktop/mobile browser checks covered partial fills, NO conversion, a lost committed response followed by replay, insufficient backing, and stale-version recovery.
 - `/portfolio` positions, value, and history
-- `/leaderboard` opt-in rankings
+- `/leaderboard` automatic rankings for all active players
 - `/watchlist` account-private saved markets
 - `/community` public discussion activity with stable cursor pagination, privacy/moderation filters, and links to individual discussion threads.
 - `/login`, `/signup`, `/verify-email`, `/reset-password`
@@ -361,7 +361,7 @@ The planned API contract and implementation status are documented in [ARCHITECTU
 3. Every financial mutation is idempotent, transactional, auditable, and represented by a balanced immutable journal entry.
 4. Market solvency, non-negative balances, non-negative positions, and exact settlement are release-blocking invariants.
 5. Use real integrations and deterministic test fixtures. Do not ship fake APIs, silent fallbacks, filler markets, or fabricated history.
-6. Leaderboards are opt-in and derived from authoritative wallet and executable-position values. The current implementation subtracts the configured welcome grant; production must exclude all non-qualifying grants/adjustments and add versioned snapshot provenance.
+6. Leaderboards include all active player accounts and are derived from authoritative wallet and executable-position values. The current implementation subtracts the configured welcome grant; production must exclude all non-qualifying grants/adjustments and add versioned snapshot provenance.
 7. Markets must have objective rules, a public resolution source, and moderation. Prohibit markets about personal harm, identifiable students' grades or private conduct, harassment, and outcomes participants can trivially manipulate.
 8. Build an original Goosey identity. Reproduce useful interaction patterns, not third-party trade dress or assets.
 

@@ -63,6 +63,24 @@ describe("leaderboard reserved cash", () => {
     ]));
   });
 
+  it("ranks active players even when their legacy leaderboard preference and public profile are disabled", async () => {
+    mocks.users.mockResolvedValue([
+      { ...user("alice_id", "alice"), role: "USER", status: "ACTIVE", leaderboardVisible: false, profilePublic: false },
+      { ...user("bob_id", "bob"), role: "USER", status: "ACTIVE", leaderboardVisible: true, profilePublic: true },
+    ]);
+
+    const rows = await getLeaderboardRows();
+
+    // The database must still exclude inactive and non-player accounts, without
+    // requiring a privacy preference or a first trade to participate.
+    expect(mocks.users.mock.calls[0][0].where).toEqual({ status: "ACTIVE", role: "USER" });
+    expect(rows.map(row => row.userId)).toEqual(["bob_id", "alice_id"]);
+    expect(rows.find(row => row.userId === "alice_id")).toMatchObject({
+      username: "alice", rank: 2, trades: 0, marketsTraded: 0,
+      equityMilli: 400_000n, pnlMilli: -600_000n,
+    });
+  });
+
   it("keeps principal and fees held in BUY escrow in equity, PnL, and rank", async () => {
     mocks.reservations.mockResolvedValue([
       // This is the actual reservation ledger balance: 500 feathers of
