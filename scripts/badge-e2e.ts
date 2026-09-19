@@ -25,6 +25,7 @@ try {
   const { createAdminMarket } = await import("../src/lib/admin-service");
   const link = await import("../src/app/api/badge/link/route");
   const account = await import("../src/app/api/badge/account/route");
+  const sync = await import("../src/app/api/badge/v1/markets/snapshot/route");
   const quote = await import("../src/app/api/badge/markets/[slug]/quote/route");
   const trade = await import("../src/app/api/badge/markets/[slug]/trades/route");
   const token = randomBytes(32).toString("hex");
@@ -41,6 +42,7 @@ try {
     return new NextRequest(`http://localhost:8080/api/badge/${path}`,{method,headers:{"content-type":"application/json",origin,...(auth==="device"?{authorization:`Bearer ${token}`} : auth==="web"?{cookie:`goosey_session=${participant.session.token}`} : {})},...(body?{body:JSON.stringify(body)}:{})});
   }
   assert.equal((await account.GET(req("account"))).status,401);
+  assert.equal((await sync.GET(req("snapshot"))).status,401);
   assert.equal((await link.POST(req("link","POST",{challenge},"device"))).status,401);
   assert.equal((await link.POST(req("link","POST",{challenge},"web","https://evil.example"))).status,403);
   assert.equal((await link.POST(req("link","POST",{challenge},"web"))).status,200);
@@ -49,6 +51,21 @@ try {
   assert.equal((await account.GET(req("account","GET",undefined,"web"))).status,401);
   const profile = await (await account.GET(req("account"))).json();
   assert.equal(profile.username,"badge_test");assert.equal(profile.email,undefined);
+  const firstSync = await sync.GET(req("snapshot"));
+  assert.equal(firstSync.status,200);
+  const syncEtag = firstSync.headers.get("etag");
+  assert.ok(syncEtag);
+  const synchronized = await firstSync.json();
+  assert.equal(synchronized.account.username,"badge_test");
+  assert.equal(typeof synchronized.account.balanceMilli,"string");
+  assert.equal(Number.isNaN(Date.parse(synchronized.capturedAt)),false);
+  assert.equal(synchronized.userId,undefined);
+  assert.equal(synchronized.email,undefined);
+  assert.equal(synchronized.markets.length,1);
+  assert.equal(synchronized.markets[0].slug,market.slug);
+  assert.deepEqual(synchronized.markets[0].holding,{yesShares:0,noShares:0,reservedYesShares:0,reservedNoShares:0});
+  const unchanged = req("snapshot");unchanged.headers.set("If-None-Match",syncEtag!);
+  assert.equal((await sync.GET(unchanged)).status,304);
   const context = {params:Promise.resolve({slug:market.slug})};
   for(const action of ["BUY","SELL"] as const) {
     const qr = await quote.POST(req("quote","POST",{side:"YES",action,quantity:1}),context);
@@ -64,12 +81,20 @@ try {
   }
   assert.equal(await db.trade.count({where:{userId:participant.user.id}}),2);
   assert.equal((await db.position.findFirstOrThrow({where:{userId:participant.user.id}})).yesShares,0);
+  const changedSync = await sync.GET(unchanged);
+  assert.equal(changedSync.status,200);
+  assert.notEqual(changedSync.headers.get("etag"),syncEtag);
+  const changedSnapshot = await changedSync.json();
+  assert.equal(changedSnapshot.markets[0].holding.yesShares,0);
+  assert.notEqual(changedSnapshot.markets[0].version,synchronized.markets[0].version);
   const linked=await db.accountToken.findUniqueOrThrow({where:{tokenHash:challenge}});
   await link.DELETE(req("link","DELETE",{id:linked.id},"web"));
   assert.equal((await account.GET(req("account"))).status,401);
+  const revokedSnapshot = req("snapshot");revokedSnapshot.headers.set("If-None-Match",changedSync.headers.get("etag")!);
+  assert.equal((await sync.GET(revokedSnapshot)).status,401);
   assert.equal((await quote.POST(req("quote","POST",{side:"YES",action:"BUY",quantity:1}),context)).status,401);
   assert.equal((await link.POST(req("link","POST",{challenge},"web"))).status,409);
   for(const journal of await db.journalEntry.findMany({include:{postings:true}})) assert.equal(journal.postings.reduce((s,p)=>s+p.amountMilli,0n),0n);
   for(const a of await db.ledgerAccount.findMany({include:{postings:true}})) assert.equal(a.balanceMilli,a.postings.reduce((s,p)=>s+p.amountMilli,0n));
-  console.log("PASS badge linking, CSRF, token isolation, account data, real BUY/SELL, duplicate confirmations, revocation and ledger reconciliation.");
+  console.log("PASS badge linking, bounded conditional snapshots, real BUY/SELL, duplicate confirmations, revocation and ledger reconciliation.");
 } finally {await disconnect?.();await rm(dir,{recursive:true,force:true});}
