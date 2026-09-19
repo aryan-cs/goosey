@@ -37,7 +37,7 @@ export default async function HomePage() {
         <div className="hero-mark" aria-hidden="true"><GooseMark /></div>
         <div className="hero-copy">
           <span className="eyebrow">Hack the North predictions</span>
-          <h1>Make your call. Win some feathers.</h1>
+          <h1>Nize your beak fam. Man&apos;s on his bread.</h1>
           <p><span className="hero-description-desktop">Pick a side on demos, workshops, campus moments, and whatever happens at Hack the North. It is all play money.</span><span className="hero-description-mobile">Pick a side on Hack the North moments. It is all play money.</span></p>
           <div className="hero-actions">
             <Link className="button button-primary" href="/markets">Trade now <ArrowRight /></Link>
