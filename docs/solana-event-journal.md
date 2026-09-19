@@ -61,6 +61,14 @@ Verification includes actual disposable SQLite persistence/rollback tests and
 bounded reader unit tests. The compiled-program exchange suite also verifies
 seven actual finalized receipts against executed grants, escrow movements,
 orders and fills, including a failed FOK with zero published events. These are
-decoder runtime checks; full RPC-to-journal and scanner runtime integration
-remain separate pending gates. Browser integration and web financial backend
-cutover are also unfinished.
+decoder runtime checks. A subsequent actual RPC-to-journal run retained all
+153 exchange cases and persisted seven finalized receipts/seven events into a
+private SQLite database. Reopening Prisma and replaying all seven inserted
+nothing new; the failed FOK remained VERIFIED_FAILED with no events. Evidence:
+`/tmp/goosey-solana-runner-pYjucL`, genesis
+`4f43GrZKe91u7SYh2d8NY4FrYgV9hPMWTDQoKcYz64si`, compiled artifact SHA-256
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
+SQLite integrity and foreign-key checks passed after the run. This is a
+single-transaction ingestion/reopen proof, not the scanner's whole-window
+runtime proof or an operating-system crash durability proof. Scanner runtime,
+browser integration and web financial backend cutover remain unfinished.
