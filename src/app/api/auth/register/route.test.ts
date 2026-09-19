@@ -68,6 +68,25 @@ describe("POST /api/auth/register without invitations", () => {
     });
   });
 
+  it("uses the normalized username when signup omits a display name", async () => {
+    const usernameOnlySignup = {
+      email: signup.email,
+      username: signup.username,
+      password: signup.password,
+      acceptedCodeOfConduct: signup.acceptedCodeOfConduct,
+    };
+    const response = await POST(request(usernameOnlySignup));
+
+    expect(response.status).toBe(201);
+    expect(mocks.registerUser).toHaveBeenCalledWith({
+      email: "hacker@example.com",
+      username: "hacker_01",
+      displayName: "hacker_01",
+      password: signup.password,
+      userAgent: "registration-test",
+    });
+  });
+
   it.each([
     ["invalid email", { email: "not-an-email" }],
     ["invalid username", { username: "a" }],

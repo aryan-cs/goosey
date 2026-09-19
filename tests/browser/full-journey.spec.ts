@@ -54,7 +54,6 @@ test("complete participant and administrator journey", async ({ page, request },
     await test.step("signup is gated until email verification", async () => {
       await page.goto("/signup");
       await page.getByLabel("Username").fill(username);
-      await page.getByLabel("Display name").fill("Browser Journey Hacker");
       await page.getByLabel("Email").fill(email);
       await page.getByLabel("Password", { exact: true }).fill(password);
       await page.getByRole("checkbox", { name: /community rules/i }).check();
@@ -138,7 +137,6 @@ test("complete participant and administrator journey", async ({ page, request },
 
     await test.step("profile, leaderboard, and ordinary-user admin boundary", async () => {
       await page.goto("/settings/profile");
-      await page.getByLabel("Display name").fill("Browser Journey Hacker");
       await page.getByLabel("Bio").fill("Testing Goosey from signup through settlement-safe trading.");
       await page.getByRole("checkbox", { name: /public profile/i }).check();
       await page.getByRole("checkbox", { name: /public leaderboard/i }).check();

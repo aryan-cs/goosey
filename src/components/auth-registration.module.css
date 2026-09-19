@@ -1,23 +1,19 @@
 .registration {
-  width: min(100%, 600px);
+  width: min(100%, 460px);
 }
 
 .registration :global(.auth-brand) { margin-bottom: 16px; }
 .registration > p { margin-bottom: 18px; }
 
 .registration form {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px 20px;
   align-items: start;
 }
 
 .registration form > * { grid-column: 1 / -1; min-width: 0; }
-.registration form > .half { grid-column: auto; }
 .registration :global(.field-hint) { line-height: 1.45; }
 .registration form > :global(.checkbox-field) { align-items: flex-start; gap: 10px; }
 .registration form > :global(.checkbox-field) > input { width: 16px; height: 16px; margin: 2px 0 0; flex: 0 0 16px; }
 .registration form > :global(.checkbox-field) > span { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.6; }
 
-@media (max-width: 600px) {
-  .registration form { grid-template-columns: minmax(0, 1fr); }
-}
