@@ -96,21 +96,21 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
     ? market.financial.summary
     : solanaMarketSummary(market, now));
 
-  return <div className="page-shell browse-page">
-    <div className="browse-layout">
+  return <div className={`page-shell browse-page ${styles.page}`}>
+    <div className={`browse-layout ${styles.layout}`}>
       <div className={styles.intro}>
         <header className={styles.header}><h1>Markets</h1><a className={`button button-secondary ${styles.suggest}`} href={MARKET_SUGGESTION_FORM_URL} target="_blank" rel="noreferrer" aria-label="Suggest a market (opens in a new tab)">Suggest a market</a></header>
         <p><Link href="/events">Browse grouped events →</Link></p>
       </div>
-      <form className="market-filters" action="/markets">
+      <form className={`market-filters ${styles.filters}`} action="/markets">
         <label className="search-field"><Search /><span className="sr-only">Search markets</span><input type="search" name="q" defaultValue={query} placeholder="Search questions and topics" /></label>
         <label><span className="sr-only">Category</span><select name="category" defaultValue={category ?? ""}><option value="">All categories</option>{MARKET_CATEGORIES.filter((item) => item !== "Trending").map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
         <label><Filter /><span className="sr-only">Sort markets</span><select name="sort" defaultValue={sort}><option value="trending">Trending</option><option value="new">Newest</option><option value="closing">Closing soon</option></select></label>
         <button className="button button-primary">Show markets</button>
       </form>
-      <section className="browse-results" aria-label="Market results">
+      <section className={`browse-results ${styles.results}`} aria-label="Market results">
         <div className="results-heading"><strong>{summaries.length} market{summaries.length === 1 ? "" : "s"}</strong>{category && <span className="filter-chip">{category}</span>}</div>
-        {summaries.length ? <div className="market-list browse-list">{summaries.map((market) => <MarketListRow market={market} key={market.id} />)}</div> : <EmptyState title="No markets found" description="Try a broader search or another category." />}
+        {summaries.length ? <div className={`market-list browse-list ${styles.marketList}`}>{summaries.map((market) => <MarketListRow className={styles.marketRow} market={market} key={market.id} />)}</div> : <EmptyState title="No markets found" description="Try a broader search or another category." />}
       </section>
     </div>
   </div>;

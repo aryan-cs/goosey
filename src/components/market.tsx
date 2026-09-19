@@ -93,10 +93,10 @@ export function MarketCard({ market, priority = false }: { market: MarketSummary
   );
 }
 
-export function MarketListRow({ market }: { market: MarketSummary }) {
+export function MarketListRow({ market, className }: { market: MarketSummary; className?: string }) {
   const lead = market.outcomes[0];
   return (
-    <article className="market-list-row">
+    <article className={`market-list-row${className ? ` ${className}` : ""}`}>
       <Link className="market-list-main" href={`/markets/${market.slug}`}>
         <span className="market-list-icon"><TrendingUp /></span>
         <span><small>{market.category}</small><strong>{market.title}</strong></span>
