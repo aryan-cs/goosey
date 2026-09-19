@@ -79,4 +79,44 @@ describe("wallet transfer preparation (mock RPC, no chain execution claims)", ()
     await expect(prepareFeatherTransfer(input())).rejects.toThrow("domain mismatch");
     expect(mocks.account).not.toHaveBeenCalled();
   });
+  it("captures runtime, amount and recipient before an asynchronous wallet change", async () => {
+    const value: Parameters<typeof prepareFeatherTransfer>[0] = { ...input(), runtime: { ...runtime } };
+    const pending = prepareFeatherTransfer(value);
+    value.runtime.genesisHash = "changed"; value.runtime.rpcUrl = "https://untrusted.invalid";
+    value.sender = createNoopSigner(recipient); value.recipient = sender.address; value.displayAmount = "999";
+    const plan = await pending;
+    expect(plan).toMatchObject({ sender: sender.address, recipient, amount: 123456n, genesisHash: runtime.genesisHash });
+  });
+  it("rejects in-place signer identity mutation before returning a signable message", async () => {
+    const mutable = { ...sender };
+    mocks.latest.mockImplementation(async () => {
+      Object.assign(mutable, { address: recipient });
+      return { context: { slot: 102n }, value: { blockhash: runtime.genesisHash, lastValidBlockHeight: 200n } };
+    });
+    await expect(prepareFeatherTransfer({ ...input(), sender: mutable })).rejects.toThrow("Sender changed");
+  });
+  it.each([99n, -1n, 1n << 64n, 101])("rejects inconsistent account context %s", async slot => {
+    mocks.account.mockResolvedValue({ ...account(), context: { slot } });
+    await expect(prepareFeatherTransfer(input())).rejects.toThrow("context");
+  });
+  it.each([72, 109, 129])("rejects unsupported token option encoding at %i", async offset => {
+    mocks.account.mockResolvedValue(account(data => data.writeUInt32LE(2, offset)));
+    await expect(prepareFeatherTransfer(input())).rejects.toThrow("options");
+  });
+  it("rejects stale blockhash context", async () => {
+    mocks.latest.mockResolvedValue({ context: { slot: 100n }, value: { blockhash: runtime.genesisHash, lastValidBlockHeight: 200n } });
+    await expect(prepareFeatherTransfer(input())).rejects.toThrow("context");
+  });
+  it.each([-1n, 1n << 64n, 200])("rejects invalid signing height %s", async lastValidBlockHeight => {
+    mocks.latest.mockResolvedValue({ context: { slot: 102n }, value: { blockhash: runtime.genesisHash, lastValidBlockHeight } });
+    await expect(prepareFeatherTransfer(input())).rejects.toThrow("lifetime");
+  });
+  it("honors cancellation even if the final RPC resolves after abort", async () => {
+    const controller = new AbortController();
+    mocks.latest.mockImplementation(async () => {
+      controller.abort();
+      return { context: { slot: 102n }, value: { blockhash: runtime.genesisHash, lastValidBlockHeight: 200n } };
+    });
+    await expect(prepareFeatherTransfer({ ...input(), signal: controller.signal })).rejects.toThrow();
+  });
 });
