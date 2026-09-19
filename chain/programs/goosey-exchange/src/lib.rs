@@ -10,12 +10,14 @@ pub mod matching;
 pub mod exchange;
 pub mod cancellation;
 pub mod resolution;
+pub mod market_terms;
 #[path = "book-bootstrap.rs"]
 pub mod book_bootstrap;
 use escrow::*;
 use exchange::*;
 use cancellation::*;
 use resolution::*;
+use market_terms::*;
 use book_bootstrap::*;
 
 declare_id!("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
@@ -26,6 +28,17 @@ pub const DEFAULT_PAYOUT_MILLI: u64 = 100_000;
 #[program]
 pub mod goosey_exchange {
     use super::*;
+
+    pub fn initialize_market_terms(ctx: Context<InitializeMarketTerms>, version: u8,
+        digest: [u8; 32], manifest_len: u32) -> Result<()> {
+        market_terms::initialize_market_terms(ctx, version, digest, manifest_len)
+    }
+    pub fn accept_market_terms(ctx: Context<AcceptMarketTerms>, expected_digest: [u8; 32]) -> Result<()> {
+        market_terms::accept_market_terms(ctx, expected_digest)
+    }
+    pub fn seal_market_terms(ctx: Context<SealMarketTerms>, expected_digest: [u8; 32]) -> Result<()> {
+        market_terms::seal_market_terms(ctx, expected_digest)
+    }
 
     pub fn initialize_resolution(ctx: Context<InitializeResolution>) -> Result<()> {
         resolution::initialize_resolution(ctx)
