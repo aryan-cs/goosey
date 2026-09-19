@@ -1,11 +1,10 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { isPrismaErrorCode } from "@/lib/prisma-errors";
 import type { NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
+export { canonicalizeEmail, canonicalizeUsername, isValidPassword, sha256 } from "@/lib/security-primitives";
 
-const EMAIL_MAX_LENGTH = 254;
-const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9_]{1,22}[a-z0-9])$/;
 const RATE_LIMIT_KEY_SECRET =
   process.env.RATE_LIMIT_KEY_SECRET ?? process.env.AUTH_SECRET ?? "goosey-local-rate-limit-key";
 const TOKEN_DERIVATION_SECRET =
@@ -28,10 +27,6 @@ export class RateLimitError extends Error {
   }
 }
 
-export function sha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
-
 export function randomToken(): string {
   return randomBytes(32).toString("base64url");
 }
@@ -51,33 +46,6 @@ export function constantTimeEqual(left: string, right: string): boolean {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-export function canonicalizeEmail(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const email = value.trim().normalize("NFKC").toLowerCase();
-  if (!email || email.length > EMAIL_MAX_LENGTH || /[\s\u0000-\u001f\u007f]/u.test(email)) {
-    return null;
-  }
-
-  const at = email.lastIndexOf("@");
-  if (at <= 0 || at !== email.indexOf("@")) return null;
-  const local = email.slice(0, at);
-  const domain = email.slice(at + 1);
-  if (!local || local.length > 64 || !domain || domain.length > 253) return null;
-  if (local.startsWith(".") || local.endsWith(".") || local.includes("..")) return null;
-  if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(local)) return null;
-  if (!domain.includes(".") || domain.startsWith(".") || domain.endsWith(".")) return null;
-  if (!domain.split(".").every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) {
-    return null;
-  }
-  return email;
-}
-
-export function canonicalizeUsername(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const username = value.trim().normalize("NFKC").toLowerCase();
-  return USERNAME_PATTERN.test(username) ? username : null;
-}
-
 export function normalizeDisplayName(value: unknown, fallback: string): string | null {
   if (value === undefined || value === null || value === "") return fallback;
   if (typeof value !== "string") return null;
@@ -86,11 +54,6 @@ export function normalizeDisplayName(value: unknown, fallback: string): string |
     return null;
   }
   return displayName;
-}
-
-export function isValidPassword(value: unknown): value is string {
-  if (typeof value !== "string" || value.length < 12 || value.length > 72) return false;
-  return Buffer.byteLength(value, "utf8") <= 72;
 }
 
 function normalizedOrigin(value: string): string | null {
