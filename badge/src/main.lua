@@ -1,6 +1,11 @@
 local markets = {
 __MARKETS__
 }
+local cloud = __CLOUD__
+if cloud then
+  markets={}
+  for i,m in ipairs(cloud.markets) do markets[i]={m.title,m.title,0,0,false,m.slug} end
+end
 local C = {bg=0xc5d99b, panel=0x91ad65, text=0x1c3524,
   muted=0x4f6b3e, yes=0x1c3524, no=0x1c3524, gold=0x1c3524}
 local visible={}
@@ -25,6 +30,7 @@ local pending, receipt, note = nil, "", ""
 
 local function money(n) return string.format("%.2f", n / 100) end
 local function prob(i)
+  if cloud then return cloud.markets[i].probability end
   local m, p = markets[i], positions[i]
   return 100 / (1 + math.exp(-(m[3]+p[1]-m[4]-p[2])/40))
 end
@@ -78,8 +84,8 @@ end
 local function render()
   for i=1,#labels do labels[i]:set_text("") end
   mark:hidden(true); chart:hidden(true); track:hidden(true); dot:hidden(true); midline:hidden(true)
-  balance:set_text(page=="username" and "" or money(cash))
-  userLabel:set_text(username~="" and ("@"..username) or "")
+  balance:set_text(cloud and cloud.capturedAt or (page=="username" and "" or money(cash)))
+  userLabel:set_text(cloud and "Saved snapshot" or (username~="" and ("@"..username) or ""))
   local m,p=markets[selected],positions[selected]
   local names={username="Your name",list="Markets",detail="Market",ticket="Trade",review="Review",portfolio="Portfolio",account="Account",link="Link account",settings="Settings",receipt="Saved"}
   header:set_text(names[page])
@@ -111,10 +117,10 @@ local function render()
   elseif page=="detail" then
     text(1,wrap(m[2],39),10,36,300,14)
     local h=histories[selected]
-    local current=h[#h][1]
-    local span=h[#h][2]-h[1][2]
+    local current=cloud and prob(selected) or h[#h][1]
+    local span=#h>1 and h[#h][2]-h[1][2] or 0
     text(2,string.format("%.1f%%",current),222,87,88,24,C.text,"right")
-    text(3,(#h>1 and string.format("%+.1f pts",current-h[1][1]) or "-- pts").."\n"..(#h>1 and (math.floor(span/1000).."s shown") or "1 price"),220,122,90,14,C.muted,"right")
+    text(3,(#h>1 and string.format("%+.1f pts",h[#h][1]-h[1][1]) or "-- pts").."\n"..(cloud and "Past day" or (#h>1 and (math.floor(span/1000).."s shown") or "1 price")),220,122,90,14,C.muted,"right")
     track:set_pos(10,86); track:set_size(178,97); track:hidden(false)
     midline:hidden(false)
     text(4,"100",190,85,28,14,C.muted)
@@ -127,9 +133,10 @@ local function render()
       pts[j]={math.floor(x*170),math.floor(88-h[j][1]*0.88)}
     end
     if #h>1 then chart:set_points(pts); chart:hidden(false) end
-    dot:set_pos(13+pts[#pts][1],89+pts[#pts][2]); dot:hidden(false)
-    text(7,"Vol --",10,186,104,14,C.muted)
-    text(8,"Closes --",122,186,188,14,C.muted,"right")
+    if #pts>0 then dot:set_pos(13+pts[#pts][1],89+pts[#pts][2]); dot:hidden(false)
+    else text(3,"No history",220,122,90,14,C.muted,"right") end
+    text(7,cloud and ("Vol "..cloud.markets[selected].volume) or "Vol --",10,186,90,12,C.muted)
+    text(8,cloud and cloud.markets[selected].closes or "Closes --",100,186,210,12,C.muted,"right")
     focus(side==1 and 7 or 164,207,149,28)
     text(9,string.format("YES  %.0f%%",current),18,212,132,16)
     text(10,string.format("NO  %.0f%%",100-current),176,212,132,16)
@@ -156,7 +163,7 @@ local function render()
     local options={"Return to market","Portfolio","Account"}
     for i=1,3 do text(i,options[i],18,54+(i-1)*46,285,18) end
     focus(7,47+(settingsIndex-1)*46,307,39)
-    text(5,"Practice mode / cloud offline",10,211,300,14,C.muted)
+    text(5,cloud and "Saved prices / trade on the website" or "Practice mode / cloud offline",10,211,300,14,C.muted)
   elseif page=="account" then
     text(1,"@"..username,10,42,300,20)
     text(2,"Badge ID",10,108,300,14,C.muted)
@@ -164,9 +171,9 @@ local function render()
     text(4,"Practice wallet / not linked",10,177,300,14,C.muted)
     focus(7,204,307,31); text(5,"Edit username",18,211,285,16)
   elseif page=="link" then
-    text(1,"Your Socials email",10,45,300,20)
-    text(2,wrap("Account linking is not available on this badge yet.",36),10,87,300,16)
-    text(3,wrap("Your practice balance and shares stay saved here.",36),10,149,300,16)
+    text(1,"getgoosey.vercel.app",10,45,300,20)
+    text(2,wrap("Sign in on your phone to trade and see your balance.",34),10,85,300,16)
+    text(3,wrap("Badge account linking is not connected yet. These are saved public prices.",35),10,150,300,14,C.muted)
   else
     text(1,"Order saved",10,44,300,24)
     text(2,wrap(receipt,36),10,89,300,16)
@@ -176,6 +183,7 @@ local function render()
   lights()
 end
 local function commit()
+  if cloud then return end
   if not pending then return end
   local amount,err=quote()
   if not amount or amount~=pending then note=err or "Quote changed - review again"; page="ticket"; render(); return end
@@ -209,8 +217,9 @@ function on_enter(root)
   local storedName=badge.store.get_str("username_v1","")
   username=validName(storedName) and storedName or ""
   draft=username; keyRow=1; keyCol=1
-  if username=="" then page="username" end
+  if username=="" and not cloud then page="username" end
   for i=1,#markets do positions[i]={0,0} end
+  if not cloud then
   local data=badge.store.get_str("paper_v2","")
   local vals={}
   for v in string.gmatch(data,"[^,]+") do vals[#vals+1]=tonumber(v) or -1 end
@@ -222,7 +231,8 @@ function on_enter(root)
       for i=1,(#vals-2)/2 do positions[i]={vals[2*i+1],vals[2*i+2]} end
     end
   end
-  for i=1,#markets do histories[i]={{prob(i),badge.sys.ms()}} end
+  end
+  for i=1,#markets do histories[i]=cloud and cloud.markets[i].history or {{prob(i),badge.sys.ms()}} end
   local bg=badge.ui.box(root,320,240)
   bg:set_pos(0,0); bg:style({bg_color=C.bg,border_width=0,pad_all=0,radius=0})
   local function box(x,y,w,h,color)
@@ -280,6 +290,7 @@ function on_button(button,kind)
     elseif button==B.B then page=returnPage
     elseif button==B.A then
       if settingsIndex==1 then page=returnPage
+      elseif cloud then page="link"
       elseif settingsIndex==2 then page="portfolio"; portfolioIndex=selected
       else page="account" end
     else return end
@@ -296,7 +307,8 @@ function on_button(button,kind)
     elseif button==B.RIGHT then side=2
     elseif button==B.B then page="list"
     elseif button==B.A then
-      if markets[selected][5] then note="View only / live order book unavailable"
+      if cloud then page="link"
+      elseif markets[selected][5] then note="View only / live order book unavailable"
       else page="ticket"; action=1; quantity=1; field=1 end
     else return end
   elseif page=="ticket" then
@@ -318,7 +330,7 @@ function on_button(button,kind)
     if button==B.B then page="settings"
     elseif button==B.A then draft=username; keyRow=1; keyCol=1; page="username" else return end
   elseif page=="link" then
-    if button==B.B then page="account" else return end
+    if button==B.B then page=cloud and "list" or "account" else return end
   elseif page=="review" then
     if button==B.A then commit(); return
     elseif button==B.B then pending=nil; page="ticket"
