@@ -214,11 +214,18 @@ export async function POST(
       await tx.idempotencyRequest.create({ data: { userId: user.id, route, key: idempotencyKey, requestHash, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000) } });
       const market = await tx.market.findUnique({
         where: { slug },
-        select: { id: true, status: true },
+        select: { id: true, status: true, executionBackend: true },
       });
       if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
       if (["DRAFT"].includes(market.status)) {
         throw new ApiError(403, "COMMENTS_UNAVAILABLE", "Comments are unavailable for this market.");
+      }
+      if (body.disclosePosition && market.executionBackend === "SOLANA") {
+        throw new ApiError(
+          422,
+          "CHAIN_POSITION_DISCLOSURE_UNAVAILABLE",
+          "On-chain positions require a separately verified disclosure and cannot use database holdings.",
+        );
       }
       let threadId: string | null = null;
       let replyRecipientId: string | null = null;
