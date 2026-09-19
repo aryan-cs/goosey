@@ -19,7 +19,7 @@ export interface LeaderboardUser { id: string; username: string; rank: number; d
 function LeaderboardIdentity({ user, className, label, id, children }: { user: LeaderboardUser; className: string; label: string; id?: string; children: ReactNode }) {
   return user.profilePublic
     ? <Link id={id} className={className} href={`/users/${encodeURIComponent(user.username)}`} aria-label={`View ${user.displayName}'s profile. ${label}`}>{children}</Link>
-    : <div id={id} className={className} aria-label={label}>{children}</div>;
+    : <div id={id} className={className} aria-label={label} tabIndex={id ? -1 : undefined}>{children}</div>;
 }
 
 export function LeaderboardRow({ user, current = false }: { user: LeaderboardUser; current?: boolean }) {

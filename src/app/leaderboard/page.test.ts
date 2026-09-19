@@ -24,9 +24,10 @@ vi.mock("@/components/live-page-refresh", () => ({
 }));
 
 vi.mock("@/components/data-primitives", () => ({
-  LeaderboardPodium: ({ users }: { users: Array<{ rank: number }> }) => React.createElement(
+  LeaderboardPodium: ({ users }: { users: Array<{ id: string; rank: number }> }) => React.createElement(
     "div",
     { "data-testid": "podium", "data-ranks": users.map((user) => user.rank).join(",") },
+    users.map((user) => React.createElement("div", { id: `player-${user.id}`, key: user.id })),
   ),
   LeaderboardRow: ({ user }: { user: { rank: number } }) => React.createElement(
     "div",
@@ -104,5 +105,49 @@ describe("leaderboard podium and paginated standings", () => {
 
     expect(html).toContain('data-testid="podium" data-ranks="1,2,3"');
     expect(html).not.toContain('aria-label="Leaderboard standings"');
+  });
+
+  it("makes the whole ranking card the only control for locating the viewer", async () => {
+    mocks.getServerUser.mockResolvedValueOnce({ id: "player-53" });
+    mocks.getLeaderboardPage.mockResolvedValueOnce({
+      rows: Array.from({ length: 50 }, (_, index) => row(index + 1)),
+      page: 1,
+      totalPages: 2,
+      total: 53,
+      viewer: row(53),
+    });
+
+    const html = await render(1);
+    const card = html.match(/<a[^>]*href="\/leaderboard\?focus=me#player-player-53"[^>]*>([\s\S]*?)<\/a>/);
+
+    expect(card).not.toBeNull();
+    expect(card![1]).toContain("Your ranking");
+    expect(card![1]).toContain("#53");
+    expect(html).not.toContain("Find me in the list");
+  });
+
+  it("links podium viewers to their podium anchor and paginated viewers to an existing row", async () => {
+    mocks.getServerUser.mockResolvedValue({ id: "viewer" });
+    mocks.getLeaderboardPage.mockResolvedValueOnce({
+      rows: Array.from({ length: 50 }, (_, index) => row(index + 1)),
+      page: 1,
+      totalPages: 2,
+      total: 53,
+      viewer: row(2),
+    });
+    const podiumPage = await render(1);
+    expect(podiumPage).toContain('href="/leaderboard?focus=me#player-player-2"');
+    expect(podiumPage).toContain('id="player-player-2"');
+
+    mocks.getLeaderboardPage.mockResolvedValueOnce({
+      rows: [row(51), row(52), row(53)],
+      page: 2,
+      totalPages: 2,
+      total: 53,
+      viewer: row(53),
+    });
+    const secondPage = await render(2);
+    expect(secondPage).toContain('href="/leaderboard?focus=me#player-player-53"');
+    expect(secondPage).toContain('id="player-player-53"');
   });
 });

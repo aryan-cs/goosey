@@ -16,7 +16,18 @@ describe("leaderboard profile navigation", () => {
       expect(html).toContain('href="/users/public_goose"');
       expect(html).toContain("1,000");
     }
-    expect(renderToStaticMarkup(React.createElement(LeaderboardPodium, { users: [visible] }))).toContain('id="player-test-id"');
+  });
+  it("gives every podium place a stable leaderboard anchor regardless of profile visibility", () => {
+    const users = [
+      { ...user, id: "first", rank: 1, profilePublic: true },
+      { ...user, id: "second", rank: 2, profilePublic: false },
+      { ...user, id: "third", rank: 3, profilePublic: undefined },
+    ];
+    const html = renderToStaticMarkup(React.createElement(LeaderboardPodium, { users }));
+    expect(html).toContain('id="player-first"');
+    expect(html).toContain('id="player-second"');
+    expect(html).toContain('id="player-third"');
+    expect(html.match(/tabindex="-1"/g)).toHaveLength(2);
   });
   it("keeps private players visible without a link to an unavailable profile", () => {
     for (const profilePublic of [false, undefined]) {
