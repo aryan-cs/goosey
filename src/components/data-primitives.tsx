@@ -5,13 +5,13 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight, Crown, Trophy } from "lucid
 import { FeatherIcon } from "./brand";
 
 export function MetricCard({ label, value, detail, trend, icon }: { label: string; value: ReactNode; detail?: string; trend?: number; icon?: ReactNode }) {
-  return <article className="metric-card"><div className="metric-label">{icon && <span>{icon}</span>}{label}</div><strong>{value}</strong><div className="metric-detail">{trend !== undefined && <span className={trend >= 0 ? "movement-up" : "movement-down"}>{trend >= 0 ? <ArrowUpRight /> : <ArrowDownRight />}{Math.abs(trend).toFixed(1)}%</span>}{detail && <span>{detail}</span>}</div></article>;
+  return <article className="metric-card"><div className="metric-label">{icon && <span>{icon}</span>}{label}</div><strong>{value}</strong><div className="metric-detail">{trend !== undefined && <span className={trend >= 0 ? "movement-up" : "movement-down"}>{trend >= 0 ? <ArrowUpRight /> : <ArrowDownRight />}{Math.round(Math.abs(trend))}%</span>}{detail && <span>{detail}</span>}</div></article>;
 }
 
 export interface PositionRowProps { marketSlug: string; title: string; side: "YES" | "NO"; quantity: number; averagePrice: number; probability: number | null; value: string; pnl: string; pnlPositive: boolean }
 export function PositionRow(props: PositionRowProps) {
   const pnlLabel = `${props.pnlPositive ? "Profit" : "Loss"} ${props.pnl} feathers`;
-  return <Link className="position-row" href={`/markets/${props.marketSlug}`}><span className="position-market"><span className={`side-badge ${props.side.toLowerCase()}`}>{props.side}</span><strong>{props.title}</strong></span><dl><div><dt>Contracts</dt><dd>{props.quantity}</dd></div><div><dt>Avg. entry</dt><dd>{props.averagePrice.toFixed(1)}%</dd></div><div><dt>Forecast</dt><dd>{props.probability === null ? "No price" : `${props.probability.toFixed(1)}%`}</dd></div><div><dt>Value</dt><dd><FeatherIcon /> {props.value}</dd></div><div><dt>P/L</dt><dd className={props.pnlPositive ? "movement-up" : "movement-down"} aria-label={pnlLabel}><span aria-hidden="true">{props.pnlPositive ? "+" : "−"}<FeatherIcon /> {props.pnl}</span></dd></div></dl><ChevronRight /></Link>;
+  return <Link className="position-row" href={`/markets/${props.marketSlug}`}><span className="position-market"><span className={`side-badge ${props.side.toLowerCase()}`}>{props.side}</span><strong>{props.title}</strong></span><dl><div><dt>Contracts</dt><dd>{props.quantity}</dd></div><div><dt>Avg. entry</dt><dd>{Math.round(props.averagePrice)}%</dd></div><div><dt>Forecast</dt><dd>{props.probability === null ? "No price" : `${Math.round(props.probability)}%`}</dd></div><div><dt>Value</dt><dd><FeatherIcon /> {props.value}</dd></div><div><dt>P/L</dt><dd className={props.pnlPositive ? "movement-up" : "movement-down"} aria-label={pnlLabel}><span aria-hidden="true">{props.pnlPositive ? "+" : "−"}<FeatherIcon /> {props.pnl}</span></dd></div></dl><ChevronRight /></Link>;
 }
 
 export interface LeaderboardUser { id: string; username: string; rank: number; displayName: string; score: number; movement?: number; marketsTraded?: number; badge?: string }

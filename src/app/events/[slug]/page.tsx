@@ -18,7 +18,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       <div className={styles.sectionTitle}><h2>{event.markets.length} markets</h2><span>YES probability</span></div>
       {event.markets.map((market) => <Link className={styles.market} href={`/markets/${market.slug}`} key={market.id}>
         <div><h3>{market.shortTitle || market.title}</h3><p>{market.status === "RESOLVED" ? `Resolved ${market.resolution}` : market.status === "OPEN" && market.acceptingOrders && market.closesAt > new Date() ? "Trading open" : "Trading closed"} · {market.traderCount} traders</p></div>
-        <div className={styles.forecast}><strong>{market.status === "VOID" || market.resolution === "VOID" ? "Voided" : market.probabilityYesBps === null ? "No price yet" : `${Number((market.probabilityYesBps / 100).toFixed(1))}%`}</strong><small>{market.probabilityYesBps === null ? "Awaiting a market price" : market.probabilitySource === "SETTLEMENT" ? "Final outcome" : market.probabilityStale ? "Last price · stale" : "Market-implied"}</small></div>
+        <div className={styles.forecast}><strong>{market.status === "VOID" || market.resolution === "VOID" ? "Voided" : market.probabilityYesBps === null ? "No price yet" : `${Math.round(market.probabilityYesBps / 100)}%`}</strong><small>{market.probabilityYesBps === null ? "Awaiting a market price" : market.probabilitySource === "SETTLEMENT" ? "Final outcome" : market.probabilityStale ? "Last price · stale" : "Market-implied"}</small></div>
       </Link>)}
     </section>
   </div>;

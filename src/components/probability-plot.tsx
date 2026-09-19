@@ -6,7 +6,7 @@ import { chartDomain, nearestChartIndex, normalizeChartPoints, selectChartRange,
 import { smoothChartPath } from "@/lib/chart-path";
 
 export function probabilityLabel(value: number) {
-  return `${Number((value * 100).toFixed(2))}%`;
+  return `${Math.round(value * 100)}%`;
 }
 
 function dateLabel(timestamp: number) {
