@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { encodeCursor, jsonSafe } from "./serializers";
-import { parseListFillsQuery, serializePrivateFill } from "./fill-service";
+import { parseListFillsQuery, parsePublicTradesQuery, serializePrivateFill } from "./fill-service";
 
 describe("private fill history", () => {
   it("parses strict filters and stable cursors", () => {
@@ -44,5 +44,18 @@ describe("private fill history", () => {
     });
     expect(serializePrivateFill(fill, "maker_user")).not.toHaveProperty("counterpartyUserId");
     expect(() => serializePrivateFill(fill, "unrelated_user")).toThrow();
+  });
+});
+
+describe("public order-book trade tape", () => {
+  it("uses market-bound opaque sequence cursors", () => {
+    const cursor = encodeCursor({ marketSlug: "venue-wifi", tradeSequence: "42" });
+    expect(parsePublicTradesQuery(new URLSearchParams({ limit: "25", cursor }), "venue-wifi")).toEqual({
+      limit: 25,
+      cursor: { marketSlug: "venue-wifi", tradeSequence: 42n },
+    });
+    expect(() => parsePublicTradesQuery(new URLSearchParams({ cursor }), "other-market")).toThrow();
+    expect(() => parsePublicTradesQuery(new URLSearchParams("limit=1&limit=2"), "venue-wifi")).toThrow();
+    expect(() => parsePublicTradesQuery(new URLSearchParams("unknown=x"), "venue-wifi")).toThrow();
   });
 });

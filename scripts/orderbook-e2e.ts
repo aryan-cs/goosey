@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 
 import { ApiError } from "../src/lib/market-service";
-import { listUserFills, parseListFillsQuery } from "../src/lib/fill-service";
+import { listPublicTrades, listUserFills, parseListFillsQuery } from "../src/lib/fill-service";
 import { cancelAllOrders, cancelOrder, expireOrders, placeOrder, replaceOrder } from "../src/lib/order-exchange";
 import { listUserOrders, parseListOrdersQuery } from "../src/lib/order-service";
 
@@ -168,6 +168,10 @@ async function main() {
   assert(orders.every((order) => order.status === "FILLED" && order.remainingQuantity === 0), "Filled orders remained live");
   assert(orders.every((order) => order.reservation?.reservedPrincipalMilli === 0n), "Filled cash remained reserved");
   assert(snapshots.length === 2 && snapshots.at(-1)?.yesProbabilityBps === 4_000, "Final fill did not append the actual 40% history point");
+  const publicTape = await listPublicTrades({ marketSlug: market.slug, limit: 10 });
+  assert(publicTape.trades.length === 1, "Public trade tape omitted the fill");
+  assert(publicTape.trades[0]!.yesProbabilityBps === 4_000, "Public trade tape returned the wrong execution probability");
+  assert(!("makerOrderId" in publicTape.trades[0]!) && !("takerOrderId" in publicTape.trades[0]!), "Public trade tape leaked order identity");
 
   const cancelPlacement = await placeOrder({
     userId: alice.id,
