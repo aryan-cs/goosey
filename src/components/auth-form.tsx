@@ -28,7 +28,7 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSubmitting(true); setError(null); keyRef.current ??= idempotencyKey();
     const form = new FormData(event.currentTarget);
-    const payload = { email: String(form.get("email") ?? "").trim(), password: String(form.get("password") ?? ""), ...(register ? { username: String(form.get("username") ?? "").trim(), displayName: String(form.get("displayName") ?? "").trim(), accessCode: String(form.get("accessCode") ?? ""), acceptedCodeOfConduct: form.get("acceptedCodeOfConduct") === "on" } : {}) };
+    const payload = { email: String(form.get("email") ?? "").trim(), password: String(form.get("password") ?? ""), ...(register ? { username: String(form.get("username") ?? "").trim(), displayName: String(form.get("displayName") ?? "").trim(), acceptedCodeOfConduct: form.get("acceptedCodeOfConduct") === "on" } : {}) };
     try {
       const response = await fetch(endpoint ?? `/api/auth/${register ? "register" : "login"}`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "Idempotency-Key": keyRef.current, ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}) }, body: JSON.stringify(payload) });
       const data = await response.json().catch(() => ({}));
@@ -60,8 +60,7 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
       <p>{register ? "Start with 10,000 play-money feathers." : "Sign in to trade, comment, and check your picks."}</p>
       <form onSubmit={submit}>
         {register && <><label className={styles.half}><span>Username</span><div className="input-with-icon"><UserRound /><input autoComplete="username" name="username" required minLength={3} maxLength={24} pattern="[a-zA-Z0-9_]+" aria-describedby="username-hint" /></div><small id="username-hint" className="field-hint">Letters, numbers, and underscores only.</small></label><label className={styles.half}><span>Display name</span><div className="input-with-icon"><UserRound /><input autoComplete="nickname" name="displayName" required minLength={2} maxLength={32} /></div></label></>}
-        <label className={register ? styles.half : undefined}><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" name="email" type="email" required /></div></label>
-        {register && <label className={styles.half}><span>Invite code</span><div className="input-with-icon"><LockKeyhole /><input autoComplete="off" name="accessCode" required /></div><small className="field-hint">Enter the code from an organizer. Invite codes have limited uses.</small></label>}
+        <label><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" name="email" type="email" required /></div></label>
         <div className="auth-field"><div className="auth-field-heading"><label htmlFor="auth-password">Password</label>{!register && <Link href="/reset-password">Forgot password?</Link>}</div><div className="input-with-icon"><LockKeyhole /><input id="auth-password" autoComplete={register ? "new-password" : "current-password"} name="password" type={showPassword ? "text" : "password"} required minLength={register ? 12 : undefined} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</button></div></div>
 
         {register ? <label className="checkbox-field"><input type="checkbox" name="acceptedCodeOfConduct" required /><span>I agree to the <Link href="/rules">community rules and code of conduct</Link>.</span></label> : null}

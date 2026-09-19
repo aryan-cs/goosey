@@ -117,7 +117,6 @@ Copy `.env.example` to `.env`. Never commit `.env` or production secrets.
 | `SMTP_SECURE`, `SMTP_REQUIRE_TLS` | `false`, `true` | Use implicit TLS and/or require STARTTLS. Certificate validation is always enabled. |
 | `SMTP_USER`, `SMTP_PASSWORD` | empty | Optional SMTP authentication; configure both or neither. Values are read only from the runtime environment. |
 | `SMTP_FROM`, `SMTP_REPLY_TO` | empty | Required sender identity and optional reply-to address. |
-| `REGISTRATION_ACCESS_CODE` | empty | Development-only shared-code fallback. Production registration accepts only database-backed participant invitations. |
 | `TRUST_PROXY` | `0` | Set to `1` only behind a proxy that overwrites and sanitizes forwarding headers. |
 
 The code also observes these runtime variables, which are not user-configured in `.env.example`:
