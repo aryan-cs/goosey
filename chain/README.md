@@ -53,7 +53,7 @@ Instruction data uses Anchor's discriminator followed by Borsh-encoded arguments
 | `deposit` | `amount: u64`, `expected_nonce: u64` | wallet (signer), config, market (write), seats (write), locator, feather_mint, wallet_tokens (write), vault (write), token_program |
 | `withdraw` | `amount: u64`, `expected_nonce: u64` | wallet (signer), config, market (write), seats (write), locator, feather_mint, wallet_tokens (write), vault (write), token_program |
 
-The transaction fee payer may be separate from the wallet signer. Account-creation payers are explicit above. `initialize` requires that `program_data` is this program's upgradeable-loader ProgramData account and `admin` is its actual upgrade authority. Environment 1 = localnet, 2 = devnet; use the actual 32-byte decoded genesis hash as domain. Program state cannot prove which RPC network a caller chose; main must pin genesis before submission.
+The transaction fee payer may be separate from the wallet signer. Account-creation payers are explicit above. `initialize` requires that `program_data` is this program's upgradeable-loader ProgramData account and `admin` is its actual upgrade authority. Environment 1 = localnet, 2 = devnet; use the 32-byte SHA-256 digest of the actual genesis hash's UTF-8 base58 string as domain (not its base58-decoded bytes). This is the convention checked by the shipping configuration reader and actual RPC suite. Program state cannot prove which RPC network a caller chose; clients must pin genesis before submission.
 
 PDA seeds (all under this program ID):
 

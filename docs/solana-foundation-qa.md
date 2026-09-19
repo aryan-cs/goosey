@@ -52,4 +52,12 @@ Run `npm run test:chain:program` only against a fresh, already deployed and unin
 
 Only this dedicated test upgrade key is read from disk; participant and issuer keys exist only in memory and are discarded. No private keys are committed. Public signatures refer to this local ledger, not devnet or mainnet explorers.
 
-Not yet proven here: market vault deposit/withdrawal, CLOB matching, oracle and feather payout, account/wallet linking with durable one-use nonces, browser signing/rejection flows, indexer rebuild, restart/fork recovery, or devnet execution. The foundation's escrow code is compiled but not covered by this suite. The website remains database-backed until those integrations are implemented and tested.
+## Escrow execution follow-up
+
+The expanded suite subsequently passed **53 real transaction cases** on a separate temporary validator at port 24999, genesis `HomMa9mEuscMn8i4qEjnpLrHijWR65EXb5QhMZdFTZtu`, using the same program artifact. The shared validator at 18999 was not reset. The isolated validator was stopped after testing; its full receipt log is retained locally at `/tmp/goosey-solana-escrow.ZzRxMI/program-e2e.log`.
+
+The shipping `escrow-client.ts` builders created two markets, allocated the large Seats accounts, registered a participant, deposited claimed tokens, and withdrew through the market PDA. Actual execution rejected unauthorized market creation, invalid market parameters, foreign enrollment/wallet/vault/seats, missing funds, zero amounts, skipped/replayed nonces, over-withdrawal, and direct admin spending from the vault. A second failing instruction rolled back a preceding successful token CPI and nonce update in the same transaction.
+
+An unsolicited 1,000-base-unit vault donation did not increase available cash. After withdrawing all legitimate deposits, the wallet held 875,544 units, the transfer recipient 123,456, and the vault 1,000: exactly 1,000,000 minted units. Available cash was zero and next nonce was three. The shipping `readGooseyEscrow` independently verified the finalized account snapshot at slot 93, including the donation surplus and all-seat cash reconciliation.
+
+Not yet proven here: CLOB matching, oracle and feather payout, reserved-position handling, seat-capacity exhaustion, concurrent sends, account/wallet linking with durable one-use nonces, browser signing/rejection flows, indexer rebuild, restart/fork recovery, or devnet execution. The website remains database-backed until those integrations are implemented and tested.
