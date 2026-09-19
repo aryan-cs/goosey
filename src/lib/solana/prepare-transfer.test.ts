@@ -82,7 +82,7 @@ describe("wallet transfer preparation (mock RPC, no chain execution claims)", ()
   it("captures runtime, amount and recipient before an asynchronous wallet change", async () => {
     const value: Parameters<typeof prepareFeatherTransfer>[0] = { ...input(), runtime: { ...runtime } };
     const pending = prepareFeatherTransfer(value);
-    value.runtime.genesisHash = "changed"; value.runtime.rpcUrl = "https://untrusted.invalid";
+    Object.assign(value.runtime, { genesisHash: "changed", rpcUrl: "https://untrusted.invalid" });
     value.sender = createNoopSigner(recipient); value.recipient = sender.address; value.displayAmount = "999";
     const plan = await pending;
     expect(plan).toMatchObject({ sender: sender.address, recipient, amount: 123456n, genesisHash: runtime.genesisHash });
