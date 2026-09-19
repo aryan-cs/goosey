@@ -39,6 +39,11 @@ export interface TradeTicketProps {
   balanceMilli?: number | string;
   signedIn?: boolean;
   initialOutcome?: Outcome;
+  initialAction?: Action;
+  onActionChange?: (action: Action) => void;
+  /** Named event options buy/sell the underlying YES contract. */
+  outcomeLabel?: string;
+  returnTo?: string;
   csrfToken?: string;
   disabled?: boolean;
   quoteEndpoint?: string;
@@ -61,11 +66,11 @@ function requestId() {
 
 export function TradeTicket({
   marketId, marketTitle, yesProbability, noProbability = 1 - yesProbability, balanceMilli,
-  csrfToken, signedIn = true, initialOutcome = "YES", disabled = false, quoteEndpoint, tradeEndpoint, onExecuted,
+  csrfToken, signedIn = true, initialOutcome = "YES", initialAction = "BUY", onActionChange, outcomeLabel, returnTo, disabled = false, quoteEndpoint, tradeEndpoint, onExecuted,
 }: TradeTicketProps) {
   const router = useRouter();
-  const [action, setAction] = useState<Action>("BUY");
-  const [outcome, setOutcome] = useState<Outcome>(initialOutcome);
+  const [action, setAction] = useState<Action>(initialAction);
+  const [outcome, setOutcome] = useState<Outcome>(outcomeLabel ? "YES" : initialOutcome);
   const [quantity, setQuantity] = useState(1);
   const [quote, setQuote] = useState<TradeQuote | null>(null);
   const [state, setState] = useState<"editing" | "quoting" | "review" | "submitting" | "success">("editing");
@@ -86,7 +91,7 @@ export function TradeTicket({
   const potentialProfitMilli = action === "BUY" ? maxPayoutMilli - quotedTotal : quotedTotal;
 
   function edit(next?: { action?: Action; outcome?: Outcome }) {
-    if (next?.action) setAction(next.action);
+    if (next?.action) { setAction(next.action); onActionChange?.(next.action); }
     if (next?.outcome) setOutcome(next.outcome);
     setQuote(null); setError(null); setState("editing"); executionKey.current = null;
   }
@@ -126,29 +131,29 @@ export function TradeTicket({
 
   return (
     <section className="trade-ticket" aria-labelledby="trade-ticket-title">
-      <div className="trade-ticket-header"><div><span className="eyebrow">Trade</span><h2 id="trade-ticket-title">Choose YES or NO</h2></div><ShieldCheck aria-label="Trade protected" /></div>
+      <div className="trade-ticket-header"><div><span className="eyebrow">Trade</span><h2 id="trade-ticket-title">{outcomeLabel ? `${action === "BUY" ? "Buy" : "Sell"} ${outcomeLabel}` : "Choose YES or NO"}</h2></div><ShieldCheck aria-label="Trade protected" /></div>
       <p className="trade-market-title">{marketTitle}</p>
       {state === "success" ? (
         <div className="trade-success" role="status"><CheckCircle2 /><h3>Trade placed</h3><button className="button button-secondary" onClick={() => edit()}><RotateCcw /> Make another trade</button></div>
       ) : <>
         <div className="segmented" aria-label="Trade action">{(["BUY", "SELL"] as Action[]).map((value) => <button aria-pressed={action === value} className={action === value ? "active" : ""} onClick={() => edit({ action: value })} key={value}>{value === "BUY" ? "Buy" : "Sell"}</button>)}</div>
-        <div className="side-grid" aria-label="Contract side">
+        {outcomeLabel ? <p className="review-note">{outcomeLabel} pays 100 feathers per contract if it is the winning option. Selling reduces your existing holding.</p> : <div className="side-grid" aria-label="Contract side">
           <button className={outcome === "YES" ? "yes selected" : "yes"} aria-pressed={outcome === "YES"} onClick={() => edit({ outcome: "YES" })}><span>Yes</span><strong>{Math.round(yesProbability * 100)}%</strong></button>
           <button className={outcome === "NO" ? "no selected" : "no"} aria-pressed={outcome === "NO"} onClick={() => edit({ outcome: "NO" })}><span>No</span><strong>{Math.round(noProbability * 100)}%</strong></button>
-        </div>
+        </div>}
         <label className="field-label" htmlFor="trade-quantity">Contracts</label>
         <div className="quantity-input"><input id="trade-quantity" inputMode="numeric" min={1} max={MAX_TRADE_QUANTITY} step={1} type="number" value={quantity} aria-invalid={!quantityValid} aria-describedby={!quantityValid ? "trade-quantity-error" : undefined} disabled={state !== "editing"} onChange={(event) => { setQuantity(event.currentTarget.valueAsNumber || 0); setError(null); }} /><span>contracts</span></div>
         {!quantityValid && <p id="trade-quantity-error" className="form-error" role="alert">Enter a whole number from 1 to 100,000 contracts.</p>}
         {state === "editing" && <div className="quick-values" aria-label="Quick quantities">{[1, 5, 10, 25].map((value) => <button onClick={() => setQuantity(value)} key={value}>{value}</button>)}</div>}
         <dl className="trade-breakdown">
-          {quote ? <><div><dt>Average price</dt><dd>{featherText(quote.averagePriceMilli)} <FeatherIcon width={15} height={15} /></dd></div><div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% Yes</dd></div><div><dt>Fee</dt><dd>{featherText(quote.feeMilli)} <FeatherIcon width={15} height={15} /></dd></div>{action === "BUY" && <div><dt>Potential profit if correct</dt><dd>{featherText(potentialProfitMilli)} <FeatherIcon width={15} height={15} /></dd></div>}<div className="trade-total"><dt>{action === "BUY" ? "Total cost" : "You receive"}</dt><dd>{featherText(quotedTotal)} <FeatherIcon width={15} height={15} /></dd></div></> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div><dt>Maximum payout</dt><dd><FeatherIcon width={15} height={15} /> {estimatedPayout}</dd></div>{balanceMilli !== undefined && <div><dt>Available</dt><dd>{featherText(balanceMilli)} <FeatherIcon width={15} height={15} /></dd></div>}</>}
+          {quote ? <><div><dt>Average price</dt><dd>{featherText(quote.averagePriceMilli)} <FeatherIcon width={15} height={15} /></dd></div><div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% {outcomeLabel ?? "Yes"}</dd></div><div><dt>Fee</dt><dd>{featherText(quote.feeMilli)} <FeatherIcon width={15} height={15} /></dd></div>{action === "BUY" && <div><dt>Potential profit if correct</dt><dd>{featherText(potentialProfitMilli)} <FeatherIcon width={15} height={15} /></dd></div>}<div className="trade-total"><dt>{action === "BUY" ? "Total cost" : "You receive"}</dt><dd>{featherText(quotedTotal)} <FeatherIcon width={15} height={15} /></dd></div></> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div><dt>Maximum payout</dt><dd><FeatherIcon width={15} height={15} /> {estimatedPayout}</dd></div>{balanceMilli !== undefined && <div><dt>Available</dt><dd>{featherText(balanceMilli)} <FeatherIcon width={15} height={15} /></dd></div>}</>}
         </dl>
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
         {state === "review" && <p className="review-note">Check the price before you confirm. Quotes can change or expire.</p>}
         <div className="trade-actions">
           {state === "review" && <button className="button button-ghost" onClick={() => edit()}>Edit</button>}
-          <button className="button button-primary trade-submit" disabled={disabled || state === "quoting" || state === "submitting" || !quantityValid} onClick={!signedIn ? () => router.push(authPageHref("/login", `${window.location.pathname}${window.location.search}`)) : state === "review" ? executeTrade : requestQuote}>
-            {(state === "quoting" || state === "submitting") && <LoaderCircle className="spin" />}{!signedIn ? "Sign in to trade" : state === "editing" ? "Review trade" : state === "quoting" ? "Getting quote…" : state === "review" ? `${action === "BUY" ? "Buy" : "Sell"} ${quantity} ${outcome}` : "Placing trade…"}<ArrowRight />
+          <button className="button button-primary trade-submit" disabled={disabled || state === "quoting" || state === "submitting" || !quantityValid} onClick={!signedIn ? () => router.push(authPageHref("/login", returnTo ?? `${window.location.pathname}${window.location.search}`)) : state === "review" ? executeTrade : requestQuote}>
+            {(state === "quoting" || state === "submitting") && <LoaderCircle className="spin" />}{!signedIn ? "Sign in to trade" : state === "editing" ? "Review trade" : state === "quoting" ? "Getting quote…" : state === "review" ? `${action === "BUY" ? "Buy" : "Sell"} ${quantity} ${outcomeLabel ?? outcome}` : "Placing trade…"}<ArrowRight />
           </button>
         </div>
       </>}

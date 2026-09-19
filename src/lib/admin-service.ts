@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma, type Market } from "@prisma/client";
 import { z } from "zod";
 
+import { assertDanceResolution } from "@/lib/dance-resolution";
 import { initialSubsidyMilli } from "@/lib/market-maker";
 import { ApiError, consumeRateLimit, prisma } from "@/lib/market-service";
 import { drainMarketOrderBook } from "@/lib/order-exchange";
@@ -415,6 +416,7 @@ export async function createResolutionProposal(input: {
       tx.marketResolutionProposal.findFirst({ where: { marketId: market.id, status: "PENDING" } }),
     ]);
     if (pending) throw new ApiError(409, "PROPOSAL_PENDING", "This market already has a pending resolution proposal.");
+    await assertDanceResolution(tx, market, input.resolution.outcome);
     const proposal = await tx.marketResolutionProposal.create({
       data: { marketId: market.id, proposerId: input.actorUserId, idempotencyKey: input.idempotencyKey, requestHash, pendingKey: market.id, ...input.resolution },
     });
@@ -494,6 +496,7 @@ export async function approveResolutionProposal(input: { actorUserId: string; pr
       "RESOLVER_CONFLICT",
     );
 
+    await assertDanceResolution(tx, proposal.market, proposal.outcome);
     const totalPositions = await tx.position.count({
       where: {
         marketId: proposal.marketId,

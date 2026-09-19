@@ -1,3 +1,4 @@
+import { DANCE_MARKET_GROUP, isDanceMarketSlug } from "@/lib/dance-market";
 import { MarketActivityRefresh } from "@/components/market-activity-refresh";
 import { TradeActivityDetails } from "@/components/trade-activity-details";
 import Link from "next/link";
@@ -6,7 +7,7 @@ import { MobileOrderEntry } from "@/components/mobile-order-entry";
 import { z } from "zod";
 import { FeatherIcon } from "@/components/brand";
 import { MarketStatusLabel } from "@/components/market-status";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Bookmark, CalendarClock, ChevronRight, Share2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { formatFeathers } from "@/lib/view-models";
@@ -35,6 +36,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
     const market = await tx.market.findUnique({
     where: { slug },
     include: {
+      _count: { select: { orders: true, orderFills: true, trades: true, settlements: true } },
       priceHistory: { orderBy: { createdAt: "desc" }, take: 500 },
       orderFills: { orderBy: { tradeSequence: "desc" }, take: 500, select: { id: true, canonicalYesPriceMilli: true, quantity: true, createdAt: true } },
       trades: { orderBy: { createdAt: "desc" }, take: 15, include: { user: { select: { id: true, username: true, profilePublic: true } } } },
@@ -47,8 +49,16 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
     ]);
     return { market, firstTrade, firstSnapshot, mark: (await loadMarketMarks(tx, [market])).get(market.id)! };
   });
-  if (!data) notFound();
+  if (!data) {
+    if (slug === DANCE_MARKET_GROUP.legacyMarketSlug && await db.marketEvent.findUnique({ where: { slug: DANCE_MARKET_GROUP.slug }, select: { id: true } })) redirect(`/events/${DANCE_MARKET_GROUP.slug}`);
+    notFound();
+  }
   const { market, mark } = data;
+  const danceGroup = slug === DANCE_MARKET_GROUP.legacyMarketSlug
+    ? await db.marketEvent.findUnique({ where: { slug: DANCE_MARKET_GROUP.slug }, select: { id: true } }) : null;
+  if (danceGroup && market.status === "PAUSED" && market.volumeMilli === 0n && Object.values(market._count).every(count => count === 0) && !query.comment && query.legacy !== "1") {
+    redirect(`/events/${DANCE_MARKET_GROUP.slug}`);
+  }
   const yesBps = mark.probabilityYesBps;
   const openingBps = data.firstTrade?.priceBeforeBps ?? data.firstSnapshot?.yesProbabilityBps ?? yesBps;
   const open = market.status === "OPEN" && market.acceptingOrders && market.closesAt > new Date();
@@ -59,6 +69,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
 
   return <div className={`page-shell market-detail-page ${styles.page}`}>
     <nav className="breadcrumbs" aria-label="Breadcrumb"><Link href="/markets">Markets</Link><ChevronRight /><Link href={`/markets?category=${encodeURIComponent(market.category)}`}>{market.category}</Link></nav>
+    {(isDanceMarketSlug(slug) || danceGroup) && <p><Link className="button button-secondary" href={`/events/${DANCE_MARKET_GROUP.slug}${isDanceMarketSlug(slug) ? `?option=${encodeURIComponent(slug)}` : ""}`}>View all dance options</Link>{danceGroup && " This original any-dance contract retains its original rules and holdings."}</p>}
     <div className="market-detail-layout">
       <article className="market-detail-main">
         <header className="market-detail-header">
