@@ -1,5 +1,7 @@
 "use client";
 
+import { initials } from "@/lib/initials";
+
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AlertCircle, Flag, MessageCircle, Pencil, Reply, Trash2, X } from "lucide-react";
@@ -12,7 +14,7 @@ export interface MarketComment { id: string; body: string; createdAt: string; ed
 export interface CommentSectionProps { marketId: string; marketSlug: string; focusedCommentId?: string; currentUserId?: string; csrfToken?: string; endpoint?: string; maxLength?: number }
 
 function key() { return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
-function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); }
+
 function normalizeComment(value: unknown): MarketComment | null {
   if (!value || typeof value !== "object") return null;
   const item = value as Record<string, unknown>;
