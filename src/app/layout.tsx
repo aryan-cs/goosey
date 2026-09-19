@@ -8,10 +8,7 @@ import { requiresEmailVerification } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: {
-    default: "Goosey | Campus predictions",
-    template: "%s · Goosey",
-  },
+  title: "Goosey",
   description:
     "A play-money prediction exchange for the University of Waterloo and Hack the North community.",
   applicationName: "Goosey",
