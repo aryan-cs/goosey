@@ -20,6 +20,8 @@ import { buildInitializeInstruction, buildAuthorizeEnrollmentInstruction, buildC
 import { buildCreateMarketInstructions, buildRegisterSeatInstruction, buildDepositInstruction,
   buildWithdrawInstruction } from "../src/lib/solana/escrow-client";
 import { buildBookSetupInstruction, buildPlaceOrderInstruction } from "../src/lib/solana/exchange-client";
+import { readGooseyEscrow } from "../src/lib/solana/escrow-read";
+import { buildFeatherTransfer } from "../src/lib/solana/feather-transfer";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -90,7 +92,7 @@ No cancellation/replacement/resolution instruction is claimed to be tested.`);
     return body.result;
   }
   const pin = async () => assert.equal(await rpc("getGenesisHash"), genesis, "Genesis changed: no writes allowed");
-  const accounts = async (keys: readonly Address[]) => (await rpc<Context<(ChainAccount | null)[]>>("getMultipleAccounts", [keys, { encoding: "base64", commitment: "confirmed" }])).value;
+  const accounts = async (keys: readonly Address[], commitment: "confirmed" | "finalized" = "confirmed") => (await rpc<Context<(ChainAccount | null)[]>>("getMultipleAccounts", [keys, { encoding: "base64", commitment }])).value;
   const bytes = (account: ChainAccount | null | undefined) => { assert(account, "Expected real account missing"); return Buffer.from(account.data[0], "base64"); };
   await pin();
   const base = await deriveGooseyProgramAddresses(PROGRAM);
@@ -166,6 +168,20 @@ No cancellation/replacement/resolution instruction is claimed to be tested.`);
     const deadline = Date.now() + 45_000;
     while (await time() < timestamp) { assert(Date.now() < deadline, "Validator Clock deadline exceeded"); await delay(200); }
   }
+  async function finalized(signature: string, minimumSlot: number) {
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      const status = (await rpc<Context<({ err: unknown; confirmationStatus: string; slot: number } | null)[]>>("getSignatureStatuses", [[signature], { searchTransactionHistory: true }])).value[0];
+      if (status?.confirmationStatus === "finalized") {
+        assert.equal(status.err, null); assert.equal(status.slot, minimumSlot);
+        const root = await rpc<number>("getSlot", [{ commitment: "finalized" }]);
+        assert(root >= minimumSlot);
+        return root;
+      }
+      await delay(200);
+    }
+    throw new Error(`Exact transaction signature did not finalize: ${signature}`);
+  }
   const initialized = await buildInitializeInstruction({ programAddress: PROGRAM, admin, environment: 1,
     genesisDomain: createHash("sha256").update(genesis).digest(), enrollmentAuthority: admin.address,
     perWalletCap: GRANT, campaignCap: 4n * GRANT });
@@ -232,8 +248,8 @@ No cancellation/replacement/resolution instruction is claimed to be tested.`);
   await execute("ready book cannot be finalized again", [setup("finalize_book")], 7100);
   await execute("ready book cannot grow or reset", [setup("grow_book", BOOK_BYTES)], 7100);
 
-  async function state() {
-    const [m, s, b, vault, mint, ...tokens] = await accounts([market.market, market.seats, book, market.vault, base.featherMint, ...walletTokens]);
+  async function state(commitment: "confirmed" | "finalized" = "confirmed") {
+    const [m, s, b, vault, mint, ...tokens] = await accounts([market.market, market.seats, book, market.vault, base.featherMint, ...walletTokens], commitment);
     for (const account of [m, s, b]) assert.equal(account?.owner, PROGRAM);
     for (const account of [vault, mint, ...tokens]) assert.equal(account?.owner, TOKEN_PROGRAM_ADDRESS);
     const md = bytes(m), sd = bytes(s), bd = bytes(b);
@@ -269,7 +285,7 @@ No cancellation/replacement/resolution instruction is claimed to be tested.`);
       walletAmounts: tokens.map((t, i) => { const data = getTokenDecoder().decode(bytes(t)); assert.equal(data.owner, actors[i].address); assert.equal(data.mint, base.featherMint); return data.amount; }) };
   }
   type State = Awaited<ReturnType<typeof state>>;
-  function invariants(s: State) {
+  function invariants(s: State, otherVaultAmount = 0n) {
     const reserves = s.seats.map(() => ({ cash: 0n, yes: 0n, no: 0n }));
     const active = new Set(s.orders.map(order => order.index));
     assert.equal(active.size, s.bd.readUInt16LE(78));
@@ -313,7 +329,49 @@ No cancellation/replacement/resolution instruction is claimed to be tested.`);
     assert.equal(yes, no); assert.equal(yes * PAYOUT, s.collateral);
     assert.equal(cash + s.collateral + s.revenue, s.accounted);
     assert.equal(s.vault, s.accounted); assert.equal(s.supply, 4n * GRANT);
-    assert.equal(s.walletAmounts.reduce((sum, n) => sum + n, s.vault), s.supply);
+    assert.equal(s.walletAmounts.reduce((sum, n) => sum + n, s.vault + otherVaultAmount), s.supply);
+  }
+  const runtime = { cluster: "localnet" as const, rpcUrl: endpoint.toString(), genesisHash: genesis, programAddress: PROGRAM };
+  const finalizedReaders: Record<string, unknown>[] = [];
+  async function verifyReaders(label: string, expected: State, minimumSlot: number) {
+    const snapshots = await Promise.all(actors.map(wallet => readGooseyEscrow(runtime, { marketId: 1n, wallet: wallet.address }, { includeOrderBook: true })));
+    snapshots.forEach((snapshot, i) => {
+      const seat = expected.seats[i];
+      assert(snapshot.finalizedSlot >= BigInt(minimumSlot));
+      assert.equal(snapshot.registered, true); assert.equal(snapshot.wallet, actors[i].address);
+      assert.equal(snapshot.market, market.market); assert.equal(snapshot.seats, market.seats);
+      assert.equal(snapshot.locator, locators[i]); assert.equal(snapshot.vault, market.vault);
+      assert.deepEqual(snapshot.seat, { index: i, availableCash: seat.available, reservedCash: seat.reserved,
+        yes: seat.yes, no: seat.no, reservedYes: seat.reservedYes, reservedNo: seat.reservedNo,
+        nextNonce: seat.nonce, everTraded: seat.everTraded === 1 });
+      assert.equal(snapshot.marketState.accountedVault, expected.accounted);
+      assert.equal(snapshot.marketState.collateral, expected.collateral);
+      assert.equal(snapshot.marketState.feeRevenue, expected.revenue);
+      assert.equal(snapshot.marketState.payoutMilli, PAYOUT); assert.equal(snapshot.marketState.feeBps, Number(FEE_BPS));
+      assert.equal(snapshot.vaultAmount, expected.vault); assert.equal(snapshot.vaultSurplus, 0n);
+      assert.equal(snapshot.walletTokenAmount, expected.walletAmounts[i]);
+      // Reader reconciles the same-batch book and escrow, not the complete exchange lifecycle.
+      assert.equal(snapshot.exchangeVerified, false);
+      assert(snapshot.orderBook);
+      assert.equal(snapshot.orderBook.book, book);
+      assert.equal(snapshot.orderBook.revision, expected.revision);
+      assert.equal(snapshot.orderBook.nextSequence, expected.nextSequence);
+      assert.equal(snapshot.orderBook.reservesReconciled, true);
+      assert.equal(snapshot.orderBook.orders.length, expected.orders.length);
+      for (const actual of snapshot.orderBook.orders) {
+        const raw = expected.orders.find(order => order.id === actual.id);
+        assert(raw);
+        assert.equal(actual.ownerSeat, raw.owner);
+        assert.equal(actual.remaining, raw.remaining);
+        assert.equal(actual.limitPrice, raw.price);
+        assert.equal(actual.sequence, raw.sequence);
+        assert.equal(actual.expiresAt, raw.expiresAt);
+      }
+    });
+    finalizedReaders.push({ label, minimumSlot, wallets: snapshots.map(snapshot => ({ wallet: snapshot.wallet,
+      finalizedSlot: snapshot.finalizedSlot, seat: snapshot.seat, walletTokenAmount: snapshot.walletTokenAmount,
+      vaultAmount: snapshot.vaultAmount, collateral: snapshot.marketState.collateral, fees: snapshot.marketState.feeRevenue })) });
+    console.log(`PASS finalized shipping escrow reader: ${label}, all four actual participants`);
   }
   invariants(await state());
   for (const [i, wallet] of actors.entries()) {
@@ -441,6 +499,11 @@ No cancellation/replacement/resolution instruction is claimed to be tested.`);
   await order("partial GTC maker setup", 0, sellYes(700n, 1n), { rested: 1n });
   const partialGtc = await order("partial GTC rests exact remaining telescoping reserve", 2, buyYes(710n, 3n), { filled: 1n, canceled: 0n, rested: 2n, disposition: 2 });
   assert.equal(partialGtc.after.seats[2].reserved, 1_435n);
+  const liveRoot = await finalized(partialGtc.signature, partialGtc.receipt.slot);
+  const liveFinalized = await state("finalized"); invariants(liveFinalized);
+  assert.equal(liveFinalized.seats[2].reserved, 1_435n);
+  assert(liveFinalized.collateral > 0n && liveFinalized.revenue > 0n);
+  await verifyReaders("live cash reserves, minted positions and accrued fees", liveFinalized, liveRoot);
   const cancelResting = await order("self-trade cancel-resting releases maker cash then rests incoming", 2, { ...sellYes(700n, 1n), selfTrade: 1 }, { filled: 0n, rested: 1n });
   assert.equal(cancelResting.events.removed[0].reason, 1); assert.equal(cancelResting.after.seats[2].reserved, 0n);
   await order("self-trade cancel-both releases both reserves", 2, { ...buyYes(700n, 1n, 1), selfTrade: 2 }, { filled: 0n, canceled: 1n, rested: 0n, disposition: 5 });
@@ -514,18 +577,114 @@ No cancellation/replacement/resolution instruction is claimed to be tested.`);
   current = await state();
   const withdrawal = await buildWithdrawInstruction({ programAddress: PROGRAM, marketId: 1n, wallet: actors[0], seats: market.seats,
     amount: current.seats[0].available, expectedNonce: current.seats[0].nonce });
-  await execute("withdraw real unreserved cash while minted positions remain collateralized", [withdrawal.instruction]);
+  const finalWithdrawal = await execute("withdraw real unreserved cash while minted positions remain collateralized", [withdrawal.instruction]);
   const final = await state(); invariants(final); assert.equal(final.orders.length, 0); assert.equal(final.seats[0].available, 0n);
-  const finalSlot = Number(receipts.at(-1)!.slot), deadline = Date.now() + 60_000;
-  while (await rpc<number>("getSlot", [{ commitment: "finalized" }]) < finalSlot) { assert(Date.now() < deadline, "Finality gate timed out"); await delay(200); }
+  assert.equal(receipts.length, 109, "Original transaction coverage must remain intact before additions");
+  const primaryRoot = await finalized(finalWithdrawal.signature, finalWithdrawal.receipt.slot);
+  const primaryFinalized = await state("finalized"); invariants(primaryFinalized);
+  await verifyReaders("post-trade withdrawal with positions and fees still backed", primaryFinalized, primaryRoot);
+
+  // Separate short-lived market. Fund only from the real primary withdrawal;
+  // no new grants, account rewrites, clock warps, or synthetic positions.
+  const shortId = 2n, shortClose = (await time()) + 30n;
+  const shortSeats = await generateKeyPairSigner();
+  const shortMarket = await buildCreateMarketInstructions({ programAddress: PROGRAM, marketId: shortId, admin, seats: shortSeats,
+    seatsRentLamports: BigInt(await rpc<number>("getMinimumBalanceForRentExemption", [32_816])), payoutMilli: PAYOUT,
+    feeBps: Number(FEE_BPS), closesAt: shortClose, resolvesAt: shortClose });
+  const shortSetup = (step: Parameters<typeof buildBookSetupInstruction>[0]["step"]) => buildBookSetupInstruction({ programAddress: PROGRAM, marketId: shortId, admin, step });
+  const shortBook = (await shortSetup({ kind: "create" })).book;
+  for (const key of [shortMarket.market, shortMarket.seats, shortMarket.vault, shortBook]) watched.add(key);
+  await execute("close-boundary market is created with actual future Clock deadline", shortMarket.instructions);
+  await execute("close-boundary canonical draft is created", [(await shortSetup({ kind: "create" })).instruction]);
+  for (let size = STEP; size < BOOK_BYTES; size = Math.min(size + STEP, BOOK_BYTES)) {
+    await execute(`close-boundary book separate growth ${size}`, [(await shortSetup({ kind: "grow", expectedSize: size })).instruction]);
+    assert.equal(bytes((await accounts([shortBook]))[0]).length, Math.min(size + STEP, BOOK_BYTES));
+  }
+  await execute("close-boundary book is finalized before close", [(await shortSetup({ kind: "finalize" })).instruction]);
+  for (let i = 0; i < 2; i++) {
+    const registered = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[i], seats: shortMarket.seats });
+    watched.add(registered.locator);
+    await execute(`close-boundary register already-enrolled wallet ${i}`, [registered.instruction]);
+  }
+  const funding = await buildFeatherTransfer({ mint: base.featherMint, sender: actors[0], recipient: actors[1].address, payer: admin, amount: 2_000n });
+  await execute("close-boundary funding transfers actual previously withdrawn feathers", funding.instructions);
+  for (let i = 0; i < 2; i++) {
+    const deposited = await buildDepositInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[i], seats: shortMarket.seats, amount: 2_000n, expectedNonce: 0n });
+    await execute(`close-boundary deposit real balance for wallet ${i}`, [deposited.instruction]);
+  }
+  const shortOrder = (owner: number, expectedNonce: bigint, outcome: "YES" | "NO", price: bigint, timeInForce: "GTC" | "IOC" | "FOK") =>
+    buildPlaceOrderInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[owner], seats: shortMarket.seats,
+      expectedNonce, price, quantity: 1n, outcome, action: "BUY", timeInForce, selfTrade: "CANCEL_AGGRESSOR" });
+  assert(await time() < shortClose, "Setup missed the market deadline; do not weaken the close test or forge Clock");
+  await execute("close-boundary real complementary maker rests while open", [(await shortOrder(0, 1n, "YES", 400n, "GTC")).instruction]);
+  const openFill = await execute("close-boundary real complementary fill succeeds while open", [(await shortOrder(1, 1n, "NO", 600n, "FOK")).instruction]);
+  await execute("close-boundary reserves remain real while market approaches close", [(await shortOrder(0, 2n, "YES", 100n, "GTC")).instruction]);
+  const openClock = await time(); assert(openClock < shortClose, "Expected successful trades strictly before the real close");
+  const openBlockTime = await rpc<number | null>("getBlockTime", [openFill.receipt.slot]);
+  assert(openBlockTime !== null && BigInt(openBlockTime) < shortClose);
+  const shortBeforeClose = await accounts([shortMarket.market, shortMarket.seats, shortBook, shortMarket.vault]);
+  assert.equal(bytes(shortBeforeClose[0]).readBigUInt64LE(176), 1_000n);
+  assert.equal(bytes(shortBeforeClose[0]).readBigUInt64LE(184), 10n);
+  assert.equal(bytes(shortBeforeClose[1]).readBigUInt64LE(48 + 72), 101n);
+  await until(shortClose);
+  const closedClock = await time(); assert(closedClock >= shortClose);
+  const rejected = await execute("real Clock at/after close rejects an otherwise fillable FOK", [(await shortOrder(1, 2n, "NO", 900n, "FOK")).instruction], 7002);
+  const closedBlockTime = await rpc<number | null>("getBlockTime", [rejected.receipt.slot]);
+  assert(closedBlockTime !== null && BigInt(closedBlockTime) >= shortClose);
+  await execute("real Clock at/after close rejects a new GTC placement", [(await shortOrder(1, 2n, "NO", 900n, "GTC")).instruction], 7002);
+  await execute("real Clock at/after close rejects an IOC placement", [(await shortOrder(1, 2n, "NO", 900n, "IOC")).instruction], 7002);
+  await execute("book finalization checks actual close before readiness", [(await shortSetup({ kind: "finalize" })).instruction], 7102);
+  const oneUnitWithdrawal = await buildWithdrawInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[1], seats: shortMarket.seats, amount: 1n, expectedNonce: 2n });
+  await execute("closed second instruction rolls back preceding real withdrawal CPI and nonce", [oneUnitWithdrawal.instruction,
+    (await shortOrder(1, 3n, "NO", 900n, "FOK")).instruction], { index: 1, error: 7002 });
+  assert.deepEqual(await accounts([shortMarket.market, shortMarket.seats, shortBook, shortMarket.vault]), shortBeforeClose);
+  const withdrawAfterClose = await buildWithdrawInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[0], seats: shortMarket.seats, amount: 1_495n, expectedNonce: 3n });
+  const closedWithdrawal = await execute("close blocks new trades but permits withdrawal of genuinely unreserved cash", [withdrawAfterClose.instruction]);
+  const closedRoot = await finalized(closedWithdrawal.signature, closedWithdrawal.receipt.slot);
+  const closedReads = await Promise.all(actors.slice(0, 2).map(wallet => readGooseyEscrow(runtime, { marketId: shortId, wallet: wallet.address }, { includeOrderBook: true })));
+  const shortFinalAccounts = await accounts([shortMarket.market, shortMarket.seats, shortBook, shortMarket.vault], "finalized");
+  const shortVaultAmount = getTokenDecoder().decode(bytes(shortFinalAccounts[3])).amount;
+  assert.equal(shortVaultAmount, 2_505n); assert.deepEqual(shortFinalAccounts[2], shortBeforeClose[2]);
+  closedReads.forEach((snapshot, i) => {
+    assert(snapshot.finalizedSlot >= BigInt(closedRoot)); assert.equal(snapshot.registered, true);
+    assert.equal(snapshot.marketState.closesAt, shortClose);
+    assert.equal(snapshot.marketState.accountedVault, shortVaultAmount); assert.equal(snapshot.vaultAmount, shortVaultAmount);
+    assert.equal(snapshot.marketState.collateral, 1_000n); assert.equal(snapshot.marketState.feeRevenue, 10n);
+    assert.equal(snapshot.vaultSurplus, 0n); assert.equal(snapshot.exchangeVerified, false);
+    assert(snapshot.orderBook);
+    assert.equal(snapshot.orderBook.book, shortBook);
+    assert.equal(snapshot.orderBook.reservesReconciled, true);
+    assert.equal(snapshot.orderBook.revision, bytes(shortFinalAccounts[2]).readBigUInt64LE(56));
+    assert.equal(snapshot.orderBook.orders.length, 1);
+    assert.equal(snapshot.orderBook.orders[0].ownerSeat, 0);
+    assert.equal(snapshot.orderBook.orders[0].remaining, 1n);
+    assert.equal(snapshot.orderBook.orders[0].limitPrice, 100n);
+    assert.deepEqual(snapshot.orderBook.orders[0].reserve, { cash: 101n, yes: 0n, no: 0n });
+    assert.deepEqual(snapshot.seat, { index: i, availableCash: i === 0 ? 0n : 1_394n, reservedCash: i === 0 ? 101n : 0n,
+      yes: i === 0 ? 1n : 0n, no: i === 0 ? 0n : 1n, reservedYes: 0n, reservedNo: 0n, nextNonce: i === 0 ? 4n : 2n, everTraded: true });
+    const rawSeat = bytes(shortFinalAccounts[1]), offset = 48 + 128 * i;
+    assert.equal(snapshot.seat!.availableCash, rawSeat.readBigUInt64LE(offset + 64));
+    assert.equal(snapshot.seat!.reservedCash, rawSeat.readBigUInt64LE(offset + 72));
+    assert.equal(snapshot.seat!.yes, rawSeat.readBigUInt64LE(offset + 80));
+    assert.equal(snapshot.seat!.no, rawSeat.readBigUInt64LE(offset + 88));
+    assert.equal(snapshot.seat!.nextNonce, rawSeat.readBigUInt64LE(offset + 112));
+  });
+  const primaryAfterBoundary = await state("finalized"); invariants(primaryAfterBoundary, shortVaultAmount);
+  assert.deepEqual(primaryAfterBoundary.seats, final.seats); assert.equal(primaryAfterBoundary.collateral, final.collateral);
+  assert.equal(primaryAfterBoundary.revenue, final.revenue); assert.deepEqual(primaryAfterBoundary.bd, final.bd);
+  await verifyReaders("all primary participants after real cross-market funding and close", primaryAfterBoundary, closedRoot);
+  console.log("PASS finalized shipping reader accepts both closed-market seats, positions, reserves and fees");
   console.log(JSON.stringify({ result: "PASS", scope: "Actual RPC compiled-program exchange integration, not a host arithmetic simulation",
     rpc: endpoint.toString(), genesis, program: PROGRAM, validator: await rpc("getVersion"), market: market.market, seats: market.seats, book,
     bookBytes: BOOK_BYTES, bootstrapSizes: [10_240, 20_480, 30_720, 40_960, 51_200, 61_440, 69_720], transactionCaseCount: receipts.length,
     successBuilders: ["program-client.ts", "escrow-client.ts", "exchange-client.ts"],
-    additionalChecks: ["identical signed transaction replay", "finalized completion", "heap/free-list and exact live-order reserves after every placement"],
+    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "14 finalized shipping escrow reader snapshots"],
+    finalizedReaders, closeBoundary: { market: shortMarket.market, closesAt: shortClose, openClock, closedClock, openBlockTime, closedBlockTime,
+      openSignature: openFill.signature, rejectedSignature: rejected.signature, finalizedSlot: closedRoot,
+      accountedVault: shortVaultAmount, collateral: 1_000n, fees: 10n, readers: closedReads.map(r => ({ wallet: r.wallet, finalizedSlot: r.finalizedSlot, seat: r.seat })) },
     final: { accounted: final.accounted, vault: final.vault, collateral: final.collateral, fees: final.revenue, supply: final.supply, seats: final.seats },
     receipts, gaps: ["cancel/replace/resolution instruction lifecycle", "1024-order capacity exhaustion", "16 distinct maker seats/full-book CU stress",
-      "fork/restart recovery and concurrent RPC sends", "browser wallets", "unreachable corrupt-account/nonce-overflow states are not fabricated", "market-close boundary"],
+      "fork/restart recovery and concurrent RPC sends", "browser wallets", "unreachable corrupt-account/nonce-overflow states are not fabricated", "exact equality-second scheduling is not guaranteed; real pre-close and at/after-close receipts are checked"],
   }, (_, value: unknown) => typeof value === "bigint" ? value.toString() : value, 2));
 }
 main().catch((error: unknown) => { console.error(error instanceof Error ? error.message : "Exchange RPC suite failed"); process.exitCode = 1; });

@@ -81,3 +81,13 @@ The suite claims real program-issued SPL feathers for four ephemeral wallets, de
 Final accounted vault and actual vault were both 3,003,222 base units, including 26,000 collateral and 429 fees; token supply remained 4,000,000. One wallet withdrew its available cash while its positions remained backed. Final successful withdrawal was at slot 148, signature `5VvRpzhWPTeX95KdBS1ypVYSPWEydpwjrtACRSSvj33RRPpJcF7XLt2xKyKGBfLbEboHcasoEDrFJ99FKvu6dSfv`; the run waited until that slot finalized. Maximum observed CU was 76,200 for nine makers, **not a worst-case bound**.
 
 Remaining gates include cancellation/replacement/result-payout lifecycle, integrated full-capacity stress, market-close boundary, browser wallets and HTTP flows, indexer recovery/forks, and devnet rehearsal. The suite uses privileged ephemeral local test funding for SOL/rent; it does not prove a production fee-sponsorship system. Successful local matching does not switch the website's financial backend.
+
+### Finalized readers and real market-close boundary
+
+The expanded suite passed **132 actual transactions** on genesis `8CK27P75NjUhGmhRW1oaayZfazi3Go1iUE2ReyDNZwHX`, with receipts in `/tmp/goosey-solana-runner-rA3xR0/`. Loaded artifact SHA-256: `17719e98ad055d69d4bc6f9eb6dba79c7cd0550be2e2f5875c2cc34449dde878` (includes cancellation entrypoints; this run does not execute those entrypoints).
+
+Fourteen shipping `readGooseyEscrow` snapshots with `includeOrderBook: true` verified real finalized states, including a live 1,435-unit cash reserve, minted positions, accrued fees, and post-withdrawal balances. Each reader reconciles the canonical full book and token backing from one RPC batch. Exact successful signatures were checked for finality, not merely compared with an advancing slot counter.
+
+A second market was funded from actual withdrawn/transferred feathers. Its real Clock close was `1789847430`: a fill executed before close, then otherwise fillable FOK, GTC and IOC requests were rejected at/after close. A preceding withdrawal CPI and nonce update rolled back when a later instruction attempted a closed-market trade. Unreserved cash remained withdrawable after close, while the live order's 101-unit reserve stayed protected. The final closed-market reader observed slot 274, 2,505 accounted/vault units, 1,000 collateral and 10 fees. No Clock warp or account rewrite was used. Exact equality-second scheduling is not guaranteed across runs; the assertions establish pre-close success and at/after-close rejection.
+
+This closes the earlier basic market-close and finalized trading-reader gates. Resolution/payout-aware reading, cancellation execution, wallet-extension flows, fork recovery and devnet remain separate work.
