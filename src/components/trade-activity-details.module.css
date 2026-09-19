@@ -8,3 +8,8 @@
 }
 
 .amount > svg { width: 1em; height: 1em; align-self: center; }
+
+.positive, .negative, .option { font-weight: 700; }
+.positive { color: var(--yes); }
+.negative { color: var(--no); }
+.option { color: var(--ink); }
