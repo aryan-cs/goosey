@@ -46,18 +46,8 @@ jobs:
       - name: Generate isolated PostgreSQL Prisma client
         run: npm run db:generate:postgres
 
-      - name: Verify the offline baseline is reproducible
-        shell: bash
-        run: |
-          set -euo pipefail
-          POSTGRES_DATABASE_URL="postgresql://goosey:goosey@127.0.0.1:5432/goosey" \
-          POSTGRES_DIRECT_DATABASE_URL="postgresql://goosey:goosey@127.0.0.1:5432/goosey" \
-            npx prisma migrate diff \
-              --from-empty \
-              --to-schema-datamodel prisma/postgresql/schema.prisma \
-              --script \
-              --output "$RUNNER_TEMP/postgresql-baseline.sql"
-          diff -u prisma/postgresql/baseline.generated.sql "$RUNNER_TEMP/postgresql-baseline.sql"
+      # Current-schema parity is checked against the full applied migration chain
+      # in postgres-runtime. The historical baseline is not today's entire schema.
 
   checks:
     name: Static checks and unit tests
@@ -95,6 +85,52 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sqlite3
           npm run test
+
+  postgres-runtime:
+    name: PostgreSQL runtime and exchange smoke
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DATABASE_PROVIDER: postgresql
+      POSTGRES_DATABASE_URL: postgresql://goosey:goosey@127.0.0.1:5432/goosey
+      POSTGRES_DIRECT_DATABASE_URL: postgresql://goosey:goosey@127.0.0.1:5432/goosey
+      POSTGRES_TEST_DATABASE_URL: postgresql://goosey:goosey@127.0.0.1:5432/goosey
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: goosey
+          POSTGRES_PASSWORD: goosey
+          POSTGRES_DB: goosey
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U goosey -d goosey"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate both runtime clients
+        run: npm run db:generate
+
+      - name: Run PostgreSQL migrations, concurrency, and exchange checks
+        run: npm run test:postgres
 
   build:
     name: Production build
@@ -151,7 +187,10 @@ jobs:
         run: npm run build
 
       - name: Run isolated API E2E
-        run: npm run test:e2e
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3
+          npm run test:e2e
 
       - name: Verify real TLS email onboarding and recovery
         run: npm run test:email:onboarding
@@ -208,7 +247,11 @@ jobs:
         run: npm run db:generate
 
       - name: Run isolated order-book E2E
-        run: npm run test:orderbook
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3
+          npm run test:orderbook
+          npm run test:orderbook:settlement
 
   reconciliation:
     name: Ledger reconciliation
@@ -234,10 +277,13 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
 
-      - name: Reconcile an isolated fixture copy
+      - name: Create and reconcile a fresh isolated fixture
         shell: bash
         run: |
           set -euo pipefail
-          reconcile_db="$RUNNER_TEMP/goosey-reconcile.db"
-          cp prisma/dev.db "$reconcile_db"
-          DATABASE_URL="file:$reconcile_db" npm run reconcile
+          reconcile_db="$(mktemp "$RUNNER_TEMP/goosey-reconcile.XXXXXX")"
+          export DATABASE_PROVIDER=sqlite
+          export DATABASE_URL="file:$reconcile_db"
+          npx prisma db push --schema prisma/schema.prisma --skip-generate
+          npx tsx prisma/seed.ts
+          npm run reconcile

@@ -12,6 +12,7 @@ import { loadTradeHistory, parseTradeHistoryCursor } from "../src/lib/trade-hist
 import { listPublicTrades, listUserFills, parseListFillsQuery } from "../src/lib/fill-service";
 import { cancelAllOrders, cancelOrder, expireOrders, placeOrder, replaceOrder } from "../src/lib/order-exchange";
 import { getPublicOrderBook, listUserOrders, parseListOrdersQuery } from "../src/lib/order-service";
+import { runSerializableTransaction } from "../src/lib/serializable-transaction";
 
 const suffix = randomUUID().slice(0, 8);
 const payoutMilli = 100_000n;
@@ -32,7 +33,7 @@ async function expectApiError(operation: () => Promise<unknown>, code: string): 
 }
 
 async function createUser(label: string, role = "USER") {
-  return db.$transaction(async (tx) => {
+  return runSerializableTransaction(db, async (tx) => {
     const user = await tx.user.create({
       data: {
         email: `${label}-${suffix}@goosey.test`,
@@ -107,7 +108,7 @@ async function createUser(label: string, role = "USER") {
       }),
     ]);
     return tx.user.findUniqueOrThrow({ where: { id: user.id } });
-  });
+  }, { attempts: 8 }); // Several fixture users concurrently fund the shared issuance account.
 }
 
 async function main() {

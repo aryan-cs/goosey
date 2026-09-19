@@ -48,10 +48,13 @@ async function stopChild(child: ChildProcess | undefined): Promise<void> {
 
 try {
   await writeFile(path.join(runDir, "journey.db"), "", { mode: 0o600 });
+  // This isolated journey proves the verification gate and post-confirmation
+  // grant. Production and ordinary local runs keep their configured default.
   const env = {
     ...process.env,
     DATABASE_PROVIDER: "sqlite", DATABASE_URL: databaseUrl,
     POSTGRES_DATABASE_URL: "", POSTGRES_DIRECT_DATABASE_URL: "",
+    REQUIRE_EMAIL_VERIFICATION: "true",
     SESSION_COOKIE_NAME: "goosey_email_journey", STARTING_FEATHERS: "1000",
     RATE_LIMIT_KEY_SECRET: randomBytes(32).toString("hex"),
     GOOSEY_TOKEN_SECRET: randomBytes(32).toString("hex"),

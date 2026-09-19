@@ -205,7 +205,9 @@ export async function grantWelcomeFeathers(
       purpose: "ISSUANCE",
       allowsNegative: true,
     },
-    update: {},
+    // A nonempty, value-preserving update lets Prisma use native ON CONFLICT
+    // rather than a racy read/create for this shared cold-start account.
+    update: { balanceMilli: { increment: 0n } },
     select: { id: true },
   });
   const wallet = await tx.ledgerAccount.upsert({
@@ -221,7 +223,7 @@ export async function grantWelcomeFeathers(
       ownerId: userId,
       purpose: "USER_FEATHERS",
     },
-    update: {},
+    update: { balanceMilli: { increment: 0n } },
     select: { id: true },
   });
 
@@ -262,7 +264,7 @@ export async function registerUser(input: {
 }, database: typeof db = db): Promise<{ user: PublicUser; session: SessionRecord }> {
   const passwordHash = await hashPassword(input.password);
 
-  return database.$transaction(async (tx) => {
+  return runSerializableTransaction(database, async (tx) => {
     const invite = input.inviteCodeHash ? await tx.registrationInvite.findUnique({ where: { codeHash: input.inviteCodeHash } }) : null;
     if (input.inviteCodeHash) {
       if (!invite || invite.status !== "ACTIVE" || (invite.expiresAt && invite.expiresAt <= new Date())) throw new RegistrationInviteError();

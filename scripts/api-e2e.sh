@@ -31,7 +31,9 @@ env -u POSTGRES_DATABASE_URL -u POSTGRES_DIRECT_DATABASE_URL \
   ADMIN_PASSWORD="$ADMIN_PASSWORD" \
   npx tsx prisma/seed.ts >/dev/null
 
-DATABASE_PROVIDER="sqlite" DATABASE_URL="file:${DB_FILE}" APP_URL="$ORIGIN" NEXT_PUBLIC_APP_URL="$ORIGIN" GOOSEY_TOKEN_SECRET="$(openssl rand -hex 32)" RATE_LIMIT_KEY_SECRET="$(openssl rand -hex 32)" npm start -- --hostname 127.0.0.1 --port "$PORT" >"$SERVER_LOG" 2>&1 &
+# This journey specifically verifies the gated onboarding path. Opt in for this
+# isolated server without changing Goosey's default verification policy.
+REQUIRE_EMAIL_VERIFICATION="true" DATABASE_PROVIDER="sqlite" DATABASE_URL="file:${DB_FILE}" APP_URL="$ORIGIN" NEXT_PUBLIC_APP_URL="$ORIGIN" GOOSEY_TOKEN_SECRET="$(openssl rand -hex 32)" RATE_LIMIT_KEY_SECRET="$(openssl rand -hex 32)" npm start -- --hostname 127.0.0.1 --port "$PORT" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 cleanup() {
   local exit_code=$?

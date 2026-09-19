@@ -41,6 +41,38 @@ async function migrate(): Promise<void> {
   );
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`PostgreSQL migration rehearsal exited with status ${result.status}.`);
+  const drift = spawnSync("./node_modules/.bin/prisma", [
+    "migrate", "diff",
+    "--from-schema-datasource", "prisma/postgresql/schema.prisma",
+    "--to-schema-datamodel", "prisma/postgresql/schema.prisma",
+    "--exit-code",
+  ], {
+    cwd: process.cwd(),
+    env: { ...process.env, POSTGRES_DATABASE_URL: isolatedUrl, POSTGRES_DIRECT_DATABASE_URL: isolatedUrl },
+    stdio: "inherit",
+    timeout: 60_000,
+  });
+  if (drift.error) throw drift.error;
+  if (drift.status !== 0) throw new Error(`Applied PostgreSQL migrations differ from the current schema (status=${drift.status}).`);
+}
+
+function verifyExchange(script: string): void {
+  const result = spawnSync("./node_modules/.bin/tsx", [script], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      DATABASE_PROVIDER: "postgresql",
+      DATABASE_URL: undefined,
+      POSTGRES_DATABASE_URL: isolatedUrl,
+      POSTGRES_DIRECT_DATABASE_URL: isolatedUrl,
+      RATE_LIMIT_KEY_SECRET: randomBytes(32).toString("hex"),
+    },
+    stdio: "inherit",
+    timeout: 120_000,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`PostgreSQL exchange verification exited with status ${result.status}.`);
 }
 
 async function main(): Promise<void> {
@@ -97,6 +129,8 @@ async function main(): Promise<void> {
     process.stdout.write(
       `PostgreSQL runtime smoke passed (database=${startup.database}, serverVersionNum=${startup.serverVersionNum}, serializableRetries=${retries}).\n`,
     );
+    verifyExchange("scripts/postgres-exchange-concurrency.ts");
+    verifyExchange("scripts/orderbook-e2e.ts");
   } finally {
     await Promise.allSettled([first.$disconnect(), second.$disconnect()]);
     await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
