@@ -4,7 +4,7 @@ import { assertAdmin } from "@/lib/admin-service";
 import { readJsonObject } from "@/lib/http";
 import { ApiError, apiErrorResponse, consumeRateLimit, jsonResponse, prisma, requireUser } from "@/lib/market-service";
 import { assertMutationSession } from "@/lib/mutation-session";
-import { chainCatalogMetadataSchema, registerSolanaMarket } from "@/lib/solana/market-catalog";
+import { chainCatalogMetadataSchema, publishSolanaMarket, registerSolanaMarket } from "@/lib/solana/market-catalog";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 
 export const runtime = "nodejs";
@@ -17,12 +17,24 @@ const schema = z.object({
 /** Register metadata only. Chain identity is the idempotency key; no deployment,
  * signing, financial writes or public-listing transition takes place here. */
 export async function POST(request: NextRequest) {
+  return handle(request, false);
+}
+
+/** Explicit publication of a previously registered entry; never a chain send. */
+export async function PATCH(request: NextRequest) {
+  return handle(request, true);
+}
+
+async function handle(request: NextRequest, publish: boolean) {
   try {
     const actor = await requireUser(request, true);
     assertAdmin(actor);
     await consumeRateLimit(prisma, `solana-catalog-register:${actor.id}`, 10, 60_000);
     const body = schema.parse(await readJsonObject(request));
     const env = { ...process.env };
+    if (publish && env.GOOSEY_SOLANA_CATALOG_ENABLED !== "true") {
+      throw new ApiError(503, "CHAIN_CATALOG_UNAVAILABLE", "Public chain catalog is not enabled.");
+    }
     let deployment;
     const termsDirectory = env.GOOSEY_SOLANA_TERMS_DIRECTORY;
     try {
@@ -32,7 +44,8 @@ export async function POST(request: NextRequest) {
     } catch {
       throw new ApiError(503, "CHAIN_CATALOG_UNAVAILABLE", "Chain catalog registration is not configured.");
     }
-    const result = await registerSolanaMarket({ actorUserId: actor.id, runtime: deployment, termsDirectory,
+    const operation = publish ? publishSolanaMarket : registerSolanaMarket;
+    const result = await operation({ actorUserId: actor.id, runtime: deployment, termsDirectory,
       chainMarketId: BigInt(body.chainMarketId), metadata: body.metadata,
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]),
       authorize: async tx => { await assertMutationSession(tx, request, actor.id); },

@@ -17,7 +17,7 @@ vi.mock("./escrow-read", () => ({ readGooseyEscrow: boundary.read }));
 vi.mock("./market-terms-store", () => ({ readRetainedMarketTerms: boundary.terms }));
 vi.mock("@solana/kit", async original => ({ ...await original<typeof import("@solana/kit")>(),
   createSolanaRpc: () => ({ getGenesisHash: () => ({ send: boundary.genesis }) }) }));
-import { registerSolanaMarket } from "./market-catalog";
+import { publishSolanaMarket, registerSolanaMarket } from "./market-catalog";
 
 const program = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const genesis = "Bax5P2GmYBb2P6UjJFmEVys7cpRzY4A85ncAJqtgvSsm";
@@ -78,6 +78,47 @@ afterEach(async () => {
 });
 
 describe("catalog registration with real isolated SQLite and mocked chain/store boundaries", () => {
+  it("publishes only an existing exact verified entry and replays without duplicate writes", async () => {
+    const registered = await registerSolanaMarket(input(), db());
+    const financial = await financialState();
+    const result = await publishSolanaMarket(input(), db());
+    expect(result.market).toMatchObject({ id: registered.market.id, status: "OPEN", acceptingOrders: false,
+      executionBackend: "SOLANA", collateralAccountId: null, version: registered.market.version + 1 });
+    const state = await catalogState(); expect(state.audits).toHaveLength(2);
+    expect(state.audits.some(audit => audit.action === "PUBLISH_SOLANA_CATALOG")).toBe(true);
+    expect(await financialState()).toEqual(financial);
+    await publishSolanaMarket(input(), db());
+    expect(await catalogState()).toEqual(state); expect(await financialState()).toEqual(financial);
+  });
+  it("publication does not implicitly register an unknown market", async () => {
+    await expect(publishSolanaMarket(input(), db())).rejects.toMatchObject({ code: "CHAIN_CATALOG_NOT_REGISTERED" });
+    expect(await catalogState()).toEqual({ markets: [], bindings: [], audits: [] });
+  });
+  it("failed publication audit rolls back visibility and version atomically", async () => {
+    await registerSolanaMarket(input(), db()); const before = await catalogState(), financial = await financialState();
+    await db().$executeRawUnsafe('CREATE TRIGGER reject_publish_audit BEFORE INSERT ON "AuditLog" WHEN NEW.action = \'PUBLISH_SOLANA_CATALOG\' BEGIN SELECT RAISE(ABORT, \'isolated publish audit failure\'); END');
+    await expect(publishSolanaMarket(input(), db())).rejects.toThrow();
+    expect(await catalogState()).toEqual(before); expect(await financialState()).toEqual(financial);
+  });
+  it("publication rechecks terms and rejects changed registered metadata", async () => {
+    await registerSolanaMarket(input(), db()); const before = await catalogState();
+    boundary.terms.mockResolvedValue({ ...retained(), terms: { ...retained().terms, question: "Conflicting mocked commitment?" } });
+    await expect(publishSolanaMarket(input(), db())).rejects.toMatchObject({ code: "CHAIN_CATALOG_CONFLICT" });
+    expect(await catalogState()).toEqual(before);
+  });
+  it.each([{ status: "CLOSED", acceptingOrders: false }, { status: "DRAFT", acceptingOrders: true }])("does not reinterpret incompatible catalog state %s", async state => {
+    const registered = await registerSolanaMarket(input(), db());
+    await db().market.update({ where: { id: registered.market.id }, data: state });
+    const before = await catalogState();
+    await expect(publishSolanaMarket(input(), db())).rejects.toMatchObject({ code: "CHAIN_CATALOG_STATE_CONFLICT" });
+    expect(await catalogState()).toEqual(before);
+  });
+  it("revoked publication session prevents visibility and audit updates", async () => {
+    await registerSolanaMarket(input(), db()); const before = await catalogState();
+    const authorize = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("revoked session"));
+    await expect(publishSolanaMarket({ ...input(), authorize }, db())).rejects.toThrow("revoked session");
+    expect(await catalogState()).toEqual(before);
+  });
   it("creates exactly a hidden SOLANA draft, binding and audit with no financial writes", async () => {
     const before = await financialState(); const result = await registerSolanaMarket(input(), db());
     expect(result.created).toBe(true);

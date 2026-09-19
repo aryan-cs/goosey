@@ -83,6 +83,24 @@ An exact existing identity/metadata replay returns 200; a new draft returns 201.
 Conflicts return 409. Responses are private/no-store and expose only catalog
 identity, visibility, execution backend and the canonical public chain binding.
 
-This endpoint does not deploy or activate a program market, sign a transaction,
+The POST endpoint does not deploy or activate a program market, sign a transaction,
 open a public listing, create collateral, or convert database feathers. Financial
 operations remain exclusively in the market's immutable execution backend.
+
+## Explicit listing publication
+
+`PATCH /api/admin/solana/markets` accepts the same exact registration body and
+requires `GOOSEY_SOLANA_CATALOG_ENABLED=true` in server configuration. It rereads
+the finalized chain accounts and retained reviewed terms, then requires an
+existing exact registration. It does not implicitly create a draft or alter its
+identity or metadata. A serializable compare-and-set updates only DRAFT to OPEN
+and increments the catalog version, alongside a `PUBLISH_SOLANA_CATALOG` audit.
+Failed auditing rolls back visibility too; exact publication replay is a no-op.
+Session and administrator privilege are rechecked within that transaction.
+
+For SOLANA entries, OPEN means **discoverable metadata**, not permission to trade.
+`acceptingOrders` stays false for all SQL services. Current market phase, quotes,
+funds, and order acceptance must come from verified on-chain accounts. The
+dedicated chain catalog read path exposes metadata and canonical links, not
+legacy SQL price/volume defaults. The feature flag remains disabled in shared
+development until the read separation and browser integration are verified.

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mock = vi.hoisted(() => ({ user: vi.fn(), limit: vi.fn(), register: vi.fn(), session: vi.fn() }));
+const mock = vi.hoisted(() => ({ user: vi.fn(), limit: vi.fn(), register: vi.fn(), publish: vi.fn(), session: vi.fn() }));
 // Mock only authentication/storage/RPC boundaries. Keep real request parsing,
 // metadata validation, runtime validation and API response serialization.
 vi.mock("@/lib/db", () => ({ db: {} }));
@@ -8,9 +8,9 @@ vi.mock("@/lib/market-service", async original => ({ ...await original<typeof im
   requireUser: mock.user, consumeRateLimit: mock.limit }));
 vi.mock("@/lib/mutation-session", () => ({ assertMutationSession: mock.session }));
 vi.mock("@/lib/solana/market-catalog", async original => ({ ...await original<typeof import("@/lib/solana/market-catalog")>(),
-  registerSolanaMarket: mock.register }));
+  registerSolanaMarket: mock.register, publishSolanaMarket: mock.publish }));
 import { ApiError } from "@/lib/market-service";
-import { POST } from "./route";
+import { PATCH, POST } from "./route";
 afterEach(() => vi.unstubAllEnvs());
 
 const body = () => ({ chainMarketId: "7", metadata: { slug: "reviewed-chain-market", shortTitle: "Reviewed question",
@@ -24,6 +24,7 @@ beforeEach(() => {
   vi.stubEnv("GOOSEY_SOLANA_PROGRAM_ID", "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
   vi.stubEnv("GOOSEY_SOLANA_GENESIS_HASH", "AjRRXmyGBFhUtVWWp5xYXYKAP4Ha8vyTDRNVrkTVA2DE");
   vi.stubEnv("GOOSEY_SOLANA_TERMS_DIRECTORY", "/private/operator-terms");
+  vi.stubEnv("GOOSEY_SOLANA_CATALOG_ENABLED", "");
   mock.user.mockResolvedValue({ id: "admin", role: "ADMIN", status: "ACTIVE" });
   mock.register.mockResolvedValue({ created: true, market: { id: "catalog", slug: "reviewed-chain-market", title: "Question?",
     status: "DRAFT", executionBackend: "SOLANA", collateralAccountId: null, volumeMilli: 0n },
@@ -31,6 +32,20 @@ beforeEach(() => {
     programAddress: process.env.GOOSEY_SOLANA_PROGRAM_ID, marketAddress: "public-market", chainMarketId: "7", market: { privateField: true } } });
 });
 describe("administrator chain catalog registration HTTP", () => {
+  it("keeps publication off unless explicitly enabled", async () => {
+    expect((await PATCH(request())).status).toBe(503);
+    expect(mock.publish).not.toHaveBeenCalled(); expect(mock.register).not.toHaveBeenCalled();
+  });
+  it("routes explicit enabled publication through verified publication, not registration", async () => {
+    vi.stubEnv("GOOSEY_SOLANA_CATALOG_ENABLED", "true");
+    // Use the resolved registration fixture only to construct this response mock.
+    const fixture = await mock.register(); mock.register.mockClear();
+    mock.publish.mockResolvedValue({ ...fixture, created: false, market: { ...fixture.market, status: "OPEN" } });
+    const response = await PATCH(request());
+    expect(response.status).toBe(200); expect((await response.json()).market.status).toBe("OPEN");
+    expect(mock.publish).toHaveBeenCalledOnce(); expect(mock.register).not.toHaveBeenCalled();
+    const input = mock.publish.mock.calls[0][0]; await input.authorize({}); expect(mock.session).toHaveBeenCalledOnce();
+  });
   it("uses only server-selected runtime, authenticated actor and a strict public response", async () => {
     const req = request(), response = await POST(req), result = await response.json();
     expect(response.status).toBe(201); expect(response.headers.get("cache-control")).toContain("no-store");

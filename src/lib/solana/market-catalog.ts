@@ -32,12 +32,26 @@ function date(seconds: bigint) {
  * is created here. The entry shares comments/watchlists, never SQL finances.
  * A separate chain-aware publication flow is required before public listing.
  */
-export async function registerSolanaMarket(input: {
+export type SolanaCatalogInput = {
   actorUserId: string; runtime: SolanaRuntime; termsDirectory: string; chainMarketId: bigint;
   metadata: z.input<typeof chainCatalogMetadataSchema>; signal?: AbortSignal;
   /** HTTP callers must revalidate their session inside both transactions. */
   authorize?: (tx: Parameters<Parameters<TransactionRunner["$transaction"]>[0]>[0]) => Promise<void>;
-}, client: TransactionRunner = db) {
+};
+
+export async function registerSolanaMarket(input: SolanaCatalogInput, client: TransactionRunner = db) {
+  return writeVerifiedCatalog(input, client, "register");
+}
+
+/** OPEN is discoverability only for SOLANA metadata, never trading permission.
+ * The browser must read current finalized chain phase/terms before signing.
+ * Only an existing exact registration can be published; no implicit creation.
+ */
+export async function publishSolanaMarket(input: SolanaCatalogInput, client: TransactionRunner = db) {
+  return writeVerifiedCatalog(input, client, "publish");
+}
+
+async function writeVerifiedCatalog(input: SolanaCatalogInput, client: TransactionRunner, operation: "register" | "publish") {
   const actorUserId = input.actorUserId, metadata = chainCatalogMetadataSchema.parse(input.metadata);
   const authorize = input.authorize;
   const chainMarketId = input.chainMarketId, termsDirectory = input.termsDirectory;
@@ -97,8 +111,23 @@ export async function registerSolanaMarket(input: {
         if (!same || prior.market.executionBackend !== "SOLANA" || prior.market.collateralAccountId !== null) {
           throw new ApiError(409, "CHAIN_CATALOG_CONFLICT", "This deployment/market is already registered differently.");
         }
+        if (operation === "publish") {
+          if (!["DRAFT", "OPEN"].includes(prior.market.status) || prior.market.acceptingOrders) {
+            throw new ApiError(409, "CHAIN_CATALOG_STATE_CONFLICT", "The catalog visibility state requires review.");
+          }
+          if (prior.market.status === "OPEN") return { created: false, market: prior.market, binding: prior };
+          const updated = await tx.market.updateMany({ where: { id: prior.market.id, version: prior.market.version,
+            status: "DRAFT", executionBackend: "SOLANA", collateralAccountId: null, acceptingOrders: false },
+          data: { status: "OPEN", version: { increment: 1 } } });
+          if (updated.count !== 1) throw new ApiError(409, "CHAIN_CATALOG_STATE_CONFLICT", "The catalog changed; review it again.");
+          await tx.auditLog.create({ data: { actorUserId, action: "PUBLISH_SOLANA_CATALOG", entityType: "MARKET", entityId: prior.market.id,
+            metadata: JSON.stringify({ ...identity, digest: retained.digest, finalizedSlot: snapshot.finalizedSlot.toString(),
+              visibility: "PUBLIC", tradingAuthority: "SOLANA", financialLedgerCreated: false }) } });
+          return { created: false, market: { ...prior.market, status: "OPEN", version: prior.market.version + 1 }, binding: prior };
+        }
         return { created: false, market: prior.market, binding: prior };
       }
+      if (operation === "publish") throw new ApiError(409, "CHAIN_CATALOG_NOT_REGISTERED", "Register and review this market before publishing its listing.");
       const market = await tx.market.create({ data: { ...fields, createdById: actorUserId,
         executionBackend: "SOLANA", collateralAccountId: null, pricingModel: "ORDER_BOOK",
         status: "DRAFT", acceptingOrders: false } });
