@@ -1,5 +1,12 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { ingestFinalizedProgramPage } from "../src/lib/solana/ingestion-worker";
+import {
+  isAbortFromSignal,
+  registerContinuousSolanaIndexer,
+  runOwnedContinuousSolanaIndexerCycle,
+  stopContinuousSolanaIndexer,
+  type SolanaIndexerLease,
+} from "../src/lib/solana/indexer-health";
 import { resolveSolanaRuntime } from "../src/lib/solana/runtime";
 
 const help = `Usage: npm run chain:index -- --coverage-start=SIGNATURE [--continuous] [--page-size=25] [--interval-ms=5000]
@@ -38,28 +45,44 @@ async function main() {
   }
   const pageSize = integer("--page-size", 25, 1, 100), interval = integer("--interval-ms", 5000, 1000, 60_000);
   const runtime = resolveSolanaRuntime();
+  const continuous = values.has("--continuous");
   let lastStatus: string | undefined;
+  let lease: SolanaIndexerLease | undefined;
   try {
+    if (continuous) lease = await registerContinuousSolanaIndexer(runtime);
     do {
       if (stopping.signal.aborted) return;
-      const result = await ingestFinalizedProgramPage(runtime, coverage, {
+      const indexPage = () => ingestFinalizedProgramPage(runtime, coverage, {
         pageSize, signal: AbortSignal.any([stopping.signal, AbortSignal.timeout(60_000)]),
       });
+      // One-shot mode deliberately has no worker lease to leave behind. The
+      // continuous path cannot begin or complete a cycle without ownership.
+      const result = lease ? await runOwnedContinuousSolanaIndexerCycle(lease, indexPage, {
+        gracefulStopSignal: stopping.signal,
+      }) : await indexPage();
       if (result.status !== "idle" || lastStatus !== "idle") console.log(JSON.stringify({ event: "solana_index_page",
         status: result.status, verifiedReceipts: result.verifiedReceipts, insertedReceipts: result.insertedReceipts,
         revision: result.cursor.revision, finalizedRoot: result.finalizedRoot.toString(),
         backfillComplete: result.cursor.backfillComplete }));
       lastStatus = result.status;
-      if (!values.has("--continuous")) return;
-      await delay(interval, undefined, { signal: stopping.signal });
+      if (!continuous) return;
+      try { await delay(interval, undefined, { signal: stopping.signal }); }
+      catch (error) {
+        if (isAbortFromSignal(error, stopping.signal)) return;
+        throw error;
+      }
     } while (!stopping.signal.aborted);
   } finally {
     const { db } = await import("../src/lib/db");
-    await db.$disconnect();
+    try {
+      if (lease) await stopContinuousSolanaIndexer(lease, db);
+    } finally {
+      await db.$disconnect();
+    }
   }
 }
 void main().catch(error => {
-  if (stopping.signal.aborted) return;
+  if (isAbortFromSignal(error, stopping.signal)) return;
   // Provider messages may contain private RPC URLs or credentials. Keep them
   // out of process logs; typed failures remain available to library callers.
   console.error(JSON.stringify({ event: "solana_indexer_stopped", errorType: error instanceof Error ? error.name : "UnknownError",
