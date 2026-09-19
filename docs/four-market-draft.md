@@ -4,11 +4,11 @@ Arm wrestling is deferred until competitors are known. Active seed definitions
 are shared by web and badge in `prisma/selected-markets.json`:
 
 - Will there be a white person on the winning team?
-- Will the MC do a 67?
+- Will a closing ceremony speaker do a 67?
 - Will a Waterloo team win?
 
-Waterloo requires the whole listed team. MC wording is unchanged; resolution
-counts the spoken meme or recognizable gesture by an official MC. Overall
+Waterloo requires the whole listed team. The 67 market counts the spoken meme or recognizable gesture by any
+closing ceremony speaker, including an MC. Overall
 winners include any officially announced overall winning team. The first
 market uses voluntary self-identification, never inference from appearance.
 All open at a neutral 50%, not a researched forecast.
