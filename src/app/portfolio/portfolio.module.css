@@ -1,3 +1,4 @@
+.links { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; }
 .tabs { display: flex; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; margin-bottom: 28px; border-radius: var(--radius-control); background: var(--surface-sunken); }
 .tabs a { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 24px; border-radius: inherit; font-weight: 600; color: var(--ink-muted); }
 .tabs a[aria-current="page"] { background: var(--surface); color: var(--ink); }

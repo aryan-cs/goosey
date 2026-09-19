@@ -1,0 +1,38 @@
+.root { display: grid; gap: 20px; }
+.panel { min-width: 0; display: grid; gap: 16px; padding: 24px; border-radius: var(--radius-lg); background: var(--surface-raised); }
+.panel h2, .panel p { margin: 0; }
+.panel h2 { display: flex; align-items: center; gap: 10px; font-size: 19px; line-height: 1.35; }
+.panel h2 svg { width: 21px; height: 21px; }
+.panel p { color: var(--ink-muted); font-size: 14px; line-height: 1.6; }
+.panel > button, .form > button { justify-self: start; }
+.heading, .actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.actions { justify-content: flex-start; }
+.network { padding: 6px 12px; color: var(--yes); background: var(--yes-soft); border-radius: var(--radius-sm); font-size: 13px; }
+.form { display: grid; gap: 10px; min-width: 0; }
+.form label, .panel > label { font-size: 13px; font-weight: 650; }
+.form input, .panel select { min-width: 0; width: 100%; min-height: 48px; padding: 12px 20px; border: 0; border-radius: var(--radius-control); background: var(--surface-sunken); color: var(--ink); font: inherit; }
+.form input:focus-visible, .panel select:focus-visible { outline: 2px solid var(--yes); outline-offset: 2px; }
+.select { position: relative; min-width: 0; }
+.select select { appearance: none; padding-right: 48px; }
+.select > svg { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; pointer-events: none; color: var(--ink-muted); }
+.form > button { margin-top: 6px; }
+.address, .receipts code { overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+.balances { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.balances > div { display: grid; gap: 6px; padding: 18px; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.balances span { color: var(--ink-muted); font-size: 13px; }
+.balances strong { font-size: clamp(22px, 3vw, 32px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.panel .error { color: var(--no); overflow-wrap: anywhere; }
+.panel .notice { padding: 12px; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.progress { display: flex; align-items: center; gap: 8px; }
+.progress svg { width: 18px; height: 18px; flex: none; }
+.panel summary { cursor: pointer; font-size: 13px; }
+.facts { display: grid; gap: 12px; margin: 12px 0 0; }
+.facts > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 16px; font-size: 13px; line-height: 1.5; }
+.facts dt { color: var(--ink-muted); }
+.facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.review { background: var(--surface-sunken); }
+.review h2 { scroll-margin-top: 110px; }
+.receipts { display: grid; gap: 16px; list-style: none; margin: 0; padding: 0; }
+.receipts li { display: grid; gap: 6px; min-width: 0; }
+.receipts strong { font-size: 13px; }
+@media (max-width: 600px) { .panel { padding: 20px 16px; } .balances { grid-template-columns: minmax(0, 1fr); } .facts > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } .facts dd { text-align: left; } .actions > button { flex: 1 1 auto; } }

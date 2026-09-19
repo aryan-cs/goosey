@@ -57,7 +57,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const totalValue = availableCash + reservedCash + positionValue;
 
   return <div className="page-shell portfolio-page">
-    <header className="page-header"><h1>Portfolio</h1><Link className="section-link" href="/watchlist">Watchlist</Link><LivePageRefresh showButton={false} /></header>
+    <header className="page-header"><h1>Portfolio</h1><div className={styles.links}><Link className="section-link" href="/wallet">Wallet</Link><Link className="section-link" href="/watchlist">Watchlist</Link></div><LivePageRefresh showButton={false} /></header>
     <section className="metric-grid" aria-label="Account balance"><MetricCard label="Total value" value={<><FeatherIcon /> {formatFeathers(totalValue)}</>} /><MetricCard label="Available" value={<><FeatherIcon /> {formatFeathers(availableCash)}</>} detail={reservedCash > 0n ? `${formatFeathers(reservedCash)} reserved in orders` : undefined} /><MetricCard label="Estimated exit value" value={<><FeatherIcon /> {formatFeathers(positionValue)}</>} /><MetricCard label="Unrealized return" value={<><FeatherIcon /> {formatFeathers(unrealized)}</>} trend={cost > 0n ? Number(unrealized * 10_000n / cost) / 100 : undefined} /></section>
     <nav className={styles.tabs} aria-label="Portfolio views">{(["positions", "orders", "history"] as const).map(item => <Link key={item} href={`/portfolio?view=${item}`} aria-current={view === item ? "page" : undefined}>{item === "positions" ? "Positions" : item === "orders" ? "Orders" : "History"}</Link>)}</nav>
     {view === "orders" && <PortfolioActivity ordersOnly />}
