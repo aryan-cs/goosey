@@ -1,12 +1,32 @@
 import { initials } from "@/lib/initials";
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
-import { db } from "@/lib/db";
 import { EmptyState } from "@/components/states";
+import { getCommunityFeed } from "@/lib/community-feed";
+import { ApiError } from "@/lib/market-service";
 
 export const dynamic = "force-dynamic";
 
-export default async function CommunityPage() {
-  const comments = await db.comment.findMany({ where: { status: "VISIBLE", user: { profilePublic: true }, market: { status: { not: "DRAFT" } } }, include: { user: { select: { username: true, displayName: true } }, market: { select: { slug: true, shortTitle: true } } }, orderBy: { createdAt: "desc" }, take: 50 });
-  return <div className="page-shell community-page"><header className="page-header"><span className="eyebrow">Community</span><h1>What people are saying</h1><p>See what people think about current markets and why.</p></header>{comments.length ? <div className="community-feed">{comments.map((comment) => <article className="community-post" key={comment.id}><header><span className="leader-avatar" aria-hidden="true">{initials(comment.user.displayName)}</span><div><strong><Link href={`/users/${encodeURIComponent(comment.user.username)}`}>{comment.user.displayName}</Link></strong><small>@{comment.user.username} · <time dateTime={comment.createdAt.toISOString()}>{comment.createdAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Toronto" })}</time></small></div></header><p>{comment.body}</p><footer><MessageCircle aria-hidden="true" /><Link href={`/markets/${comment.market.slug}`}>{comment.market.shortTitle}</Link></footer></article>)}</div> : <EmptyState title="No comments yet" description="Join a market discussion to get things started." action={<Link className="button button-primary" href="/markets">Browse markets</Link>} />}</div>;
+export default async function CommunityPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  const cursor = typeof params.cursor === "string" ? params.cursor : undefined;
+  let feed;
+  try {
+    if (Array.isArray(params.cursor)) throw new ApiError(400, "INVALID_CURSOR", "Invalid community cursor.");
+    feed = await getCommunityFeed(cursor);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.code !== "INVALID_CURSOR") throw error;
+    return <div className="page-shell community-page"><h1>Community</h1><EmptyState title="This discussion link is no longer valid" description="Return to the latest posts to keep browsing." action={<Link className="button button-primary" href="/community">Latest discussions</Link>} /></div>;
+  }
+  const comments = feed.items;
+  return <div className="page-shell community-page">
+    <header className="page-header"><span className="eyebrow">Community</span><h1>What people are saying</h1><p>See what people think about current markets and why.</p></header>
+    {cursor && <p><Link className="button button-secondary" href="/community">Latest discussions</Link></p>}
+    {comments.length ? <div className="community-feed">{comments.map((comment) => <article className="community-post" key={comment.id}>
+      <header><span className="leader-avatar" aria-hidden="true">{initials(comment.user.displayName)}</span><div><strong><Link href={`/users/${encodeURIComponent(comment.user.username)}`}>{comment.user.displayName}</Link></strong><small>@{comment.user.username} · <time dateTime={comment.createdAt.toISOString()}>{comment.createdAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Toronto" })}</time></small></div></header>
+      <p>{comment.body}</p>
+      <footer><MessageCircle aria-hidden="true" /><Link href={`/markets/${encodeURIComponent(comment.market.slug)}?comment=${encodeURIComponent(comment.id)}#discussion-heading`}>{comment.market.shortTitle}</Link></footer>
+    </article>)}</div> : <EmptyState title={cursor ? "No older discussions" : "No comments yet"} description={cursor ? "You have reached the end of the available posts." : "Join a market discussion to get things started."} action={<Link className="button button-primary" href={cursor ? "/community" : "/markets"}>{cursor ? "Latest discussions" : "Browse markets"}</Link>} />}
+    {feed.nextCursor && <nav aria-label="Community pagination"><p><Link className="button button-secondary" href={`/community?cursor=${encodeURIComponent(feed.nextCursor)}`}>Older discussions</Link></p></nav>}
+  </div>;
 }

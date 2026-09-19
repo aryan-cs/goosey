@@ -201,6 +201,22 @@ curl -fsS -b "$COOKIE_JAR" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: appli
 REPLY_KEY="smoke-reply-${RANDOM}-$$"
 curl -fsS -b "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H "Idempotency-Key: $REPLY_KEY" -H 'Content-Type: application/json' -d "{\"body\":\"The stage timestamp is a strong source; I would also preserve the published schedule snapshot.\",\"parentId\":\"$COMMENT_ID\"}" "$ORIGIN/api/markets/$MARKET_SLUG/comments" | jq -e '.comment.id != null' >/dev/null
 curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications" | jq -e '.items | any(.[]; .type == "COMMENT_REPLY")' >/dev/null
+# Community discovery respects profile visibility independently of the market
+# discussion. Publish both real test authors, then hide the parent below.
+COMMUNITY_PRIVATE=$(curl -fsS "$ORIGIN/community")
+[[ "$COMMUNITY_PRIVATE" != *"The published organizer schedule and stage timestamp"* ]]
+[[ "$COMMUNITY_PRIVATE" != *"The stage timestamp is a strong source"* ]]
+for profile_cookie in "$COOKIE_JAR" "$COOKIE_JAR_TWO"; do
+  curl -fsS -b "$profile_cookie" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"profilePublic":true}' "$ORIGIN/api/profile" | jq -e '.profile.profilePublic == true' >/dev/null
+done
+COMMUNITY_PUBLIC=$(curl -fsS "$ORIGIN/community")
+[[ "$COMMUNITY_PUBLIC" == *"The published organizer schedule and stage timestamp"* ]]
+[[ "$COMMUNITY_PUBLIC" == *"The stage timestamp is a strong source"* ]]
+[[ "$COMMUNITY_PUBLIC" == *"comment=$COMMENT_ID#discussion-heading"* ]]
+COMMUNITY_INVALID=$(curl -fsS "$ORIGIN/community?cursor=invalid")
+[[ "$COMMUNITY_INVALID" == *"This discussion link is no longer valid"* ]]
+COMMUNITY_DUPLICATE=$(curl -fsS "$ORIGIN/community?cursor=one&cursor=two")
+[[ "$COMMUNITY_DUPLICATE" == *"This discussion link is no longer valid"* ]]
 REPORT=$(curl -fsS -b "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"reason":"OTHER","details":"Authorized moderation workflow smoke test."}' "$ORIGIN/api/comments/$COMMENT_ID/report")
 jq -e '.report.status == "PENDING"' <<<"$REPORT" >/dev/null
 REPORT_ID=$(jq -er '.report.id' <<<"$REPORT")
@@ -218,6 +234,9 @@ curl -fsS "$ORIGIN/api/markets/$MARKET_SLUG" | jq -e --argjson count "$COMMENT_C
 curl -fsS "$ORIGIN/api/markets/$MARKET_SLUG/comments?limit=100" | jq -e --arg id "$COMMENT_ID" 'all(.items[]; .id != $id)' >/dev/null
 [[ "$(curl -sS -o "${RUN_DIR}/hidden-comment.json" -w '%{http_code}' "$ORIGIN/api/markets/$MARKET_SLUG/comments?comment=$COMMENT_ID")" == "404" ]]
 jq -e '.error.code == "COMMENT_NOT_FOUND"' "${RUN_DIR}/hidden-comment.json" >/dev/null
+COMMUNITY_MODERATED=$(curl -fsS "$ORIGIN/community")
+[[ "$COMMUNITY_MODERATED" != *"The published organizer schedule and stage timestamp"* ]]
+[[ "$COMMUNITY_MODERATED" != *"The stage timestamp is a strong source"* ]]
 curl -fsS -b "$COOKIE_JAR_ADMIN" "$ORIGIN/api/admin/reports" | jq -e --arg id "$REPORT_ID" 'all(.items[]; .id != $id)' >/dev/null
 curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/notifications" | jq -e '[.items[] | select(.type == "COMMENT_MODERATED")] | length == 1' >/dev/null
 # Review is a one-way transition, not a replay-success API: retry must be 409
