@@ -4,6 +4,7 @@ import { ApiError } from "@/lib/market-service";
 import { parseSolanaCatalogQuery, readSolanaCatalog } from "@/lib/solana/catalog-read";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 import { EmptyState } from "@/components/states";
+import { SolanaIndexerHealth } from "@/components/solana-indexer-health";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,7 @@ export default async function ChainDirectory({ searchParams }: {
       {params.cursor && <Link href="/chain">First page</Link>}
       {catalog?.nextCursor && <Link className="button button-secondary" href={`/chain?cursor=${encodeURIComponent(catalog.nextCursor)}`}>More markets <ArrowRight size={16} aria-hidden="true" /></Link>}
     </nav>
+    <SolanaIndexerHealth />
     <p className={styles.footer}>Feathers are free play tokens. Transfers, trades and outcome payouts do not provide money or cash redemption.</p>
   </div>;
 }
