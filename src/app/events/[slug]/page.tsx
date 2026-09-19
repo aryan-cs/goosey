@@ -1,3 +1,4 @@
+import { INDEPENDENT_DANCE_GROUP, INDEPENDENT_DANCE_MARKETS } from "@/lib/september-market-additions";
 import { DanceMarketPanel } from "@/components/dance-market-panel";
 import { DANCE_MARKET_GROUP, DANCE_MARKET_OUTCOMES } from "@/lib/dance-market";
 import { getServerUser } from "@/lib/server-session";
@@ -12,15 +13,18 @@ export const dynamic = "force-dynamic";
 export default async function EventPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const event = await getPublicEvent(db, (await params).slug);
   if (!event) notFound();
-  if (event.slug === DANCE_MARKET_GROUP.slug) {
+  if (event.slug === DANCE_MARKET_GROUP.slug || event.slug === INDEPENDENT_DANCE_GROUP.slug) {
+    const independent = event.slug === INDEPENDENT_DANCE_GROUP.slug;
+    const definitions = independent ? INDEPENDENT_DANCE_MARKETS : DANCE_MARKET_OUTCOMES;
     const [user, query] = await Promise.all([getServerUser(), searchParams]);
-    const options = DANCE_MARKET_OUTCOMES.flatMap(option => {
+    const options = definitions.flatMap(option => {
       const market = event.markets.find(market => market.slug === option.slug);
       if (!market) return [];
-      return [{ ...market, acceptingOrders: market.acceptingOrders && market.closesAt > new Date() && event.markets.length === DANCE_MARKET_OUTCOMES.length && market.pricingModel === "LMSR", label: option.label, rules: option.rules, closesAt: market.closesAt.toISOString(), payoutMilli: market.payoutMilli.toString(), volumeMilli: market.volumeMilli.toString() }];
+      return [{ ...market, acceptingOrders: market.acceptingOrders && market.closesAt > new Date() && event.markets.length === definitions.length && market.pricingModel === "LMSR", label: option.label, rules: option.rules, closesAt: market.closesAt.toISOString(), payoutMilli: market.payoutMilli.toString(), volumeMilli: market.volumeMilli.toString() }];
     });
     return <div className="page-shell"><nav aria-label="Breadcrumb"><Link href="/markets">Markets</Link> / <Link href="/events">Events</Link></nav>
-      <DanceMarketPanel title={event.title} markets={options} signedIn={Boolean(user)} balanceMilli={user?.balanceMilli.toString()} initialSlug={typeof query.option === "string" ? query.option : undefined} initialAction={query.action === "SELL" ? "SELL" : "BUY"} />
+      {!independent && <p role="note">These original first-dance contracts keep their rules and positions. <Link href={`/events/${INDEPENDENT_DANCE_GROUP.slug}`}>Trade each dance independently</Link>.</p>}
+      <DanceMarketPanel independent={independent} title={event.title} markets={options} signedIn={Boolean(user)} balanceMilli={user?.balanceMilli.toString()} initialSlug={typeof query.option === "string" ? query.option : undefined} initialAction={query.action === "SELL" ? "SELL" : "BUY"} />
     </div>;
   }
   const date = (value: Date) => value.toLocaleString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });

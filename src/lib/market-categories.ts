@@ -10,4 +10,5 @@ export const MARKET_CATEGORIES = [
   "Weather",
   "Sports",
   "Memes",
+  "Other",
 ] as const;

@@ -1,3 +1,4 @@
+import { INDEPENDENT_DANCE_GROUP, INDEPENDENT_DANCE_MARKETS } from "@/lib/september-market-additions";
 import { LEGACY_MC_SLUG, SPEAKER_MARKET } from "@/lib/speaker-market";
 import { DANCE_MARKET_GROUP, isDanceMarketSlug } from "@/lib/dance-market";
 import { MarketActivityRefresh } from "@/components/market-activity-refresh";
@@ -55,6 +56,9 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
     notFound();
   }
   const { market, mark } = data;
+  if (INDEPENDENT_DANCE_MARKETS.some(option => option.slug === slug) && query.details !== "1" && !query.comment && query.outcome !== "NO") {
+    redirect(`/events/${INDEPENDENT_DANCE_GROUP.slug}?option=${encodeURIComponent(slug)}`);
+  }
   const danceGroup = slug === DANCE_MARKET_GROUP.legacyMarketSlug
     ? await db.marketEvent.findUnique({ where: { slug: DANCE_MARKET_GROUP.slug }, select: { id: true } }) : null;
   if (danceGroup && market.status === "PAUSED" && market.volumeMilli === 0n && Object.values(market._count).every(count => count === 0) && !query.comment && query.legacy !== "1") {
@@ -71,6 +75,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
   return <div className={`page-shell market-detail-page ${styles.page}`}>
     <nav className="breadcrumbs" aria-label="Breadcrumb"><Link href="/markets">Markets</Link><ChevronRight /><Link href={`/markets?category=${encodeURIComponent(market.category)}`}>{market.category}</Link></nav>
     {(isDanceMarketSlug(slug) || danceGroup) && <p><Link className="button button-secondary" href={`/events/${DANCE_MARKET_GROUP.slug}${isDanceMarketSlug(slug) ? `?option=${encodeURIComponent(slug)}` : ""}`}>View all dance options</Link>{danceGroup && " This original any-dance contract retains its original rules and holdings."}</p>}
+    {INDEPENDENT_DANCE_MARKETS.some(option => option.slug === slug) && <p><Link className="button button-secondary" href={`/events/${INDEPENDENT_DANCE_GROUP.slug}?option=${encodeURIComponent(slug)}`}>View all independent dance options</Link></p>}
     {slug === LEGACY_MC_SLUG && <p role="note">This original MC-only contract keeps its original rules, positions and history. <Link href={`/markets/${SPEAKER_MARKET.slug}`}>Trade the separate closing-ceremony-speaker market</Link>.</p>}
     {slug === SPEAKER_MARKET.slug && <p role="note">This is a separate broader contract. <Link href={`/markets/${LEGACY_MC_SLUG}`}>Existing MC-only positions remain in the original market</Link>.</p>}
     <div className="market-detail-layout">
