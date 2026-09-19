@@ -1,4 +1,5 @@
 import { HomeActivity } from "@/components/home-activity";
+import { LivePageRefresh } from "@/components/live-page-refresh";
 import Link from "next/link";
 import styles from "./home-layout.module.css";
 import { MarketCanvasToolbar } from "@/components/market-canvas-toolbar";
@@ -29,7 +30,7 @@ export default async function HomePage() {
       return rows.map((market) => ({ ...market, mark: marks.get(market.id)! }));
     }),
     getLeaderboardRows(8),
-    runSerializableTransaction(db, (tx) => loadPublicTradeActivity(tx, 3)),
+    runSerializableTransaction(db, (tx) => loadPublicTradeActivity(tx, 4)),
   ]);
   const summaries = markets.map((market) => marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, market.mark.probabilityYesBps));
   const featured = summaries.slice(0, 3);
@@ -55,6 +56,7 @@ export default async function HomePage() {
       </section>
 
       <section className="market-canvas" aria-label="Live prediction markets">
+        <LivePageRefresh showButton={false} />
         <MarketCanvasToolbar />
         <div className="home-layout">
           <div className="home-main">

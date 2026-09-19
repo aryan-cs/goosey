@@ -21,6 +21,54 @@
   min-width: 0;
 }
 
+.iconButton {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  color: var(--ink-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
+}
+
+.iconButton:hover:not(:disabled) {
+  color: var(--yes);
+  background: var(--surface-sunken);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--feather-500);
+  outline-offset: -4px;
+}
+
+.iconButton:disabled {
+  color: var(--ink-muted);
+  opacity: .45;
+  cursor: default;
+}
+
+.iconButton svg {
+  width: 22px;
+  height: 22px;
+}
+
+.spinning {
+  animation: notification-spin 800ms linear infinite;
+}
+
+@keyframes notification-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinning { animation: none; }
+}
+
 .actions button {
   flex-shrink: 0;
   white-space: nowrap;
@@ -34,5 +82,6 @@
 
   .actions {
     width: 100%;
+    justify-content: flex-end;
   }
 }

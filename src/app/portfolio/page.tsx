@@ -19,6 +19,7 @@ import { loadTradeHistory, parseTradeHistoryCursor, type TradeHistoryCursor } fr
 import { ApiError } from "@/lib/market-service";
 import { TradeHistory } from "@/components/trade-history";
 import { authDestination, authPageHref } from "@/lib/auth-destination";
+import { SolanaPortfolio } from "@/components/solana-portfolio";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
     <nav className={styles.tabs} aria-label="Portfolio views">{(["positions", "orders", "history"] as const).map(item => <Link key={item} href={`/portfolio?view=${item}`} aria-current={view === item ? "page" : undefined}>{item === "positions" ? "Positions" : item === "orders" ? "Orders" : "History"}</Link>)}</nav>
     {view === "orders" && <PortfolioActivity ordersOnly />}
     {view === "positions" && <>
+    <SolanaPortfolio />
     <section><SectionHeader title="Your positions" />{values.length ? <div className="position-list">{values.map(({ position }) => {
       const sideValues = valuations.get(position.id)!;
       const probability = sideValues.probabilityYesBps === null ? null : sideValues.probabilityYesBps / 100;

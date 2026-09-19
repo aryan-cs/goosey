@@ -23,11 +23,64 @@
 .ticket :global(.trade-breakdown > div) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); align-items: baseline; gap: 16px; margin: 0; }
 .ticket :global(.trade-breakdown dd) { display: flex; align-items: center; justify-content: flex-end; gap: 6px; text-align: right; font-family: var(--font-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .ticket :global(.trade-breakdown dd > svg) { flex: 0 0 auto; margin: 0; }
+.moneySummary {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 10px !important;
+  margin: 2px 0 0 !important;
+  padding: 14px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+}
+.moneySummary > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); align-items: baseline; gap: 16px; }
+.primaryAmount dt { color: var(--ink); font-weight: 700; }
+.primaryAmount dd { color: var(--ink); font-size: 17px; font-weight: 700; }
+.estimateNote { margin: -10px 0 0; color: var(--ink-muted); font-size: 12px; line-height: 1.45; }
 .ticket :global(.review-note) { margin: 0; line-height: 1.5; }
 .ticket :global(.trade-actions) { margin: 0; }
 .ticket :global(.trade-submit) { min-width: 0; white-space: normal; }
 
+.successState:global(.trade-success) {
+  min-height: 320px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  justify-items: center;
+  gap: 16px;
+  padding-block: 32px;
+}
+
+.successState:global(.trade-success) > svg {
+  width: 52px;
+  height: 52px;
+}
+
+.successState:global(.trade-success) h3 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+
+.successState:global(.trade-success) button {
+  width: min(100%, 280px);
+  min-height: 52px;
+  justify-content: center;
+  gap: 10px;
+  padding-inline: 20px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.successState:global(.trade-success) button > svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
 @media (max-width: 809.98px) {
   .ticket:global(.trade-ticket) { padding: var(--space-panel-mobile); }
   .quantityGroup :global(.quick-values button) { min-height: 44px; }
+  .successState:global(.trade-success) { min-height: 280px; padding-block: 24px; }
+  .successState:global(.trade-success) h3 { font-size: 22px; }
 }

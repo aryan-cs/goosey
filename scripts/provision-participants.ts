@@ -2,7 +2,7 @@
 import { lstat, open, readFile, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { canonicalizeEmail, canonicalizeUsername, isValidPassword, sha256 } from "../src/lib/security";
+import { canonicalizeEmail, canonicalizeUsername, isValidPassword, sha256 } from "../src/lib/security-primitives";
 import { runSerializableTransaction } from "../src/lib/serializable-transaction";
 
 type Account = { username: string; email: string; password: string; startingFeathers: number };

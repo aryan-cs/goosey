@@ -36,7 +36,9 @@ export function MarketTradingPanel(props: TradeTicketProps) {
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
     closeButton.current?.focus({ preventScroll: true });
     const handleDialogKeys = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -54,8 +56,38 @@ export function MarketTradingPanel(props: TradeTicketProps) {
     window.addEventListener("keydown", handleDialogKeys);
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
       window.removeEventListener("keydown", handleDialogKeys);
       triggerButton.current?.focus({ preventScroll: true });
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const shell = ticketShell.current;
+    if (!shell) return;
+    const viewport = window.visualViewport;
+    let animationFrame = 0;
+    const syncVisibleViewport = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const height = Math.max(320, viewport?.height ?? window.innerHeight);
+        const offsetTop = Math.max(0, viewport?.offsetTop ?? 0);
+        shell.style.setProperty("--trade-vv-height", `${height}px`);
+        shell.style.setProperty("--trade-vv-top", `${offsetTop}px`);
+      });
+    };
+    syncVisibleViewport();
+    viewport?.addEventListener("resize", syncVisibleViewport);
+    viewport?.addEventListener("scroll", syncVisibleViewport);
+    window.addEventListener("orientationchange", syncVisibleViewport);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      viewport?.removeEventListener("resize", syncVisibleViewport);
+      viewport?.removeEventListener("scroll", syncVisibleViewport);
+      window.removeEventListener("orientationchange", syncVisibleViewport);
+      shell.style.removeProperty("--trade-vv-height");
+      shell.style.removeProperty("--trade-vv-top");
     };
   }, [open]);
 
@@ -108,10 +140,13 @@ export function MarketTradingPanel(props: TradeTicketProps) {
         .sheet-backdrop, .sheet-close, .sheet-handle, .mobile-trade-dock { display: none; }
         @media (max-width: 959.98px) {
           .trading-panel { margin: 0; max-width: none; }
-          .ticket-shell {
-            position: fixed; z-index: 80; left: max(0px, calc((100vw - 520px) / 2)); right: max(0px, calc((100vw - 520px) / 2)); bottom: 0; display: block;
-            height: min(90dvh, 760px); max-height: 90dvh; overflow-x: hidden; overflow-y: auto;
+          .trading-panel .ticket-shell {
+            --trade-sheet-height: min(760px, calc(var(--trade-vv-height, 100vh) - 8px));
+            position: fixed; z-index: 80; left: max(0px, calc((100vw - 520px) / 2)); right: max(0px, calc((100vw - 520px) / 2));
+            top: calc(var(--trade-vv-top, 0px) + var(--trade-vv-height, 100vh) - var(--trade-sheet-height)); bottom: auto; display: block;
+            height: var(--trade-sheet-height); max-height: calc(var(--trade-vv-height, 100vh) - 8px); min-height: 0; overflow-x: hidden; overflow-y: auto;
             overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+            scroll-padding-block: 12px calc(88px + env(safe-area-inset-bottom));
             background: var(--panel-glass-solid); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
             box-shadow: none;
             opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(24px);
@@ -162,6 +197,11 @@ export function MarketTradingPanel(props: TradeTicketProps) {
           .ticket-shell .trade-ticket { max-height: none; overflow: visible; background: transparent; border: 0; box-shadow: none; }
           .ticket-shell .trade-ticket-header { padding-right: 40px; }
           .ticket-shell .trade-ticket-header > svg { display: none; }
+          .ticket-shell .trade-actions {
+            position: sticky; z-index: 3; bottom: 0;
+            padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+            background: var(--panel-glass-solid);
+          }
           @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
             .ticket-shell, .mobile-trade-dock { background: var(--panel-glass); -webkit-backdrop-filter: blur(48px); backdrop-filter: blur(48px); }
           }

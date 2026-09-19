@@ -2,9 +2,9 @@
 
 Website: [getgoosey.vercel.app](https://getgoosey.vercel.app).
 
-**Solana work in progress:** the requested free, transferable, non-cash-redeemable feather system is being implemented for localnet/devnet. The current website's trades are still database-backed, not on-chain. See [the migration scope, implemented foundations, and remaining gates](docs/solana-migration.md).
+**Solana track:** Goosey now has a separate localnet/devnet chain surface for real transferable SPL feathers, wallet-signed escrow, an on-chain order book, finalized trade activity, portfolio reads, two-reviewer resolution, claims, and keeper actions. The legacy market catalog remains database-backed and is never presented as on-chain; devnet rehearsal and a deliberate single-authority cutover remain release gates. See [the migration scope, evidence, and remaining gates](docs/solana-migration.md).
 
-Goosey is a working play-money prediction market for a University of Waterloo and Hack the North-inspired hackathon experience. Its unit is the feather (`🪶`). Feathers are free, have no promised cash value, and cannot be purchased or redeemed for money or prizes through Goosey. The Solana implementation will support user-to-user feather transfers without introducing a cash-out feature.
+Goosey is a working play-money prediction market for a University of Waterloo and Hack the North-inspired hackathon experience. Its unit is the feather (`🪶`). Feathers are free, have no promised cash value, and cannot be purchased or redeemed for money or prizes through Goosey. The Solana implementation supports user-to-user feather transfers on localnet/devnet without introducing a cash-out feature.
 
 > **Independent project.** Goosey is not affiliated with, endorsed by, sponsored by, or operated by the University of Waterloo, Hack the North, Kalshi, or Timbermarket. “University of Waterloo,” “Hack the North,” “Kalshi,” and “Timbermarket” are used only to describe inspiration or context. Do not use third-party logos, protected brand assets, proprietary copy, or language implying official status without written permission.
 
@@ -275,7 +275,7 @@ Implemented product pages:
 - `/community` public discussion activity with stable cursor pagination, privacy/moderation filters, and links to individual discussion threads.
 - `/login`, `/signup`, `/verify-email`, `/reset-password`
 - `/search`, `/rules`
-- `/markets/suggest` redirects to the external market-suggestion form
+- `/markets/suggest` authenticated market suggestions
 - `/users/[username]` public forecaster profiles
 - `/notifications` persisted trade, reply, and resolution notifications with read state and cursor-paginated older history. Order-book matches notify both participants atomically with each fill; NO contracts use their own execution price, not the canonical YES price. Resting orders do not generate trade confirmations.
 - `/settings/profile`, `/settings/privacy` editable profile/visibility, active-session revocation, and privacy information. Profile saves refresh the account heading. Browser-session controls include loading, refresh, expired-session guidance, and revocation failure recovery; revoking other browsers preserves the current session. Session reads and errors use private no-store responses without exposing token hashes.

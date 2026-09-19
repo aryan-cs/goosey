@@ -63,11 +63,11 @@ describe("LMSR probabilities and cost", () => {
 });
 
 describe("quotes", () => {
-  it("values a legitimately purchased negligible-probability holding at zero without allowing a zero-proceeds sale", () => {
-    const buy = quoteBuy({ yesQuantity: 1_000, noQuantity: 0, liquidity: 40 }, "NO", 1, 100);
-    expect(buy.grossMilli).toBe(1n);
-    expect(sellLiquidationValueMilli(buy.stateAfter, "NO", 1, 100)).toBe(0n);
-    expect(() => quoteSell(buy.stateAfter, "NO", 1, 100)).toThrow("sell proceeds do not exceed the fee");
+  it("rejects trades whose value rounds to zero", () => {
+    const state = { yesQuantity: 1_000, noQuantity: 0, liquidity: 40 };
+    expect(() => quoteBuy(state, "NO", 1, 100)).toThrow("trade value rounds to zero");
+    expect(sellLiquidationValueMilli({ ...state, noQuantity: 1 }, "NO", 1, 100)).toBe(0n);
+    expect(() => quoteSell({ ...state, noQuantity: 1 }, "NO", 1, 100)).toThrow("trade value rounds to zero");
   });
 
   it("values fee-exhausted holdings at zero and preserves state validation", () => {
@@ -107,7 +107,16 @@ describe("quotes", () => {
       const buy = quoteBuy({ yesQuantity, noQuantity, liquidity }, outcome, quantity, feeBps);
       const sell = quoteSell(buy.stateAfter, outcome, quantity, feeBps);
       expect(sell.netCreditMilli).toBeLessThanOrEqual(buy.totalDebitMilli);
+      if (feeBps === 0) expect(sell.netCreditMilli).toBe(buy.totalDebitMilli);
     }
+  });
+
+  it("returns an account to its exact balance after an immediate fee-free round trip", () => {
+    const startingBalance = 1_000_000n;
+    const buy = quoteBuy({ yesQuantity: 13, noQuantity: 0, liquidity: 40 }, "YES", 10, 0);
+    const sell = quoteSell(buy.stateAfter, "YES", 10, 0);
+    expect(sell.grossMilli).toBe(buy.grossMilli);
+    expect(startingBalance - buy.totalDebitMilli + sell.netCreditMilli).toBe(startingBalance);
   });
 
   it("returns mixed-side, partial-sell paths to origin with bounded conservative rounding", () => {
@@ -144,9 +153,7 @@ describe("quotes", () => {
       }
 
       expect(state).toEqual({ ...initial, payoutMilli: DEFAULT_PAYOUT_MILLI });
-      const conservativeRoundingLoss = paid - received;
-      expect(conservativeRoundingLoss).toBeGreaterThanOrEqual(0n);
-      expect(conservativeRoundingLoss).toBeLessThanOrEqual(12n);
+      expect(received).toBe(paid);
     }
   });
 
@@ -185,10 +192,8 @@ describe("quotes", () => {
       }
 
       expect(state).toEqual({ ...initial, payoutMilli: DEFAULT_PAYOUT_MILLI });
-      const conservativeRoundingLoss = grossBought - grossSold;
-      expect(conservativeRoundingLoss).toBeGreaterThanOrEqual(0n);
-      expect(conservativeRoundingLoss).toBeLessThanOrEqual(8n);
-      expect(debit - credit).toBe(fees + conservativeRoundingLoss);
+      expect(grossSold).toBe(grossBought);
+      expect(debit - credit).toBe(fees);
     }
   });
 

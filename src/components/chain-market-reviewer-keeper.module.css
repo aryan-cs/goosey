@@ -1,0 +1,45 @@
+.root { display: grid; gap: 20px; min-width: 0; }
+.panel { display: grid; gap: 16px; min-width: 0; padding: 22px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-raised); }
+.panel h2, .panel p, .panel pre, .panel dl { margin: 0; }
+.heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.heading > div { display: grid; gap: 4px; }
+.heading button { flex: 0 0 auto; }
+.eyebrow { color: var(--ink-muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.address { max-width: 100%; padding: 9px 11px; overflow-wrap: anywhere; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.metrics > div { display: grid; gap: 5px; min-width: 0; padding: 13px; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.metrics span { color: var(--ink-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.metrics strong { overflow-wrap: anywhere; font-size: 16px; }
+.form { display: grid; gap: 11px; }
+.form label { font-size: 13px; font-weight: 700; }
+.form label span { color: var(--ink-muted); font-weight: 400; }
+.form textarea, .form select { width: 100%; padding: 11px 12px; color: var(--ink); background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-sm); font: inherit; }
+.form textarea { resize: vertical; line-height: 1.5; }
+.form textarea:focus, .form select:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.facts { display: grid; gap: 0; min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); overflow: hidden; }
+.facts > div { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(0, 1.5fr); gap: 14px; padding: 10px 12px; }
+.facts > div + div { border-top: 1px solid var(--border-subtle); }
+.facts dt { color: var(--ink-muted); }
+.facts dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-data); font-size: 12px; }
+.review { scroll-margin-top: 110px; border-color: var(--border-strong); }
+.review details { min-width: 0; padding: 12px; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.review details p { margin-top: 10px; overflow-wrap: anywhere; }
+.review details code { overflow-wrap: anywhere; }
+.review pre { max-height: 240px; margin-top: 10px; padding: 12px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font: 12px/1.5 var(--font-data); white-space: pre-wrap; overflow-wrap: anywhere; }
+.note { color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
+.error { color: var(--no); }
+.receipts { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.receipts li { display: grid; gap: 4px; padding: 12px; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.receipts code { overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  .panel { padding: 16px; }
+  .heading { align-items: stretch; flex-direction: column; }
+  .heading button { align-self: flex-start; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .facts > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .actions > button { flex: 1 1 210px; }
+}
+
+@media (max-width: 420px) { .metrics { grid-template-columns: minmax(0, 1fr); } }

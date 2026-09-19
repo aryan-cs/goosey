@@ -217,9 +217,12 @@ describe("leaderboard reserved cash", () => {
     mocks.wallets.mockResolvedValue([]); mocks.grants.mockResolvedValue([]);
     mocks.activity.mockResolvedValue(new Map(players.map(p => [p.id, {trades: 0, marketsTraded: 0}])));
     const first = await getLeaderboardPage(1, 50, "id_122");
+    const focused = await getLeaderboardPage(1, 50, "id_122", true);
     const second = await getLeaderboardPage(2, 50);
     const last = await getLeaderboardPage(3, 50);
     expect(first.viewer).toMatchObject({userId: "id_122", rank: 123});
+    expect(focused.page).toBe(3);
+    expect(focused.rows.some(row => row.userId === "id_122")).toBe(true);
     expect(first.rows.some(row => row.userId === "id_122")).toBe(false);
     expect((await getLeaderboardPage(2, 50, "missing")).viewer).toBeNull();
     expect(second.viewer).toBeNull();

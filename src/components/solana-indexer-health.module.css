@@ -1,0 +1,161 @@
+.card {
+  --ink: #14241c;
+  --muted: #607268;
+  --border: #dbe4de;
+  background: linear-gradient(145deg, #ffffff 0%, #f5faf7 100%);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 12px 30px rgb(20 36 28 / 7%);
+  color: var(--ink);
+  padding: 20px;
+  width: 100%;
+}
+
+.header {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.header h2 {
+  font-size: clamp(1.15rem, 2vw, 1.4rem);
+  letter-spacing: -.025em;
+  line-height: 1.15;
+  margin: 4px 0 0;
+}
+
+.eyebrow,
+.label {
+  color: var(--muted);
+  display: block;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.badge {
+  align-items: center;
+  background: #eef3f0;
+  border: 1px solid #d4dfd8;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: .75rem;
+  font-weight: 750;
+  gap: 7px;
+  line-height: 1;
+  padding: 8px 10px;
+}
+
+.dot {
+  background: currentColor;
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
+}
+
+.running { color: #087443; background: #e8f8ef; border-color: #b9e7cd; }
+.stale { color: #915b00; background: #fff6dc; border-color: #f0d58d; }
+.failing { color: #a22b30; background: #fff0f0; border-color: #edc3c5; }
+.stopped, .missing { color: #56635c; }
+
+.content { margin-top: 18px; }
+
+.summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.summary > div {
+  background: rgb(255 255 255 / 76%);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 13px 14px;
+}
+
+.summary strong { display: block; font-size: .95rem; margin-top: 5px; }
+.summary p { color: var(--muted); font-size: .8rem; line-height: 1.45; margin: 5px 0 0; }
+
+.metrics,
+.timestamps {
+  display: grid;
+  gap: 1px;
+  margin: 14px 0 0;
+  overflow: hidden;
+}
+
+.metrics {
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metrics > div { background: #fff; padding: 11px 12px; }
+.metrics dt, .timestamps dt { color: var(--muted); font-size: .7rem; }
+.metrics dd { font-size: .95rem; font-variant-numeric: tabular-nums; font-weight: 800; margin: 4px 0 0; overflow-wrap: anywhere; }
+
+.timestamps {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.timestamps > div { padding: 2px 12px; }
+.timestamps dd { font-size: .75rem; font-weight: 650; margin: 3px 0 0; overflow-wrap: anywhere; }
+
+.disclosure { color: var(--muted); font-size: .7rem; margin: 15px 0 0; }
+.notice { color: var(--muted); font-size: .85rem; margin: 18px 0 0; }
+
+.error {
+  align-items: center;
+  background: #fff3f3;
+  border: 1px solid #efcaca;
+  border-radius: 12px;
+  color: #84282c;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding: 11px 12px;
+}
+
+.error p { font-size: .82rem; margin: 0; }
+.error button, .refresh {
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: .75rem;
+  font-weight: 750;
+  padding: 7px 10px;
+}
+
+.error button:focus-visible, .refresh:focus-visible { outline: 3px solid #f6c900; outline-offset: 2px; }
+.error button:disabled { cursor: wait; opacity: .6; }
+.refresh { color: #17613f; margin-top: 16px; }
+
+@media (max-width: 640px) {
+  .card { border-radius: 14px; padding: 16px; }
+  .header { align-items: stretch; flex-direction: column; }
+  .badge { align-self: flex-start; }
+  .summary, .timestamps { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .error { align-items: flex-start; flex-direction: column; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .card { --ink: #ecf4ef; --muted: #9eafa5; --border: #33463b; background: linear-gradient(145deg, #19251e, #142019); box-shadow: none; }
+  .summary > div, .metrics > div { background: rgb(24 38 30 / 84%); }
+  .metrics { background: var(--border); }
+  .running { color: #75dca8; background: #163727; border-color: #285d41; }
+  .stale { color: #f2ca69; background: #3b3018; border-color: #665329; }
+  .failing { color: #ff9da1; background: #412326; border-color: #6c3438; }
+  .stopped, .missing { color: #bac7bf; background: #26342c; border-color: #415247; }
+  .error { background: #3f2426; border-color: #6d383c; color: #ffb3b6; }
+  .refresh { color: #87d9ad; }
+}

@@ -51,13 +51,14 @@ export async function getLeaderboardRows(limit = 50) {
 }
 
 /** One consistent valuation snapshot, ranked before slicing across pages. */
-export async function getLeaderboardPage(requestedPage = 1, pageSize = 50, viewerId?: string) {
+export async function getLeaderboardPage(requestedPage = 1, pageSize = 50, viewerId?: string, focusViewer = false) {
   if (!Number.isSafeInteger(requestedPage) || requestedPage < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
     throw new RangeError("Invalid leaderboard page.");
   }
   const ranked = await loadRankedPlayers();
   const total = ranked.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(requestedPage, totalPages);
-  return { page, pageSize, total, totalPages, viewer: viewerId ? ranked.find(row => row.userId === viewerId) ?? null : null, rows: ranked.slice((page - 1) * pageSize, page * pageSize) };
+  const viewer = viewerId ? ranked.find(row => row.userId === viewerId) ?? null : null;
+  const page = Math.min(focusViewer && viewer ? Math.ceil(viewer.rank / pageSize) : requestedPage, totalPages);
+  return { page, pageSize, total, totalPages, viewer, rows: ranked.slice((page - 1) * pageSize, page * pageSize) };
 }
