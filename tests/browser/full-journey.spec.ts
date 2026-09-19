@@ -235,6 +235,92 @@ test("complete participant and administrator journey", async ({ page, request, b
       await expect(row).toContainText("REVOKED");
     });
 
+    await test.step("administrator creates and transitions a real order-book market", async () => {
+      const slug = `admin-created-${suffix}`;
+      const title = `Will the admin workflow complete? ${suffix}`;
+      const create = page.locator("form").filter({ has: page.getByRole("combobox", { name: "Trading model", exact: true }) });
+      await create.getByRole("combobox", { name: "Trading model", exact: true }).selectOption("ORDER_BOOK");
+      await create.getByLabel("Slug", { exact: true }).fill(slug);
+      await create.getByLabel("Question", { exact: true }).fill(title);
+      await create.getByLabel("Short title", { exact: true }).fill("Admin workflow outcome");
+      await create.getByLabel("Description", { exact: true }).fill("A disposable market exercising the actual administrator creation workflow.");
+      await create.getByLabel("Resolution rules", { exact: true }).fill("Resolve YES when the isolated admin browser journey reaches its approval step.");
+      await create.getByLabel("Resolution source", { exact: true }).fill("Isolated browser journey");
+      await create.getByLabel("Category", { exact: true }).fill("Tests");
+      await create.getByLabel("Closes at", { exact: true }).fill(new Date(Date.now() + 86_400_000).toISOString().slice(0, 16));
+      await create.getByLabel("Resolves at", { exact: true }).fill(new Date(Date.now() + 172_800_000).toISOString().slice(0, 16));
+      await create.getByRole("button", { name: "Create order-book market", exact: true }).click();
+      await expect(page.getByText(/Order-book market created\./)).toBeVisible();
+      await expect(create.getByLabel("Slug", { exact: true })).toHaveValue("");
+      const created = await db.market.findUniqueOrThrow({ where: { slug }, include: { collateralAccount: true } });
+      expect(created.pricingModel).toBe("ORDER_BOOK");
+      expect(created.collateralAccount.balanceMilli).toBe(0n);
+      expect(await db.marketPriceSnapshot.count({ where: { marketId: created.id } })).toBe(0);
+      const lifecycle = page.locator("form").filter({ has: page.getByRole("combobox", { name: "Market", exact: true }) });
+      await expect(lifecycle.getByRole("combobox", { name: "Market", exact: true })).toHaveValue(created.id);
+      for (const [action, status] of [["pause", "PAUSED"], ["resume", "OPEN"], ["close", "CLOSED"]] as const) {
+        await lifecycle.getByRole("combobox", { name: "Action", exact: true }).selectOption(action);
+        await lifecycle.getByLabel("Reason", { exact: true }).fill(`Testing the ${action} transition through the real admin UI.`);
+        await lifecycle.getByRole("button", { name: "Apply lifecycle action" }).click();
+        await expect(lifecycle.getByRole("combobox", { name: "Market", exact: true }).locator("option:checked")).toHaveText(`${status} · ${title}`);
+        expect((await db.market.findUniqueOrThrow({ where: { id: created.id } })).status).toBe(status);
+      }
+      // Advance this disposable contract's deadlines to exercise resolution
+      // without waiting two days. Never change balances, fills or outcome state.
+      await db.market.update({ where: { id: created.id }, data: {
+        closesAt: new Date(Date.now() - 2_000), resolvesAt: new Date(Date.now() - 1_000),
+      } });
+      // Creation, proposal and approval are three separate responsibilities.
+      // The market creator is deliberately ineligible to propose its result.
+      const proposerEmail = `proposer-${suffix}@goosey.test`;
+      await db.user.create({ data: {
+        email: proposerEmail, username: `propose_${suffix.replace(/-/g, "_").slice(-14)}`,
+        displayName: "Independent Journey Proposer", passwordHash: await hash(adminPassword, 4),
+        emailVerifiedAt: new Date(), role: "ADMIN", status: "ACTIVE",
+      } });
+      await page.goto("/settings/security");
+      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await expect.poll(async () => (await page.context().cookies()).some((cookie) => cookie.name === "goosey_session")).toBe(false);
+      await page.goto("/login?next=%2Fadmin");
+      await page.getByLabel("Email", { exact: true }).fill(proposerEmail);
+      await page.getByLabel("Password", { exact: true }).fill(adminPassword);
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+      await expect(page).toHaveURL("/admin");
+      await lifecycle.getByRole("combobox", { name: "Market", exact: true }).selectOption(created.id);
+      await lifecycle.getByRole("combobox", { name: "Action", exact: true }).selectOption("resolve");
+      await lifecycle.getByLabel("Outcome for resolution").selectOption("YES");
+      await lifecycle.getByLabel("Evidence or source").fill("The isolated browser has reached the approval workflow.");
+      await lifecycle.getByLabel("Reason", { exact: true }).fill("The isolated test condition has been met and can now be reviewed.");
+      await lifecycle.getByRole("button", { name: "Apply lifecycle action" }).click();
+      const proposalRow = page.locator("article.report-item").filter({ hasText: title });
+      await expect(proposalRow.getByRole("button", { name: "Approve outcome" })).toBeDisabled();
+      const proposal = await db.marketResolutionProposal.findFirstOrThrow({ where: { marketId: created.id, status: "PENDING" } });
+
+      const reviewerEmail = `reviewer-${suffix}@goosey.test`;
+      await db.user.create({ data: {
+        email: reviewerEmail, username: `review_${suffix.replace(/-/g, "_").slice(-14)}`,
+        displayName: "Independent Journey Reviewer", passwordHash: await hash(adminPassword, 4),
+        emailVerifiedAt: new Date(), role: "ADMIN", status: "ACTIVE",
+      } });
+      await page.goto("/settings/security");
+      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await expect.poll(async () => (await page.context().cookies()).some((cookie) => cookie.name === "goosey_session")).toBe(false);
+      await page.goto("/login?next=%2Fadmin");
+      await page.getByLabel("Email", { exact: true }).fill(reviewerEmail);
+      await page.getByLabel("Password", { exact: true }).fill(adminPassword);
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+      await expect(page).toHaveURL("/admin");
+      await page.getByLabel("Administrator password for approval").fill(adminPassword);
+      await proposalRow.getByRole("button", { name: "Approve outcome" }).click();
+      await expect.poll(async () => (await db.marketResolutionProposal.findUniqueOrThrow({ where: { id: proposal.id } })).status).toBe("APPROVED");
+      await expect(proposalRow.getByRole("button", { name: "Process next ≤100" })).toBeVisible();
+      await proposalRow.getByRole("button", { name: "Process next ≤100" }).click();
+      await expect(proposalRow).toContainText("completed");
+      const resolved = await db.market.findUniqueOrThrow({ where: { id: created.id } });
+      expect(resolved.status).toBe("RESOLVED");
+      expect(resolved.resolution).toBe("YES");
+    });
+
     expect(consoleErrors, `browser console errors:\n${consoleErrors.join("\n")}`).toEqual([]);
   } finally {
     await db.$disconnect();

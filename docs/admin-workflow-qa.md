@@ -30,3 +30,30 @@ or comprehensive security certification. Service-backed admin routes recheck
 the session after reading the body, and their services check active-admin status
 inside the transaction; unlike direct moderation/invitation writes, the session
 check itself is not inside those service transactions.
+
+## Admin UI integration checkpoint
+
+- Market creation now explicitly chooses participant order books or treasury-
+  funded LMSR liquidity, defaults to order books, and retains the idempotency
+  key for an unchanged creation/proposal retry. Confirmed lifecycle responses
+  immediately update status/version; refreshed server state supersedes them.
+- Resolution queues consume refreshed props, block overlapping operations,
+  preserve approval retry identity, and refresh after failed or uncertain
+  responses. Rejection and next-batch processing are not replay APIs, so stale
+  progress must be reconciled after a dropped response.
+- The full browser journey passed on desktop and mobile with the new admin
+  steps: create a real order-book market, verify zero collateral and no synthetic
+  price snapshots, pause/resume/close, submit an independent proposal, verify
+  self-approval controls are disabled, sign in as a third administrator, approve
+  with password confirmation, and process the empty-market settlement to YES.
+- Only that disposable market's deadlines were moved into the past to simulate
+  elapsed contract time. No balances, fills or resolution state were inserted.
+  Non-empty economic settlement coverage remains in the separate settlement
+  integration journeys described above.
+- Inspected actual desktop creation controls and the completed settlement queue
+  at 390px. Screenshots: `output/playwright/admin-market-creation-desktop.png`
+  and `output/playwright/admin-settlement-mobile.png`.
+- Full unit suite: 983 passed, one skipped. Scoped lint, TypeScript and the
+  production build passed. The accumulated isolated database reconciled
+  123 journals, 88 accounts, 17 participants, 25 markets, 44 orders/reservations
+  and eight fills after the browser runs. Port 8080 remained available.
