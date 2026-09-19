@@ -1,0 +1,120 @@
+# Goosey badge 0.6.0
+
+The installable app is an **offline practice app**, built from the repository's
+11 seeded markets. It does not place cloud orders or issue account-link codes.
+New in 0.6: numeric balances without F; no list Practice/counter; order-book
+market hidden without reindexing persistent holdings. Detail has a 178x97 chart,
+right-hand probability/change, fixed 0/50/100 scale, and volume/close placeholders.
+One recorded price draws one marker; timestamp-spaced history spans the plot.
+Change is calculated over the displayed observations, with elapsed seconds.
+19 reused widgets; A/B navigation and Start settings remain. Missing cloud
+volume and closing timestamps show -- rather than generated values.
+
+## Build and install
+
+```sh
+python3 badge/scripts/build.py
+# Optional: python3 badge/scripts/build.py --output /absolute/release/path
+```
+
+Import `badge/dist/goosey.lua` into https://badge.hackthenorth.com/ide/.
+Choose image → select `goosey-logo.png` from the build output (the original
+`public/brand/goosey-mark.png` logo). The IDE converts it to the required 42×42,
+5,304-byte `icon.bin`. This separate asset overrides the GSY text fallback.
+Connect → choose the badge's serial device → Push → open Goosey on the badge.
+Use the existing `goosey_base` slug to preserve the per-app practice store.
+Version 0.3.1 fixes the observed 48 KiB compile-time Lua memory error by using
+the supported 96 KiB ceiling and incremental garbage collection on entry and
+600 ms idle ticks. Generated source omits comments/indentation to reduce buffers.
+USB upload, cold launch, market detail and ticket navigation were verified on
+the connected badge. At the ticket screen: system free 24,632 bytes, largest
+block 8,704 bytes. This is a smoke test, not a long-running stress test.
+Exit Goosey to the home screen before Push: reloading while it was running
+caused a firmware abort/reboot. Reopening after reboot succeeded.
+Radio and custom font rendering remain unverified.
+
+The builder checks `market-order.json`: changing/removing/reordering a market
+requires a deliberate migration because `paper_v1` uses positional holdings.
+It refuses to silently reinterpret another market's holdings.
+
+## Controls
+
+| Screen | Controls |
+|---|---|
+| Markets | Up/down select, A opens |
+| Detail | Left/right select YES/NO, A trades, B returns |
+| Ticket | Up/down select field; left/right adjust; A advances or opens Review; B returns |
+| Review | A confirms once, B edits |
+| Settings | Up/down select, A opens, B resumes |
+| Portfolio | Up/down select, A opens market, B settings |
+| Account | A linking info, B settings |
+| Everywhere | Start opens/closes Settings; firmware HOME exits the app |
+
+
+Practice trades use local cent-rounded, fee-free simulation. Connected trading
+will use server milli-feather quotes and idempotent commits instead. No local
+balance or graph is presented as a shared server portfolio. The order-book
+market is hidden; its persistent slot is retained for save compatibility. Green LEDs mean **local practice save**, not cloud receipt.
+
+## Connected foundation (not wired into the installable app)
+
+- `src/sync.lua`: bounded public snapshot/delta reducer; detects stale data,
+  replay, gaps and changed catalogs. Authentication/decoding must precede it.
+  Version 1 supports up to 16 markets; no account data or order mutations.
+- `gateway/sse.mjs`: bounded UTF-8 SSE reader and single authenticated fetch
+  connection, backpressure through awaited callbacks, Last-Event-ID resume,
+  and cursor advancement only after application/checkpoint success. It is a
+  library, not a deployed gateway daemon. The caller must implement durable
+  checkpoints, reconnect/backoff/heartbeat timeout, snapshot reconciliation
+  and POST authorization before production use. No endpoint exists yet.
+- `tests/`: Lua host mocks and sync reducer tests; built-in Node tests for SSE.
+
+Next milestone is a two-badge/USB round-trip proof, followed by the durable
+server outbox/SSE endpoint and authenticated wireless pairing. The official
+guide exposes `badge.radio.on_recv` and 44-byte broadcasts, but filters out
+system bump/sync frames. Native tapping cannot be intercepted by Lua. Inbound
+USB messages to running relay Lua, secure device identity, and email magic-link
+login remain unimplemented. Do not connect raw radio packets directly to trading.
+
+## Tests
+
+Python 3 plus pinned `lupa==2.8` and `Pillow==12.3.0` are used only for host tests.
+The layout renderer defaults to macOS Arial; on Linux set `BADGE_TEST_FONT` to
+an installed compatible TTF. `BADGE_OUTPUT` optionally selects a build directory.
+
+```sh
+python3 badge/scripts/build.py
+python3 badge/tests/test_app.py
+python3 badge/tests/test_sync.py
+node --test badge/gateway/sse.test.mjs
+```
+
+Rendered screenshots are approximate 320×240 layouts, not physical badge captures.
+Dependencies of the website are not needed for these checks.
+
+## Upstream review
+
+Baseline advanced from b668f4d to dd26256. Upstream adds order-book bulk cancel,
+public trade tape, private fills/history, recovery UI and chart fixes. Seed data,
+LMSR trade service and core auth were unchanged in that range. The email pairing,
+SSE + POST and gateway architecture still applies; ORDER_BOOK remains deliberately
+view-only in the badge release. Web email verification is not passwordless login.
+
+The clean upstream `npm ci` currently fails with missing `@emnapi/core` and
+`@emnapi/runtime` lock entries. No package/lock changes are included here. A
+no-lockfile, ignore-scripts local install succeeded for inspection; it is not
+evidence of a reproducible web build or passing backend integration tests.
+
+## Socials email and requested font
+
+The desired account email is the one already saved in the badge Socials app.
+The official stock Lua API deliberately excludes email/phone/socials from both
+badge.me and contacts. Do not substitute badge_id for verified email. Reusing
+Socials email requires an organizer-supported, user-consented identity API;
+this integration is not implemented. Existing email-link explanation is only
+placeholder UI, not an authentication flow.
+
+Pokemon Red/Blue-style typography is requested but not implemented. Stock Lua
+only exposes built-in font sizes, not custom font loading. A bitmap renderer
+or firmware font binding is needed; avoid adding hundreds of glyph widgets
+without memory profiling on hardware. Current body text uses native fonts.
