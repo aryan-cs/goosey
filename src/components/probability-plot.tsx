@@ -75,8 +75,22 @@ export function ProbabilityChart({ points, label = "YES probability", height = 3
   const [range, setRange] = useState<ChartRange>("ALL");
   const [inspected, setInspected] = useState<{ timestamp: number; probability: number; opening?: boolean } | null>(null);
   // The first client render must use the same domain as the server render.
-  // Advance to wall time only after the history request finishes below.
+  // After hydration, advance the domain even when there are no new observations.
   const [clock, setClock] = useState(() => asOf ?? Math.max(0, ...normalizeChartPoints(points).map(point => point.timestamp)));
+  useEffect(() => {
+    const advance = () => {
+      if (document.visibilityState === "visible") setClock(Date.now());
+    };
+    advance();
+    const timer = window.setInterval(advance, 10 * 60 * 1000);
+    document.addEventListener("visibilitychange", advance);
+    window.addEventListener("focus", advance);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", advance);
+      window.removeEventListener("focus", advance);
+    };
+  }, []);
   const [revision, setRevision] = useState(0);
   const [history, setHistory] = useState<{ range: string; slug: string; points: ChartPoint[] } | null>(null);
   const [historyError, setHistoryError] = useState(false);
