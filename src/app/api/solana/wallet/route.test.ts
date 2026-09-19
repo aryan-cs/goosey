@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ user: vi.fn(), issue: vi.fn(), consume: vi.fn(), find: vi.fn(), read: vi.fn(), rate: vi.fn() }));
-vi.mock("@/lib/auth", () => ({ SESSION_COOKIE_NAME: "goosey_session" }));
+vi.mock("@/lib/auth", async importOriginal => ({ ...(await importOriginal<typeof import("@/lib/auth")>()), SESSION_COOKIE_NAME: "goosey_session" }));
 vi.mock("@/lib/market-service", () => ({
   ApiError: class ApiError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } },
   requireUser: mocks.user, prisma: { solanaWalletLink: { findMany: mocks.find } },
@@ -30,7 +30,9 @@ const challenge = createWalletChallenge({ origin, chainId: "solana:localnet", ge
 const id = "550e8400-e29b-41d4-a716-446655440000";
 const link = { id: "link-id", userId: "user-1", chainId: "solana:localnet", genesisHash, walletAddress, verifiedAt: new Date() };
 const validBody = () => ({ challengeId: id, challenge, signedMessageBase64: Buffer.from(challenge.message).toString("base64"), signatureBase64: Buffer.alloc(64, 1).toString("base64") });
+const password = "Wallet-link-test-password-42!";
 function request(body?: unknown, headers: Record<string, string> = {}) {
+  if (body && typeof body === "object" && "walletAddress" in body && !("password" in body)) body = { ...body, password };
   return new NextRequest(`${origin}/api/solana/wallet`, { method: body === undefined ? "GET" : "POST",
     headers: { origin, cookie: "goosey_session=current-session", "content-type": "application/json", ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -42,7 +44,7 @@ beforeEach(() => {
   vi.stubEnv("GOOSEY_SOLANA_PROGRAM_ID", "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
   vi.stubEnv("GOOSEY_SOLANA_GENESIS_HASH", genesisHash);
   mocks.user.mockResolvedValue({ id: "user-1" }); mocks.read.mockResolvedValue({});
-  mocks.issue.mockResolvedValue({ id, challenge }); mocks.consume.mockResolvedValue(link); mocks.find.mockResolvedValue([link]);
+  mocks.issue.mockResolvedValue({ id, challenge }); mocks.consume.mockResolvedValue({ wallet: link, session: { token: "replacement-secret", expiresAt: new Date(Date.now()+60_000) } }); mocks.find.mockResolvedValue([link]);
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -57,7 +59,7 @@ describe("authenticated Solana wallet linking routes (mocked service/RPC)", () =
     const response = await challengePost(request({ walletAddress }, { host: "evil.example", "x-forwarded-host": "evil.example" }));
     expect(response.status).toBe(201); expect(await response.json()).toEqual({ id, challenge });
     expect(mocks.issue).toHaveBeenCalledWith({ authentication: { userId: "user-1", sessionToken: "current-session" },
-      configuration: { origin, chainId: "solana:localnet", genesisHash }, walletAddress });
+      configuration: { origin, chainId: "solana:localnet", genesisHash }, walletAddress, password });
     expect(mocks.read.mock.invocationCallOrder[0]).toBeLessThan(mocks.issue.mock.invocationCallOrder[0]!);
     expect(mocks.rate).toHaveBeenCalledTimes(2);
     expect(response.headers.get("cache-control")).toContain("private, no-store");
@@ -70,6 +72,9 @@ describe("authenticated Solana wallet linking routes (mocked service/RPC)", () =
       configuration: { origin, chainId: "solana:localnet", genesisHash } });
     const json = await response.json(); expect(json.wallet.walletAddress).toBe(walletAddress);
     expect(json.wallet).not.toHaveProperty("userId"); expect(json).not.toHaveProperty("balance");
+    expect(JSON.stringify(json)).not.toContain("replacement-secret");
+    expect(response.headers.get("set-cookie")).toContain("goosey_session=replacement-secret");
+    expect(response.headers.get("set-cookie")).toContain("HttpOnly");
   });
   it("GET scopes own links to configured genesis and never runs issuance or live RPC", async () => {
     const response = await GET(request()); expect(response.status).toBe(200);
@@ -142,5 +147,21 @@ describe("authenticated Solana wallet linking routes (mocked service/RPC)", () =
     mocks.issue.mockRejectedValue(new Error("secret database URL"));
     const response = await challengePost(request({ walletAddress })); expect(response.status).toBe(500);
     expect(await response.text()).not.toContain("secret database URL");
+  });
+  it("requires bounded password input before issuing a challenge",async()=>{
+    for(const password of [undefined,"", "x".repeat(257),42]) {
+      expect((await challengePost(request({walletAddress,password}))).status).toBe(400);
+    }
+    expect(mocks.issue).not.toHaveBeenCalled();
+  });
+  it("returns a sanitized reauthentication error without replacing the cookie",async()=>{
+    mocks.issue.mockRejectedValue(new WalletLinkError("REAUTHENTICATION_REQUIRED","private password detail"));
+    const response=await challengePost(request({walletAddress}));expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({error:{code:"REAUTHENTICATION_REQUIRED"}});
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+  it("does not set a replacement cookie when verification/rotation fails",async()=>{
+    mocks.consume.mockRejectedValue(new Error("rotation failed"));
+    const response=await verifyPost(request(validBody()));expect(response.status).toBe(500);expect(response.headers.get("set-cookie")).toBeNull();
   });
 });

@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "@prisma/client";
 
-import { INTERACTIVE_ROLES, requiresEmailVerification } from "@/lib/auth";
+import { createSession, INTERACTIVE_ROLES, requiresEmailVerification, verifyPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isPrismaErrorCode } from "@/lib/prisma-errors";
-import { constantTimeEqual, sha256 } from "@/lib/security";
+import { constantTimeEqual, isValidPassword, sha256 } from "@/lib/security";
 import { runSerializableTransaction, type TransactionRunner } from "@/lib/serializable-transaction";
 import {
   createWalletChallenge,
@@ -15,7 +15,9 @@ import {
 } from "@/lib/solana/wallet-challenge";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 
-const LINK_PURPOSE = "LINK_WALLET";
+// Only challenges issued AFTER explicit credential verification satisfy this
+// purpose. Pre-upgrade LINK_WALLET rows cannot be upgraded by session rotation.
+const LINK_PURPOSE = "LINK_WALLET_REAUTH_V1";
 const MAX_SESSION_TOKEN_LENGTH = 512;
 
 export type WalletLinkConfiguration = Readonly<{
@@ -45,6 +47,7 @@ export type LinkedSolanaWallet = Readonly<{
 
 export type WalletLinkErrorCode =
   | "AUTHENTICATION_REQUIRED"
+  | "REAUTHENTICATION_REQUIRED"
   | "EMAIL_VERIFICATION_REQUIRED"
   | "INVALID_CHALLENGE"
   | "CHALLENGE_EXPIRED"
@@ -181,33 +184,48 @@ function challengeMatchesRecord(
   }
 }
 
-/** Persist a short-lived ownership challenge for one current Goosey session.
+/** Reverify the current password, then persist a five-minute ownership challenge
+ * for the ORIGINAL authenticated session. Its new purpose is the durable proof
+ * this issuance used credential reauthentication, not merely a fresh cookie.
  * The caller supplies trusted deployment configuration, never request headers. */
 export async function issueWalletLinkChallenge(
   input: {
     authentication: WalletLinkAuthentication;
     configuration: WalletLinkConfiguration;
     walletAddress: string;
+    password: string;
     now?: Date;
   },
   client: TransactionRunner = db,
 ): Promise<IssuedWalletLinkChallenge> {
+  const authentication = { ...input.authentication }, configuration = { ...input.configuration };
+  const walletAddress = input.walletAddress, password = input.password;
+  const tokenHash = sessionTokenHash(authentication);
+  if (typeof password !== "string" || !isValidPassword(password)) throw new WalletLinkError("REAUTHENTICATION_REQUIRED", "Current password required.");
+  const credential = await runSerializableTransaction(client, async tx => {
+    await requireSession(tx, authentication, tokenHash, input.now ?? new Date());
+    return tx.user.findUniqueOrThrow({ where: { id: authentication.userId }, select: { passwordHash: true } });
+  });
+  // bcrypt stays outside the serializable transaction, like login. Re-read the
+  // exact verified hash below to close the concurrent credential-change race.
+  if (!await verifyPassword(password, credential.passwordHash)) throw new WalletLinkError("REAUTHENTICATION_REQUIRED", "Current password required.");
   const now = input.now ?? new Date();
   const challenge = createWalletChallenge({
-    ...input.configuration,
-    walletAddress: input.walletAddress,
+    ...configuration,
+    walletAddress,
     now,
   });
   const id = randomUUID();
-  const tokenHash = sessionTokenHash(input.authentication);
 
   try {
     return await runSerializableTransaction(client, async (tx) => {
-      const session = await requireSession(tx, input.authentication, tokenHash, now);
+      const session = await requireSession(tx, authentication, tokenHash, now);
+      const current = await tx.user.findFirst({ where: { id: authentication.userId, passwordHash: credential.passwordHash }, select: { id: true } });
+      if (!current) throw new WalletLinkError("REAUTHENTICATION_REQUIRED", "Credentials changed; authenticate again.");
       await tx.solanaWalletLinkChallenge.create({
         data: {
           id,
-          userId: input.authentication.userId,
+          userId: authentication.userId,
           sessionId: session.id,
           purpose: LINK_PURPOSE,
           origin: challenge.uri,
@@ -232,9 +250,12 @@ export async function issueWalletLinkChallenge(
   }
 }
 
-/** Verify exact signed bytes, consume the session-bound challenge, and create
- * the off-chain account association in one transaction. This does not grant
- * feathers or authorize any Solana or Goosey exchange transaction. */
+/** Verify exact signed bytes, consume the reauthenticated session-bound challenge,
+ * create the association and replace/revoke the session in ONE transaction.
+ * The route must set the replacement cookie only after commit, never serialize
+ * its token into JSON. Lost responses require sign-in and reading the existing
+ * link, not replaying the consumed challenge. No feather grant or transaction
+ * authorization occurs here; replacement session issuance is NOT reauth proof. */
 export async function consumeWalletLinkChallenge(
   input: {
     authentication: WalletLinkAuthentication;
@@ -246,7 +267,7 @@ export async function consumeWalletLinkChallenge(
     now?: Date;
   },
   client: TransactionRunner = db,
-): Promise<LinkedSolanaWallet> {
+): Promise<{ wallet: LinkedSolanaWallet; session: Awaited<ReturnType<typeof createSession>> }> {
   const now = input.now ?? new Date();
   const tokenHash = sessionTokenHash(input.authentication);
 
@@ -303,7 +324,7 @@ export async function consumeWalletLinkChallenge(
         throw new WalletLinkError("CHALLENGE_ALREADY_USED", "Wallet challenge has already been used.");
       }
 
-      return tx.solanaWalletLink.create({
+      const wallet = await tx.solanaWalletLink.create({
         data: {
           userId: input.authentication.userId,
           chainId: stored.chainId,
@@ -313,6 +334,13 @@ export async function consumeWalletLinkChallenge(
         },
         select: walletLinkSelect,
       });
+      const old = await tx.session.findUniqueOrThrow({ where: { id: session.id }, select: { userAgent: true, ipHash: true } });
+      const replacement = await createSession(tx, input.authentication.userId, old);
+      const revoked = await tx.session.deleteMany({ where: { id: session.id, tokenHash, userId: input.authentication.userId } });
+      if (revoked.count !== 1) throw new WalletLinkError("AUTHENTICATION_REQUIRED", "Session changed during linking.");
+      // sessionId on challenge is intentionally NOT a FK: retain its original
+      // binding and consumed tombstone after revoking the old session.
+      return { wallet, session: replacement };
     });
   } catch (error) {
     if (isPrismaErrorCode(error, "P2002")) {
