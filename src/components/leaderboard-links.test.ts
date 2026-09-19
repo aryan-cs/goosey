@@ -24,6 +24,11 @@ describe("leaderboard profile navigation", () => {
     expect(html).toContain("1,426");
     expect(html).not.toContain("available");
   });
+  it("shows podium balances with only the feather icon and number", () => {
+    const html = renderToStaticMarkup(React.createElement(LeaderboardPodium, { users: [user] }));
+    expect(html).toContain("1,000");
+    expect(html).not.toContain("Total ·");
+  });
   it("gives every podium place a stable leaderboard anchor regardless of profile visibility", () => {
     const users = [
       { ...user, id: "first", rank: 1, profilePublic: true },
