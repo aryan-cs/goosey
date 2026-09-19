@@ -357,7 +357,7 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .reading-page { max-width: 780px; }.reading-page > section { margin-bottom: 14px; padding: var(--space-panel); background: var(--surface-raised); border: 0; border-radius: var(--radius-lg); }.reading-page h2 { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; font: 700 20px var(--font-display); }.reading-page h2 svg { width: 20px; height: 20px; margin-top: .1em; color: var(--feather-700); }.reading-page section p { margin: 0; color: var(--ink-secondary); }.auth-page { min-height: 100svh; display: grid; place-items: start center; align-content: start; position: relative; overflow: hidden; padding: 116px 16px 48px; }.auth-texture { position: absolute; inset: 0; opacity: .6; background-image: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); background-size: 36px 36px; mask-image: radial-gradient(circle at center, black, transparent 70%); pointer-events: none; }.auth-card { position: relative; z-index: 1; }.verification-card { max-width: 500px; }.verification-state { min-height: 260px; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; }.verification-state > svg { width: 34px; height: 34px; color: var(--feather-700); }.verification-state .verification-success-icon { color: var(--yes); }.verification-state h1 { margin: 2px 0 0; }.verification-state p { margin-top: 0; }
 
 .market-card { min-width: 0; padding: 22px; background: var(--surface); border: 0; border-radius: var(--radius-lg); box-shadow: none; display: flex; flex-direction: column; animation: surface-enter var(--motion-slow) var(--ease-emphasized) backwards; transition: background-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-emphasized); }
-.market-card:hover { transform: none; box-shadow: none; }
+.market-card:focus-within { background: var(--surface-sunken); }
 .market-card:active { transform: translateY(0) scale(.995); }
 .market-card-featured { padding: 22px; border-radius: var(--radius-lg); }
 .market-card-topline, .status-row, .market-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -431,8 +431,9 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .outcome-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; padding: 4px; background: var(--surface-sunken); border-radius: var(--radius-md); }
 .outcome-actions a { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 14px; color: var(--yes); background: var(--surface); border: 1px solid transparent; border-radius: calc(var(--radius-md) - 4px); box-shadow: none; font-size: 13px; }
 .outcome-actions a:nth-child(2) { color: var(--no); background: var(--surface); }
-.outcome-actions a:hover { border-color: transparent; }
-.outcome-actions a:hover { transform: none; box-shadow: none; }.outcome-actions a:active { transform: translateY(0) scale(.98); box-shadow: none; }
+.outcome-actions a:focus-visible { background: var(--yes-soft); }
+.outcome-actions a:nth-child(2):focus-visible { background: var(--no-soft); }
+.outcome-actions a:active { transform: translateY(0) scale(.98); box-shadow: none; }
 .market-card-footer { justify-content: flex-start; margin-top: 11px; color: var(--ink-muted); font-size: 12px; }
 .market-card-footer span { display: flex; align-items: center; gap: 5px; }
 .market-card-footer svg { width: 14px; height: 14px; }
@@ -708,6 +709,10 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .search-error p { margin: 0; color: var(--ink-muted); }
 
 @media (hover: hover) and (pointer: fine) {
+  .market-card:hover { background: var(--surface-sunken); transform: translateY(-2px); }
+  .outcome-actions a:hover { background: var(--yes-soft); transform: translateY(-1px); }
+  .outcome-actions a:nth-child(2):hover { background: var(--no-soft); }
+  .market-list-row:hover { transform: translateY(-2px); }
   .search-clear:hover { color: var(--ink); background: var(--surface-sunken); transform: rotate(5deg) scale(1.04); }
   .search-result-row:hover { background: var(--surface-raised); transform: translateX(3px); }
 }
@@ -725,6 +730,7 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-delay: 0s !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-delay: 0s !important; transition-duration: .01ms !important; }
+  .market-card:hover, .market-list-row:hover, .outcome-actions a:hover { transform: none; }
 }
 
 .position-list > .muted-copy { margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); line-height: 1.5; }
