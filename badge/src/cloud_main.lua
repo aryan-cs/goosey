@@ -1,10 +1,10 @@
-local cloud={markets={},capturedAt=""}
+local cloud={markets={},capturedAt="",rangeStart=nil,rangeEnd=nil}
 __CLOUD_READER__
 local readDetailFrame=require("detail_reader")
 local trade,qr,uiRoot,pendingCloud,refreshSlug
-local C={bg=0xc5d99b,panel=0x91ad65,text=0x1c3524,muted=0x4f6b3e}
+local C={bg=0xc5d99b,panel=0x91ad65,text=0x1c3524,muted=0x4f6b3e,up=0x267a35,down=0xa23d2b}
 local page,selected,side,setting="list",1,1,1
-local labels,header,status,stamp,mark,chart,track,dot,midline
+local labels,header,status,stamp,mark,chart,track,dot,midline,listCharts
 local lastRead,lastRx,lastGC=0,nil,0
 local detail,detailGeneration
 local initialized=false
@@ -16,11 +16,39 @@ local function wrap(s,limit)
   end
   return out..line
 end
-local function text(i,s,x,y,w,size,align)
+local function text(i,s,x,y,w,size,align,color)
   local l=labels[i]
   l:set_pos(x,y);l:set_size(w,240-y)
-  l:style({text_font=size,text_color=C.text,text_align=align or "left"})
+  l:style({text_font=size,text_color=color or C.text,text_align=align or "left"})
   l:set_text(s)
+end
+local function accountSummary(user,balance)
+  if #user>11 then user=user:sub(1,10).."~" end
+  return user.." · "..balance
+end
+local function compactClose(value)
+  return value:gsub(" UTC$","Z")
+end
+local function drawListChart(slot,item,y)
+  local line=listCharts[slot]
+  local h=item.history or {}
+  if #h<2 then return end
+  local low,high=100,0
+  for j=1,#h do low=math.min(low,h[j][1]);high=math.max(high,h[j][1]) end
+  local span=math.min(100,math.max(10,high-low+4))
+  local domainLow=math.max(0,math.min(100-span,(low+high-span)/2))
+  local domainHigh=domainLow+span
+  local first=cloud.rangeStart or h[1][2]
+  local last=cloud.rangeEnd or h[#h][2]
+  if last<=first then return end
+  local pts={}
+  for j=1,#h do
+    local x=math.floor(math.max(0,math.min(1,(h[j][2]-first)/(last-first)))*58)
+    pts[#pts+1]={x,math.floor((domainHigh-h[j][1])/span*28)}
+  end
+  line:set_points(pts);line:set_pos(186,y+30)
+  line:style({line_color=(item.changeBps or 0)<0 and C.down or C.up,line_width=2})
+  line:hidden(false)
 end
 local function focus(x,y,w,h)
   mark:set_pos(x,y);mark:set_size(w,h);mark:hidden(false)
@@ -48,11 +76,11 @@ local function refresh(initial)
       local generation=badge.fs.read("appdata/market_generation.txt")
       if not generation or not generation:match("^%d+$") or generation==cloud.generation then return false end
       refreshSlug=cloud.markets[selected] and cloud.markets[selected].slug
-      cloud={markets={},capturedAt=""}
+      cloud={markets={},capturedAt="",rangeStart=nil,rangeEnd=nil}
       return true
     end
     local data=badge.fs.read("appdata/market_snapshot.txt")
-    if type(data)=="string" and cloud.generation and data:match("^GS1\t(%d+)\t")==cloud.generation then return false end
+    if type(data)=="string" and cloud.generation and data:match("^GS[12]\t(%d+)\t")==cloud.generation then return false end
     pendingCloud=readCloudFrame(data,true)
     return false
   end
@@ -71,14 +99,18 @@ end
 local function render()
   for i=1,#labels do labels[i]:set_text("") end
   mark:hidden(true);chart:hidden(true);track:hidden(true);dot:hidden(true);midline:hidden(true)
+  for i=1,#listCharts do listCharts[i]:hidden(true) end
   if qr then qr:hidden(true) end
+  header:set_pos(10,7);header:set_size(78,22)
+  status:set_pos(88,7);status:set_size(222,18)
   header:set_text(({list="Markets",detail="Market",settings="Settings",link="Account"})[page])
   status:set_text(lastRx and badge.sys.ms()-lastRx<45000 and "USB updated" or "Saved snapshot")
   stamp:set_text(cloud.capturedAt)
   if trade then
     local user,balance,offline=trade.header()
-    if page=="link" and offline then header:set_text(user);status:set_text(balance);stamp:set_text("")
-    else status:set_text(user);stamp:set_text(balance) end
+    if page=="link" and offline then header:set_size(125,22);status:set_pos(135,1);status:set_size(175,17);header:set_text(user);status:set_text(balance);stamp:set_text("")
+    elseif offline then status:set_text(user);stamp:set_text("")
+    else status:set_text(accountSummary(user,balance));stamp:set_text("") end
   end
   if page=="link" and trade.pairing_challenge() then header:set_text("Sign in");status:set_text("");stamp:set_text("") end
   local m=cloud.markets[selected]
@@ -86,15 +118,21 @@ local function render()
     text(1,"Loading markets",10,70,300,20);return
   end
   if page=="list" then
-    local first=math.floor((selected-1)/3)*3+1
-    for row=0,2 do
+    local first=math.floor((selected-1)/2)*2+1
+    for row=0,1 do
       local i=first+row
       local item=cloud.markets[i]
       if item then
-        local y=40+row*65
-        text(row+1,wrap(item.title,29),18,y,239,14)
-        text(row+4,string.format("%.0f%%",item.probability),265,y+8,44,14,"right")
-        if selected==i then focus(7,y-4,307,61) end
+        local y=40+row*98
+        local base=row*5
+        text(base+1,string.upper(item.category or "Market"),15,y+5,168,14)
+        text(base+2,wrap(item.shortTitle or item.title,24),15,y+24,166,14)
+        text(base+3,"Vol "..item.volume.."  |  "..compactClose(item.closes),15,y+70,226,14)
+        text(base+4,string.format("%.0f%%",item.probability),250,y+7,60,22,"right")
+        local change=item.changeBps and item.changeBps/100 or nil
+        text(base+5,change and string.format("%+.0f pts",change) or "-- pts",242,y+39,68,14,"right",change and (change<0 and C.down or C.up) or C.muted)
+        drawListChart(row+1,item,y)
+        if selected==i then focus(5,y-3,310,96) end
       end
     end
   elseif page=="detail" then
@@ -157,16 +195,18 @@ function on_enter(root)
     b:style({bg_color=color,border_width=0,pad_all=0,radius=0});return b
   end
   box(0,0,320,240,C.bg);box(10,34,300,1,C.panel)
-  mark=box(7,47,307,58,C.panel);mark:style({border_width=1,border_color=C.text,radius=3})
-  header=badge.ui.label(root,"");header:set_pos(10,7);header:set_size(125,22)
+  mark=box(5,37,310,96,C.panel);mark:style({border_width=1,border_color=C.text,radius=3})
+  header=badge.ui.label(root,"");header:set_pos(10,7);header:set_size(78,22)
   header:style({text_font=18,text_color=C.text})
-  status=badge.ui.label(root,"");status:set_pos(135,1);status:set_size(175,17)
+  status=badge.ui.label(root,"");status:set_pos(88,7);status:set_size(222,18)
   status:style({text_font=14,text_color=C.text,text_align="right"})
   stamp=badge.ui.label(root,"");stamp:set_pos(149,16);stamp:set_size(161,17)
   stamp:style({text_font=14,text_color=C.text,text_align="right"})
   track=box(48,86,140,97,C.panel);midline=box(48,134,140,1,C.muted);dot=box(0,0,3,3,C.text)
   chart=badge.ui.line(root,{{0,0},{1,0}});chart:set_pos(52,90)
   chart:style({line_color=C.text,line_width=2})
+  listCharts={}
+  for i=1,2 do listCharts[i]=badge.ui.line(root,{{0,0},{1,0}});listCharts[i]:hidden(true) end
   labels={};for i=1,10 do labels[i]=badge.ui.label(root,"") end
   badge.led.clear();badge.led.show()
   if not trade.name then page="link" end

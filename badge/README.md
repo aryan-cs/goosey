@@ -1,4 +1,4 @@
-# Goosey badge 0.10.0
+# Goosey badge 0.10.2
 
 ## Real accounts and trading over USB
 
@@ -13,7 +13,7 @@ SSL_CERT_FILE=/etc/ssl/cert.pem python3 badge/scripts/build.py --cloud-url https
 SSL_CERT_FILE=/etc/ssl/cert.pem python3 badge/scripts/usb_trading_gateway.py --port /dev/cu.usbmodem1101
 ```
 
-Install **all three Lua files** (`main.lua`, `cloud_reader.lua`, `trade.lua`) and
+Install **all four Lua files** (`main.lua`, `cloud_reader.lua`, `detail_reader.lua`, `trade.lua`) and
 `manifest.cfg` together under `/littlefs/apps/goosey_base/`, retaining the
 repository-logo `icon.bin`. Importing only `goosey.lua` is insufficient for this
 modular release. Exit Goosey to the launcher before uploading, then reload and
@@ -27,7 +27,8 @@ an unconfirmed quote or returns. A confirmed trade waits for a server receipt;
 buttons cannot submit another while that result is uncertain. Start opens
 settings from the market screens. HOME is the firmware app-exit button.
 
-The header shows the linked username and authoritative balance. When offline,
+The header shows the linked username and authoritative balance together as
+`@username · 1000.00 feathers`. When offline,
 the badge can browse the saved public snapshot but cannot submit new trades.
 Keep the gateway running and USB connected. Restart the gateway after unplugging.
 Sharing an app does not provide its recipient an internet connection or account:
@@ -35,8 +36,10 @@ each person must approve their own link and run their own USB gateway. Stock Lua
 has no HTTP client or Socials email API. Wireless relay support is not included.
 
 The gateway checks requests every two seconds, accounts every ten seconds and
-public markets every thirty seconds. Opening a market requests its real four-hour
-history separately, bounded to 32 observations and refreshed every thirty seconds.
+public markets every thirty seconds. The catalog carries a bounded sample of each
+market's real four-hour history for list sparklines. Opening a market requests its
+real four-hour history separately, bounded to 32 observations and refreshed every
+thirty seconds.
 Confirmations take priority over chart downloads. Data is private appdata, excluded
 from native sharing; no history is fabricated. More
 than 16 open markets fails visibly rather than silently truncating the catalog.
@@ -219,3 +222,13 @@ by a build, and the seed does not remove existing markets.
 ### September 19 catalog compatibility (0.10.1)
 
 The USB exporter fetches up to 50 database catalog records, then enforces the existing 16-market Lua memory bound. It omits only the explicitly retired original/first-dance contracts when PAUSED with zero volume and zero traders. Any such contract with activity stays in the snapshot. The verified production snapshot contains 14 markets, including the new independent dances. A larger remaining catalog still fails explicitly rather than silently truncating. No change to wallet data, server rules, or authentication; this release has not been flashed or memory-tested on hardware.
+
+### Compact cloud market cards (0.10.2)
+
+The badge Markets screen shows two legible cards at a time with category, wrapped
+title, real four-hour sparkline, whole-percent probability, rounded last-change
+points, actual volume and UTC close time. Detail charts retain their real selected-
+market history and place percentage labels on the left. The linked account heading
+uses `@username · amount feathers`; trade quote and confirmation amounts retain
+their exact three-decimal precision. GS2 snapshot frames carry the additional list
+metadata and remain able to read existing GS1 frames during an upgrade.

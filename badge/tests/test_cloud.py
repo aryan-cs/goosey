@@ -39,7 +39,14 @@ assert reconnecting.y==110 and reconnecting.styles['text_align']=='center'
 assert '765.43' not in g.visible() and '@old_local' not in g.visible()
 g.files['appdata/account.txt']=f'GA1\t1\t{challenge}\tREADY\tbadge_test\t1000000\tEND\n'
 load(source,100)
-has('@badge_test');press('A');has('Markets');snapshot('cloud-list')
+has('@badge_test · 1000.00 feathers');press('A');has('Markets')
+first=source['markets'][0]
+has(first['category'].upper());has('Vol '+first['volume']);has(first['closes'].replace(' UTC','Z'))
+visible_lines=[w for w in g.widgets.values() if not w.hide and w.kind=='line']
+assert len(visible_lines)==2
+selected_box=next(w for w in g.widgets.values() if w.kind=='box' and not w.hide and w.styles['border_width']==1)
+assert (selected_box.x,selected_box.y,selected_box.w,selected_box.h)==(5,37,310,96)
+snapshot('cloud-list')
 for index,market in enumerate(source['markets']):
     press('A');has('Market');has(f"{market['probability']:.0f}%");has('Loading 4H')
     assert g.files['appdata/detail_request.txt']==f"GD1\t{market['slug']}\n"

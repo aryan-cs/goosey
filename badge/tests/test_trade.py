@@ -17,7 +17,7 @@ account(1);g.fresh();has('Reconnecting...');assert 'Waiting for connection' not 
 reconnecting=next(w for w in g.widgets.values() if w.text=='Reconnecting...')
 assert reconnecting.y==110 and reconnecting.styles['text_align']=='center'
 assert lua.eval('require("trade").pairing_challenge()') is None;snapshot('trade-link')
-account(2);tick(2000);has('Account Linked');has('@badge_test');has('1000.000');snapshot('trade-account-linked')
+account(2);tick(2000);has('Account Linked');has('@badge_test');has('1000.00 feathers');assert 'Balance ' not in g.visible();snapshot('trade-account-linked')
 press('A','A','A');has('BUY YES');press('UP');has('x2');snapshot('trade-amount')
 press('A');has('Getting a live quote');assert '\tQUOTE\t' in g.files['appdata/request.txt']
 response('QUOTE');tick(4000);has('Pay 50.001');snapshot('trade-review')

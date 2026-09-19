@@ -17,6 +17,9 @@ local function money(s)
   local n=tonumber(s) or 0
   return string.format("%d.%03d",math.floor(n/1000),n%1000)
 end
+local function balanceMoney(s)
+  return string.format("%.2f",(tonumber(s) or 0)/1000)
+end
 local function fresh()
   return T.name and lastRx and badge.sys.ms()-lastRx<35000
 end
@@ -37,7 +40,7 @@ function T.init()
   else request=nil;T.phase="account";save("request.txt","") end
 end
 function T.header()
-  if fresh() then return "@"..T.name,money(T.balance),false end
+  if fresh() then return "@"..T.name,balanceMoney(T.balance).." feathers",false end
   return "Account offline","USB required",true
 end
 function T.open(slug,side,title)
@@ -116,7 +119,7 @@ function T.draw(text,wrap,hasQR)
   if T.phase=="account" and fresh() then
     text(1,"Account Linked",10,55,300,22)
     text(2,"@"..T.name,10,100,300,20)
-    text(3,"Balance "..money(T.balance),10,138,300,18)
+    text(3,balanceMoney(T.balance).." feathers",10,138,300,18)
     text(4,"A: continue   B: markets",10,205,300,14)
   elseif T.phase=="account" then
     if hasQR then
