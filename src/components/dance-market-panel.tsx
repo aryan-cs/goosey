@@ -25,6 +25,7 @@ export interface DanceMarketOption {
 
 interface DanceMarketPanelProps {
   title: string;
+  independent?: boolean;
   markets: DanceMarketOption[];
   signedIn: boolean;
   balanceMilli?: string;
@@ -32,7 +33,7 @@ interface DanceMarketPanelProps {
   initialAction?: "BUY" | "SELL";
 }
 
-export function DanceMarketPanel({ title, markets, signedIn, balanceMilli, initialSlug, initialAction = "BUY" }: DanceMarketPanelProps) {
+export function DanceMarketPanel({ title, independent = false, markets, signedIn, balanceMilli, initialSlug, initialAction = "BUY" }: DanceMarketPanelProps) {
   const pathname = usePathname();
   const [selection, setSelection] = useState({ slug: initialSlug ?? markets[0]?.slug, action: initialAction });
   const ticket = useRef<HTMLDivElement>(null);
@@ -55,7 +56,7 @@ export function DanceMarketPanel({ title, markets, signedIn, balanceMilli, initi
     <MarketActivityRefresh />
     <header className={styles.header}>
       <span className="eyebrow">Market options</span>
-      <h1>{title}</h1>
+      <h1>{title}</h1>{independent && <p>Each dance is a separate YES/NO market. More than one can win, and later dances count.</p>}
     </header>
     <div className={styles.layout}>
       <div className={styles.main}>
@@ -83,7 +84,7 @@ export function DanceMarketPanel({ title, markets, signedIn, balanceMilli, initi
         <section className={styles.rules} aria-labelledby="dance-rules-heading">
           <span className="eyebrow">How it is decided</span>
           <h2 id="dance-rules-heading">Resolution rules</h2>
-          {selected && <><details className={styles.ruleDetails}><summary>{selected.label}: full resolution rules</summary><p className={styles.ruleText}>{selected.rules}</p></details><Link className={styles.detailLink} href={`/markets/${encodeURIComponent(selected.slug)}#discussion-heading`}>View {selected.label} history and discussion</Link></>}
+          {selected && <><details className={styles.ruleDetails}><summary>{selected.label}: full resolution rules</summary><p className={styles.ruleText}>{selected.rules}</p></details><Link className={styles.detailLink} href={`/markets/${encodeURIComponent(selected.slug)}?details=1#discussion-heading`}>View {selected.label} history and discussion</Link></>}
         </section>
       </div>
       {selected && <div ref={ticket} className={styles.ticket} tabIndex={-1} aria-label={`Trade ${selected.label}`}>

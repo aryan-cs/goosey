@@ -103,12 +103,21 @@ function T.button(button)
   end
   return false
 end
-function T.draw(text,wrap)
-  if T.phase=="account" then
-    text(1,"Link your badge",10,47,300,20)
-    text(2,challenge and challenge:sub(1,8):upper() or "Open USB gateway",10,82,300,24)
-    text(3,wrap("Open the link on your computer and approve this code once.",33),10,124,300,16)
-    text(4,"getgoosey.vercel.app/badge",10,202,300,14)
+function T.pairing_challenge() return T.phase=="account" and not fresh() and challenge or nil end
+function T.draw(text,wrap,hasQR)
+  if T.phase=="account" and fresh() then
+    text(1,"Account linked",10,55,300,22)
+    text(2,"@"..T.name,10,100,300,20)
+    text(3,"Balance "..money(T.balance),10,138,300,18)
+    text(4,"A: continue   B: markets",10,205,300,14)
+  elseif T.phase=="account" then
+    if hasQR then
+      text(1,"Scan to sign in",10,47,300,18,"center")
+      text(2,"Use your phone to link Goosey",10,195,300,14,"center")
+    else
+      text(1,"Preparing sign-in",10,65,300,20,"center")
+      text(2,"Waiting for connection",10,115,300,16,"center")
+    end
   elseif T.phase=="edit" or T.phase=="review" then
     text(1,wrap(T.title or "Market",39),10,42,300,14)
     text(2,T.action.." "..T.side.."  x"..T.qty,10,95,300,22)

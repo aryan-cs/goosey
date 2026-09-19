@@ -7,8 +7,7 @@ def tick(at): g.clock=at;g.on_tick()
 def response(state,qid='c123456789012345678901234',amount='50001',ttl=20,message='Trade complete'):
     rid=g.files['appdata/request.txt'].split('\t')[1]
     g.files['appdata/response.txt']=f'GR1\t{rid}\t{challenge}\t{state}\t{qid}\t{amount}\t0\t{ttl}\t{message}\tEND\n'
-account(1);g.fresh();has('Account offline')
-press('A','A');has('Link your badge');snapshot('trade-link')
+account(1);g.fresh();has('Preparing sign-in');snapshot('trade-link')
 account(2);tick(2000);has('@badge_test');has('1000.000')
 press('A');has('BUY YES');press('UP');has('x2');snapshot('trade-amount')
 press('A');has('Getting a live quote');assert '\tQUOTE\t' in g.files['appdata/request.txt']

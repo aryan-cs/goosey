@@ -1,6 +1,6 @@
 local cloud=__CLOUD__
 __CLOUD_READER__
-local trade
+local trade,qr,uiRoot
 local C={bg=0xc5d99b,panel=0x91ad65,text=0x1c3524,muted=0x4f6b3e}
 local page,selected,side,setting="list",1,1,1
 local labels,header,status,stamp,mark,chart,track,dot,midline
@@ -38,10 +38,12 @@ end
 local function render()
   for i=1,#labels do labels[i]:set_text("") end
   mark:hidden(true);chart:hidden(true);track:hidden(true);dot:hidden(true);midline:hidden(true)
+  if qr then qr:hidden(true) end
   header:set_text(({list="Markets",detail="Market",settings="Settings",link="Trade"})[page])
   status:set_text(lastRx and badge.sys.ms()-lastRx<45000 and "USB updated" or "Saved snapshot")
   stamp:set_text(cloud.capturedAt)
   if trade then local user,balance=trade.header();status:set_text(user);stamp:set_text(balance) end
+  if page=="link" and trade.pairing_challenge() then header:set_text("Sign in");status:set_text("");stamp:set_text("") end
   local m=cloud.markets[selected]
   if page=="list" then
     local first=math.floor((selected-1)/3)*3+1
@@ -82,10 +84,17 @@ local function render()
     focus(7,47+(setting-1)*46,307,39)
     text(5,"USB account and market sync",10,211,300,14)
   else
-    trade.draw(text,wrap)
+    local pair=trade.pairing_challenge()
+    local hasQR=pair and badge.fs.read("appdata/qr_challenge.txt")==pair
+    if hasQR then
+      if not qr then qr=badge.ui.image(uiRoot,"pairing.bin");qr:set_pos(111,82) end
+      qr:hidden(false)
+    end
+    trade.draw(text,wrap,hasQR)
   end
 end
 function on_enter(root)
+  uiRoot=root;qr=nil
   badge.sys.gc_step()
   page,selected,side,setting="list",1,1,1
   lastRead,lastRx,lastGC=0,nil,0
@@ -109,6 +118,7 @@ function on_enter(root)
   chart:style({line_color=C.text,line_width=2})
   labels={};for i=1,10 do labels[i]=badge.ui.label(root,"") end
   badge.led.clear();badge.led.show()
+  if not trade.name then page="link";local m=cloud.markets[selected];trade.open(m.slug,"YES",m.title) end
   initialized=true;render()
 end
 function on_button(button,kind)

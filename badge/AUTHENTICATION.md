@@ -72,3 +72,22 @@ The cloud client uses sandboxed require modules to reduce peak compiler memory.
 This badge's firmware lacks `pcall` despite newer documentation listing it, so
 our Lua does not depend on it. Hardware smoke tests do not establish maximum
 catalog/history capacity, flash endurance or wireless compatibility.
+
+## QR pairing on the connected badge
+
+The USB gateway now generates a small LVGL I1 QR image containing the existing
+public SHA-256 pairing challenge, not a bearer token. The app opens a clean
+sign-in page on startup and displays the website account after a fresh account
+response. The QR is 98×98 at the canonical production origin. The real badge
+screen capture was independently decoded successfully after installation.
+
+Install `qrcode==8.2` in the Python environment used to run the gateway. QR decode
+QA also uses `zxing-cpp==2.3.0` and the existing Pillow dependency. The native
+image is accompanied by a matching private `appdata/qr_challenge.txt` stamp;
+sharing app files does not copy that stamp or activate the sender's pairing QR.
+The installed firmware's `badge.fs.exists` returned false for an existing app
+image, so the UI relies on the stamp written only after successful asset upload.
+
+This QR build still needs the Mac gateway for internet access. QR scanning does
+not add wireless transport to the participant badge. No password is stored on
+or broadcast by the badge. Account activation remains a user action on the phone.
