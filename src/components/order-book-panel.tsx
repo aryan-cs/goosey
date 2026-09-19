@@ -168,12 +168,18 @@ export function OrderBookPanel({ marketSlug, marketTitle, payoutMilli, feeBps, s
         headers: { "Content-Type": "application/json", "Idempotency-Key": attempt.key },
         body: attempt.body,
       });
-      const body = await response.json().catch(() => ({})) as { accepted?: boolean; order?: PrivateOrder; reason?: string; error?: { message?: string } };
+      const body = await response.json().catch(() => ({})) as { accepted?: boolean; pending?: boolean; order?: PrivateOrder; reason?: string; error?: { message?: string } };
       if (response.status === 422 && body.accepted === false) {
         // A confirmed no-fill rejection completes this attempt. Clicking again
         // evaluates current liquidity instead of replaying the old rejection.
         placementAttempt.current = null;
         throw new Error(orderRejectionMessage(body.reason ?? ""));
+      }
+      if (response.ok && body.accepted === true && body.pending === true) {
+        setMessage("Order accepted and awaiting final confirmation.");
+        placementAttempt.current = null;
+        router.refresh();
+        return;
       }
       if (!response.ok || body.accepted !== true || !body.order) throw new Error(body.error?.message ?? "The order could not be confirmed. Retry to check the same request.");
       setMessage(orderPlacementMessage(body.order));

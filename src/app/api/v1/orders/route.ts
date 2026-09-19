@@ -5,6 +5,7 @@ import { readJsonObject } from "@/lib/http";
 import { cancelAllOrders, placeOrder } from "@/lib/order-exchange";
 import { ApiError, apiErrorResponse, jsonResponse, parseIdempotencyKey, prisma, requireUser } from "@/lib/market-service";
 import { listUserOrders, parseListOrdersQuery } from "@/lib/order-service";
+import { acceptManagedOrder } from "@/lib/solana/managed-order-service";
 
 export const dynamic = "force-dynamic";
 
@@ -50,11 +51,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const user = await requireUser(request, true);
     const market = await prisma.market.findUnique({
       where: { slug: body.marketSlug },
-      select: { id: true },
+      select: { id: true, executionBackend: true },
     });
     if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
     const { marketSlug: _marketSlug, ...order } = body;
     void _marketSlug;
+    if (market.executionBackend === "SOLANA") {
+      const result = await acceptManagedOrder({
+        userId: user.id,
+        marketSlug: body.marketSlug,
+        idempotencyKey,
+        request: order,
+      });
+      return privateNoStore(jsonResponse(result, { status: 202 }));
+    }
     const result = await placeOrder({
       userId: user.id,
       authRequest: request,
