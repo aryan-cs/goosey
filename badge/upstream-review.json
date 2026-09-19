@@ -1,12 +1,11 @@
 {
-  "lastReviewedUpstreamRevision": "3bd08baf3d193829aaf4dbab9bdb9cbddc9684a0",
-  "reviewedAt": "2026-09-19T23:04:38.304640+00:00",
-  "outcome": "Reviewed upstream and repaired obsolete cloud UI regression test; 13-market USB bundle verified on host",
+  "lastReviewedUpstreamRevision": "181239f9a6d3d4ec766365f20c0b3e8efbfeb8e6",
+  "reviewedAt": "2026-09-19T23:43:35.962164+00:00",
+  "outcome": "Reviewed and host-verified teammate four-hour badge charts and durable request sequence; 13-market bundle saved",
   "reviewedChanges": [
-    "Reviewed SQL/Solana execution isolation: badge stays on database-backed catalog; stock Lua has no wallet signer.",
-    "Reviewed incremental market parser, generation marker and 32-point history budget from teammate hardware fixes.",
-    "Updated cloud UI test to use real mailbox framing and fresh simulated account rather than removed embedded snapshot/startup behavior. Tests exercise all market screens, empty/single histories and preserved local saves.",
-    "Leaderboard, web activity and chain wallet UI are web-only; no invented badge endpoints."
+    "Four-hour selected-market history uses bounded separate detail mailbox and actual server history; catalog contains metadata only.",
+    "Reviewed persisted request sequence and restart protection, account/header spacing updates.",
+    "Core web Solana routes and sponsored command foundation do not establish authenticated wireless badge transport; no speculative account or wallet integration."
   ],
-  "integrationStatus": "Cloud, trade, snapshot, reader, gateway and wireless host tests pass; layout inspected. Only /dev/cu.usbmodem1101 is connected. Wireless worktree has in-progress native-headroom edits, preserved untouched. Known native BLE memory failure remains; no repeated crash, no physical two-device proof or authenticated wireless channel. No live data changes, orders or hardware installation this review."
+  "integrationStatus": "Cloud/trade, snapshot (9), gateway (5), wireless (7), detail/market readers, legacy app and sync tests pass; Game Boy layout inspected. One serial badge remains connected. Native BLE memory blocker and lack of second-device proof unchanged; dirty wireless investigation files preserved. No hardware or production mutations."
 }
