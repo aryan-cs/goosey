@@ -28,10 +28,9 @@ test("probability inspection matches persisted history and resets cleanly", asyn
   await expect(page.locator(".probability-chart figcaption .eyebrow")).toHaveText("Held price");
   const heldTimestamp = await tooltip.locator("time").getAttribute("datetime");
   expect(Date.parse(heldTimestamp!)).toBeGreaterThan(Date.parse(last.createdAt));
-  // Moving left from the display-only endpoint reaches the actual observation.
+  // Keyboard inspection moves through time, including gaps without observations.
   await slider.press("ArrowLeft");
-  await expect(tooltip.locator("time")).toHaveAttribute("datetime", new Date(last.createdAt).toISOString());
-  await expect(page.locator(".probability-chart figcaption .eyebrow")).toHaveText("Historical probability");
+  expect(Date.parse((await tooltip.locator("time").getAttribute("datetime"))!)).toBe(Date.parse(heldTimestamp!) - 600_000);
   await expect(slider).toHaveAttribute("aria-valuetext", new RegExp(label.replace(".", "\\.")));
   await slider.press("Escape");
   await expect(tooltip).toBeHidden();
@@ -268,14 +267,45 @@ test("held price advances ten minutes without creating another observation", asy
   await expect(tooltip.locator("b")).toHaveText(price);
   await expect(figure.locator("figcaption .eyebrow")).toHaveText("Held price");
   expect(await chartGeometry(figure)).toEqual(original);
-  // An opening-price hold can sit between the latest persisted observation and now.
-  for (let step = 0; step < 3; step++) {
-    await slider.press("ArrowLeft");
-    if (await tooltip.locator("time").getAttribute("datetime") === new Date(last!.createdAt).toISOString()) break;
-  }
-  await expect(tooltip.locator("time")).toHaveAttribute("datetime", new Date(last!.createdAt).toISOString());
+  await slider.press("ArrowLeft");
+  expect(Math.abs(Date.parse((await tooltip.locator("time").getAttribute("datetime"))!) - (advancedTime - 600_000))).toBeLessThan(1000);
+  await expect(tooltip.locator("b")).toHaveText(price);
   const afterResponse = await request.get(historyUrl);
   expect(afterResponse.ok()).toBeTruthy();
   const after = await afterResponse.json() as typeof before;
   expect(after.snapshots).toEqual(before.snapshots);
+});
+
+
+test("scrubbing a sparse history follows pointer time rather than observation timestamps", async ({ page, isMobile }, testInfo) => {
+  const loaded = page.waitForResponse(response => response.url().includes(`/api/markets/${chartSlug}/history?`) && new URL(response.url()).searchParams.get("range") === "ALL");
+  await page.goto(`/markets/${chartSlug}`);
+  await loaded;
+  const figure = page.locator(".probability-chart");
+  const slider = figure.getByRole("slider");
+  const tooltip = figure.getByRole("tooltip", { includeHidden: true });
+  await slider.scrollIntoViewIfNeeded();
+  await expect(slider).toBeVisible();
+  const box = (await slider.boundingBox())!;
+  const start = Number(await slider.getAttribute("aria-valuemin"));
+  const end = Number(await slider.getAttribute("aria-valuemax"));
+  const original = await chartGeometry(figure);
+  const timestamps: number[] = [];
+  for (const ratio of [0.2, 0.21, 0.22, 0.6, 0.61, 0.62]) {
+    const clientX = box.x + box.width * ratio;
+    if (isMobile) await slider.dispatchEvent("pointermove", { clientX, pointerType: "touch", buttons: 1 });
+    else await page.mouse.move(clientX, box.y + box.height / 2);
+    await expect(tooltip).toBeVisible();
+    const time = Date.parse((await tooltip.locator("time").getAttribute("datetime"))!);
+    expect(Math.abs(time - (start + ratio * (end - start)))).toBeLessThan(1000);
+    timestamps.push(time);
+    expect(await chartGeometry(figure)).toEqual(original);
+  }
+  expect(new Set(timestamps).size).toBe(timestamps.length);
+  await figure.screenshot({ path: `output/playwright/chart-continuous-${testInfo.project.name}.png` });
+  await slider.focus();
+  await slider.press("ArrowLeft");
+  expect(Date.parse((await tooltip.locator("time").getAttribute("datetime"))!)).toBe(timestamps.at(-1)! - 600_000);
+  await slider.press("Escape");
+  await expect(tooltip).toBeHidden();
 });
