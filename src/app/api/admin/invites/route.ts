@@ -1,8 +1,9 @@
+import { assertMutationSession } from "@/lib/mutation-session";
 import { NextRequest, NextResponse } from "next/server";
 import { isPrismaErrorCode } from "@/lib/prisma-errors";
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import { assertAdmin } from "@/lib/admin-service";
+import { assertAdmin, requireActiveAdmin } from "@/lib/admin-service";
 import { readJsonObject } from "@/lib/http";
 import { ApiError, apiErrorResponse, consumeRateLimit, jsonResponse, parseIdempotencyKey, prisma, requireUser } from "@/lib/market-service";
 import { deterministicSecretToken, sha256 } from "@/lib/security";
@@ -41,6 +42,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
+        await assertMutationSession(tx, request, user.id);
+        await requireActiveAdmin(tx, user.id);
         const previous = await tx.registrationInvite.findUnique({ where: { issuanceKey }, select: { ...inviteSelect, requestHash: true } });
         if (previous) {
           if (previous.requestHash !== requestHash) {

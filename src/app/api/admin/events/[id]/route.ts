@@ -17,6 +17,7 @@ export async function PATCH(
     assertAdmin(user);
     const { id } = paramsSchema.parse(await context.params);
     const update = updateEventSchema.parse(await readJsonObject(request));
+    assertAdmin(await requireUser(request, true));
     const result = await updateAdminEvent({ actorUserId: user.id, eventId: id, update });
     return jsonResponse(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

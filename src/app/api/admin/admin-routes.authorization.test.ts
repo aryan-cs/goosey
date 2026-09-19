@@ -1,4 +1,6 @@
+vi.mock("@/lib/mutation-session", () => ({ assertMutationSession: vi.fn() }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assertMutationSession } from "@/lib/mutation-session";
 
 const mocks = vi.hoisted(() => ({
   principal: { id: "user-attacker", role: "USER", status: "ACTIVE" },
@@ -12,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   processSettlementRun: vi.fn(),
   registrationInviteFindMany: vi.fn(),
   transaction: vi.fn(),
+  requireActiveAdmin: vi.fn(),
 }));
 
 vi.mock("@/lib/market-service", () => {
@@ -49,6 +52,7 @@ vi.mock("@/lib/market-service", () => {
 vi.mock("@/lib/admin-service", async () => {
   const { ApiError } = await import("@/lib/market-service");
   return {
+    requireActiveAdmin: mocks.requireActiveAdmin,
     assertAdmin: (user: { role: string; status: string }) => {
       if (user.role !== "ADMIN" || user.status !== "ACTIVE") {
         throw new ApiError(403, "ADMIN_REQUIRED", "An active administrator account is required.");
@@ -76,6 +80,25 @@ vi.mock("@/lib/security", () => ({
   sha256: vi.fn().mockReturnValue("invite-hash"),
 }));
 
+vi.mock("@/lib/event-service", () => ({
+  createAdminEvent: vi.fn(), updateAdminEvent: vi.fn(), attachMarketToEvent: vi.fn(), detachMarketFromEvent: vi.fn(),
+  createEventSchema: { parse: vi.fn() }, updateEventSchema: { parse: vi.fn() }, eventMembershipSchema: { parse: vi.fn() },
+}));
+vi.mock("@/lib/audit-export", () => ({ readAuditExportPage: vi.fn(), serializeAuditCsv: vi.fn() }));
+
+import { POST as resumeMarket } from "./markets/[id]/resume/route";
+import { POST as closeMarket } from "./markets/[id]/close/route";
+import { POST as createEvent } from "./events/route";
+import { PATCH as updateEvent } from "./events/[id]/route";
+import { POST as attachMarket } from "./events/[id]/markets/[marketId]/attach/route";
+import { POST as detachMarket } from "./events/[id]/markets/[marketId]/detach/route";
+import { DELETE as revokeInvite } from "./invites/[id]/route";
+import { PATCH as reviewReport } from "./reports/[id]/route";
+import { PATCH as reviewSuggestion } from "./suggestions/[id]/route";
+import { GET as listReports } from "./reports/route";
+import { GET as listSuggestions } from "./suggestions/route";
+import { GET as listProposals } from "./resolution-proposals/route";
+import { GET as exportAudit } from "./audit-logs/route";
 import { POST as createMarket } from "./markets/route";
 import { POST as pauseMarket } from "./markets/[id]/pause/route";
 import { POST as proposeResolution } from "./markets/[id]/resolve/route";
@@ -98,6 +121,9 @@ const context = { params: Promise.resolve({ id: RESOURCE_ID }) };
 describe("hostile admin route authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.readJsonObject.mockReset();
+    mocks.transaction.mockReset();
+    mocks.requireActiveAdmin.mockReset();
   });
 
   it.each([
@@ -114,9 +140,18 @@ describe("hostile admin route authorization", () => {
       reviewResolution(request("POST"), context),
       createInvite(request("POST")),
       processSettlement(request("POST"), context),
+      resumeMarket(request("POST"), context),
+      closeMarket(request("POST"), context),
+      createEvent(request("POST")),
+      updateEvent(request("PATCH"), context),
+      attachMarket(request("POST"), { params: Promise.resolve({ id: RESOURCE_ID, marketId: RESOURCE_ID }) }),
+      detachMarket(request("POST"), { params: Promise.resolve({ id: RESOURCE_ID, marketId: RESOURCE_ID }) }),
+      revokeInvite(request("DELETE"), context),
+      reviewReport(request("PATCH"), context),
+      reviewSuggestion(request("PATCH"), context),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([403, 403, 403, 403, 403, 403]);
+    expect(responses.map((response) => response.status)).toEqual(Array(15).fill(403));
     expect(mocks.readJsonObject).not.toHaveBeenCalled();
     expect(mocks.createAdminMarket).not.toHaveBeenCalled();
     expect(mocks.transitionAdminMarket).not.toHaveBeenCalled();
@@ -137,10 +172,34 @@ describe("hostile admin route authorization", () => {
     const responses = await Promise.all([
       listInvites(request("GET")),
       getSettlement(request("GET"), context),
+      listReports(request("GET")),
+      listSuggestions(request("GET")),
+      listProposals(request("GET")),
+      exportAudit(request("GET")),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([403, 403]);
+    expect(responses.map((response) => response.status)).toEqual(Array(6).fill(403));
     expect(mocks.registrationInviteFindMany).not.toHaveBeenCalled();
     expect(mocks.getSettlementRun).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { label: "invite issuance", method: "POST", body: { label: "Audited invitation" }, invoke: (incoming: never) => createInvite(incoming) },
+    { label: "invite revocation", method: "DELETE", body: {}, invoke: (incoming: never) => revokeInvite(incoming, context) },
+    { label: "comment moderation", method: "PATCH", body: { action: "HIDE", note: "Moderator explanation" }, invoke: (incoming: never) => reviewReport(incoming, context) },
+    { label: "suggestion review", method: "PATCH", body: { action: "APPROVE", note: "Reviewer explanation" }, invoke: (incoming: never) => reviewSuggestion(incoming, context) },
+  ])("rechecks a revoked administrator inside $label transaction before any resource access", async ({ method, body, invoke }) => {
+    const { ApiError } = await import("@/lib/market-service");
+    mocks.principal = { id: "formerly-admin", role: "ADMIN", status: "ACTIVE" };
+    mocks.readJsonObject.mockResolvedValue(body);
+    const tx = {};
+    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback(tx));
+    mocks.requireActiveAdmin.mockRejectedValue(new ApiError(403, "ADMIN_REQUIRED", "Administrator access was revoked."));
+
+    const response = await invoke(request(method));
+    expect(response.status).toBe(403);
+    expect(assertMutationSession).toHaveBeenCalledWith(tx, expect.anything(), "formerly-admin");
+    expect(mocks.requireActiveAdmin).toHaveBeenCalledWith(tx, "formerly-admin");
+  });
+
 });

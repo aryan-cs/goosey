@@ -16,6 +16,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     assertAdmin(user);
     const idempotencyKey = parseIdempotencyKey(request);
     const event = createEventSchema.parse(await readJsonObject(request));
+    assertAdmin(await requireUser(request, true));
     const result = await createAdminEvent({
       actorUserId: user.id,
       idempotencyKey,

@@ -1,6 +1,7 @@
+import { assertMutationSession } from "@/lib/mutation-session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { assertAdmin } from "@/lib/admin-service";
+import { assertAdmin, requireActiveAdmin } from "@/lib/admin-service";
 import { readJsonObject } from "@/lib/http";
 import { ApiError, apiErrorResponse, consumeRateLimit, jsonResponse, prisma, requireUser } from "@/lib/market-service";
 
@@ -15,6 +16,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { id } = paramsSchema.parse(await context.params);
     const body = bodySchema.parse(await readJsonObject(request));
     const result = await prisma.$transaction(async (tx) => {
+      await assertMutationSession(tx, request, user.id);
+      await requireActiveAdmin(tx, user.id);
       const suggestion = await tx.marketSuggestion.findUnique({ where: { id } });
       if (!suggestion) throw new ApiError(404, "SUGGESTION_NOT_FOUND", "Suggestion not found.");
       const status = body.action === "APPROVE" ? "APPROVED" : "REJECTED";

@@ -1,7 +1,8 @@
+import { assertMutationSession } from "@/lib/mutation-session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { assertAdmin } from "@/lib/admin-service";
+import { assertAdmin, requireActiveAdmin } from "@/lib/admin-service";
 import { ApiError, apiErrorResponse, consumeRateLimit, jsonResponse, prisma, requireUser } from "@/lib/market-service";
 
 const paramsSchema = z.object({ id: z.string().cuid() }).strict();
@@ -13,6 +14,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     await consumeRateLimit(prisma, `admin-invite-revoke:${user.id}`, 60, 60_000);
     const { id } = paramsSchema.parse(await context.params);
     const invite = await prisma.$transaction(async (tx) => {
+      await assertMutationSession(tx, request, user.id);
+      await requireActiveAdmin(tx, user.id);
       const current = await tx.registrationInvite.findUnique({ where: { id } });
       if (!current) throw new ApiError(404, "INVITE_NOT_FOUND", "Invitation not found.");
       if (current.status === "REVOKED") return current;

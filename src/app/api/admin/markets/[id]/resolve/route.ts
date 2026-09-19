@@ -13,6 +13,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const idempotencyKey = parseIdempotencyKey(request);
     const { id } = paramsSchema.parse(await context.params);
     const resolution = resolutionSchema.parse(await readJsonObject(request));
+    assertAdmin(await requireUser(request, true));
     const result = await createResolutionProposal({ actorUserId: user.id, marketId: id, idempotencyKey, resolution });
     return jsonResponse(result, { status: result.replayed ? 200 : 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

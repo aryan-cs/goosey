@@ -1,6 +1,7 @@
+import { assertMutationSession } from "@/lib/mutation-session";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { assertAdmin } from "@/lib/admin-service";
+import { assertAdmin, requireActiveAdmin } from "@/lib/admin-service";
 import { readJsonObject } from "@/lib/http";
 import { ApiError, apiErrorResponse, jsonResponse, prisma, requireUser } from "@/lib/market-service";
 
@@ -12,6 +13,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const user = await requireUser(request, true); assertAdmin(user);
     const { id } = paramsSchema.parse(await context.params); const body = bodySchema.parse(await readJsonObject(request));
     const result = await prisma.$transaction(async (tx) => {
+      await assertMutationSession(tx, request, user.id);
+      await requireActiveAdmin(tx, user.id);
       const report = await tx.commentReport.findUnique({ where: { id }, include: { comment: true } });
       if (!report) throw new ApiError(404, "REPORT_NOT_FOUND", "Report not found.");
       const nextStatus = body.action === "HIDE" ? "ACTIONED" : "DISMISSED";

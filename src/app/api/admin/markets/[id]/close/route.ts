@@ -12,6 +12,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     assertAdmin(user);
     const { id } = paramsSchema.parse(await context.params);
     const { reason, expectedVersion } = lifecycleReasonSchema.parse(await readJsonObject(request));
+    assertAdmin(await requireUser(request, true));
     return jsonResponse(await transitionAdminMarket({ actorUserId: user.id, marketId: id, action: "CLOSE", reason, expectedVersion }), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return apiErrorResponse(error);

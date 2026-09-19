@@ -9,6 +9,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     assertAdmin(user);
     const idempotencyKey = parseIdempotencyKey(request);
     const market = createMarketSchema.parse(await readJsonObject(request));
+    assertAdmin(await requireUser(request, true));
     const result = await createAdminMarket({ actorUserId: user.id, idempotencyKey, market });
     return jsonResponse(result, { status: result.replayed ? 200 : 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

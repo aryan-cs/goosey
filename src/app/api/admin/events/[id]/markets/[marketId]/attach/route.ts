@@ -19,6 +19,7 @@ export async function POST(
     assertAdmin(user);
     const { id, marketId } = paramsSchema.parse(await context.params);
     const { expectedMarketVersion, expectedEventVersion } = eventMembershipSchema.parse(await readJsonObject(request));
+    assertAdmin(await requireUser(request, true));
     const result = await attachMarketToEvent({
       actorUserId: user.id,
       eventId: id,

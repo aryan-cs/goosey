@@ -26,6 +26,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     assertAdmin(user);
     const { id } = paramsSchema.parse(await context.params);
     const { batchSize } = processSchema.parse(await readJsonObject(request));
+    assertAdmin(await requireUser(request, true));
     const result = await processSettlementRun({ actorUserId: user.id, runId: id, batchSize });
     return jsonResponse(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

@@ -14,6 +14,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     assertAdmin(user);
     const { id } = paramsSchema.parse(await context.params);
     const body = bodySchema.parse(await readJsonObject(request));
+    assertAdmin(await requireUser(request, true));
     if (body.action === "APPROVE") {
       await consumeRateLimit(prisma, `admin-resolution-step-up:${user.id}`, 5, 15 * 60_000);
       if (!body.password) throw new ApiError(403, "STEP_UP_REQUIRED", "Re-enter your administrator password to approve settlement.");
