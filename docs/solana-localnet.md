@@ -11,6 +11,26 @@ ELF separately; creation snapshots those exact bytes. Set
 `GOOSEY_SOLANA_PROGRAM_ARTIFACT` optionally selects the actual compiled artifact.
 No personal Solana CLI configuration is read.
 
+## Current development instance (2026-09-19)
+
+The local development app now reads a retained instance at
+`/Users/aryan/.local/share/goosey-localnet-20260919`, RPC port 20999, genesis
+`AjRRXmyGBFhUtVWWp5xYXYKAP4Ha8vyTDRNVrkTVA2DE`. Its pinned compiled artifact is
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
+The development caps are 10,000 feathers per wallet and 10,000,000 feathers across
+the campaign (10,000,000 and 10,000,000,000 base units). Initial authorized,
+minted and supply counters were independently observed as zero through the live
+application `/api/solana/status`. The status is `foundation_verified`, **not**
+on-chain web trading readiness. Browser capability remains explicitly disabled
+pending database and wallet integration. Runtime bindings reside only in ignored
+local environment configuration; neither keys nor ledger files belong in Git.
+
+The isolated operator rehearsal at
+`/private/tmp/goosey-localnet-proof-Qmx0Xp/instance` proved create/start/stop/restart
+with the same genesis and initialization receipt, unchanged zero issuance, and
+occupied-port refusal without disturbing the listener. This is localnet evidence,
+not a devnet deployment or a machine-reboot durability claim.
+
 ## Creation and foreground start
 
 Choose a **new, normalized absolute directory under an existing canonical parent**.
