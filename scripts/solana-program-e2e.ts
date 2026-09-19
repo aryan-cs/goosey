@@ -1,4 +1,4 @@
-/** Real RPC verification of the Goosey foundation (market/escrow not exercised).
+/** Real RPC verification of Goosey issuance and market escrow.
  * Requires a fresh, deployed, uninitialized program on a pinned loopback ledger.
  * GOOSEY_SOLANA_TEST_ADMIN_KEYPAIR must explicitly identify the newly created
  * test upgrade-authority key. Other signers exist only in memory. No key output.
@@ -20,10 +20,14 @@ import {
 import {
   ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS,
   findAssociatedTokenPda, getCreateAssociatedTokenIdempotentInstruction,
-  getMintDecoder, getTokenDecoder,
+  getMintDecoder, getTokenDecoder, getTransferCheckedInstruction,
 } from "@solana-program/token";
-import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";
+import { SYSTEM_PROGRAM_ADDRESS, getCreateAccountInstruction, getTransferSolInstruction } from "@solana-program/system";
 import { buildFeatherTransfer } from "../src/lib/solana/feather-transfer";
+import { buildCreateMarketInstructions, buildRegisterSeatInstruction, buildDepositInstruction, buildWithdrawInstruction } from "../src/lib/solana/escrow-client";
+import { readGooseyEscrow } from "../src/lib/solana/escrow-read";
+import { prepareFeatherTransfer } from "../src/lib/solana/prepare-transfer";
+import { submitSignedFeatherTransfer, type TransferSubmission } from "../src/lib/solana/submit-transfer";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -36,6 +40,7 @@ const keyBytes = (key: Address) => Buffer.from(getAddressEncoder().encode(key));
 const discriminator = (namespace: string, name: string) => createHash("sha256").update(`${namespace}:${name}`).digest().subarray(0, 8);
 function u64(value: bigint) { const bytes = Buffer.alloc(8); bytes.writeBigUInt64LE(value); return bytes; }
 function i64(value: bigint) { const bytes = Buffer.alloc(8); bytes.writeBigInt64LE(value); return bytes; }
+function u16(value: number) { const bytes = Buffer.alloc(2); bytes.writeUInt16LE(value); return bytes; }
 const ro = (key: Address): AccountMeta => ({ address: key, role: AccountRole.READONLY });
 const rw = (key: Address): AccountMeta => ({ address: key, role: AccountRole.WRITABLE });
 const signer = (key: TransactionSigner, writable = true) => ({ address: key.address, role: writable ? AccountRole.WRITABLE_SIGNER : AccountRole.READONLY_SIGNER, signer: key });
@@ -103,22 +108,32 @@ async function main() {
   const expiring = await generateKeyPairSigner();
   const other = await generateKeyPairSigner();
   const receipts: Record<string, unknown>[] = [];
-  async function confirmed(signature: string) {
+  const preparedSubmissions: Record<string, unknown>[] = [];
+  async function confirmed(signature: string, wire?: string) {
     const deadline = Date.now() + 45_000;
+    let lastResend = Date.now();
     while (Date.now() < deadline) {
       const result = await rpc<Context<({ err: unknown; confirmationStatus: string } | null)[]>>("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]);
       if (result.value[0] && ["confirmed", "finalized"].includes(result.value[0].confirmationStatus)) return result.value[0];
+      // A new validator's TPU may not yet be reachable when RPC first becomes
+      // healthy. Retry the identical signed bytes, never a fresh economic intent.
+      if (!result.value[0] && wire && Date.now() - lastResend > 1_000) {
+        await pin();
+        assert.equal(await rpc("sendTransaction", [wire, { encoding: "base64", skipPreflight: true, maxRetries: 5 }]), signature);
+        lastResend = Date.now();
+      }
       await delay(200);
     }
     throw new Error(`Unknown transaction outcome after timeout: ${signature}`);
   }
-  for (const fundee of [admin, issuer, attacker]) {
+  const adminBalance = await rpc<Context<number>>("getBalance", [admin.address, { commitment: "confirmed" }]);
+  if (adminBalance.value < 5_000_000_000) {
     await pin();
-    const signature = await rpc<string>("requestAirdrop", [fundee.address, 1_000_000_000]);
+    const signature = await rpc<string>("requestAirdrop", [admin.address, 5_000_000_000]);
     assert.equal((await confirmed(signature)).err, null);
   }
   let lastBlockhash = "";
-  async function execute(name: string, instructions: readonly Instruction[], expectation: number | RegExp | null = null, watch: readonly Address[] = [config, mint]) {
+  async function execute(name: string, instructions: readonly Instruction[], expectation: number | RegExp | null = null, watch: readonly Address[] = [config, mint], errorIndex = 0, prepared?: Awaited<ReturnType<typeof prepareFeatherTransfer>>) {
     await pin();
     const before = expectation === null ? null : await accounts(watch);
     let latest: Context<{ blockhash: string; lastValidBlockHeight: number }>;
@@ -134,10 +149,38 @@ async function main() {
       (tx) => setTransactionMessageFeePayerSigner(admin, tx),
       (tx) => setTransactionMessageLifetimeUsingBlockhash({ blockhash: blockhash(latest.value.blockhash), lastValidBlockHeight: BigInt(latest.value.lastValidBlockHeight) }, tx),
       (tx) => appendTransactionMessageInstructions(instructions, tx));
-    const signed = await signTransactionMessageWithSigners(message);
+    // A prepared wallet message must be signed unchanged, including its payer
+    // and finalized blockhash lifetime; never replace it with our admin message.
+    const signed = await signTransactionMessageWithSigners(prepared?.message ?? message);
     const signature = getSignatureFromTransaction(signed);
-    assert.equal(await rpc("sendTransaction", [getBase64EncodedWireTransaction(signed), { encoding: "base64", skipPreflight: true, maxRetries: 0 }]), signature);
-    const status = await confirmed(signature);
+    const wire = getBase64EncodedWireTransaction(signed);
+    if (prepared) {
+      const saved: Omit<TransferSubmission, "status">[] = [];
+      const submitted = await submitSignedFeatherTransfer({
+        runtime: { cluster: "localnet", rpcUrl: endpoint.toString(), genesisHash: genesis!, programAddress: PROGRAM },
+        prepared, signed,
+        onPrepared: async receipt => {
+          // Persist in test memory before sending. At this point this unique
+          // signed intent must not have reached the ledger yet.
+          saved.push(receipt);
+          const status = await rpc<Context<(unknown | null)[]>>("getSignatureStatuses", [[receipt.signature], { searchTransactionHistory: true }]);
+          assert.equal(status.value[0], null);
+        },
+      });
+      assert.equal(saved.length, 1);
+      assert.equal(saved[0].signature, signature);
+      assert.equal(saved[0].signedWireBase64, wire);
+      assert.equal(saved[0].lastValidBlockHeight, prepared.lifetime.lastValidBlockHeight);
+      assert.equal(submitted.signature, signature);
+      assert.equal(submitted.signedWireBase64, wire);
+      assert(["submitted", "unknown"].includes(submitted.status));
+      preparedSubmissions.push({ signature, status: submitted.status, persistedBeforeSend: true });
+    } else {
+      assert.equal(await rpc("sendTransaction", [wire, { encoding: "base64", skipPreflight: true, maxRetries: 5 }]), signature);
+    }
+    // Submission status is never treated as chain confirmation; reconcile the
+    // saved signature and only rebroadcast its identical bytes if necessary.
+    const status = await confirmed(signature, wire);
     let transaction: Receipt | null = null;
     for (let i = 0; i < 30; i++) {
       transaction = await rpc("getTransaction", [signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
@@ -151,13 +194,16 @@ async function main() {
     if (expectation === null) assert.equal(transaction.meta.err, null, `${name}: ${JSON.stringify(transaction.meta.err)}\n${logs}`);
     else {
       assert.notEqual(transaction.meta.err, null, `${name}: unexpectedly succeeded`);
-      if (typeof expectation === "number") assert.deepEqual(transaction.meta.err, { InstructionError: [0, { Custom: expectation }] }, `${name}: ${logs}`);
+      if (typeof expectation === "number") assert.deepEqual(transaction.meta.err, { InstructionError: [errorIndex, { Custom: expectation }] }, `${name}: ${logs}`);
       else assert.match(logs, expectation, `${name}: rejection was not for the expected constraint`);
       assert.deepEqual(await accounts(watch), before, `${name}: rejected transaction changed economic/program accounts`);
     }
     receipts.push({ name, signature, slot: transaction.slot, error: transaction.meta.err, feeLamports: transaction.meta.fee });
     console.log(`PASS ${name}: ${signature}`);
   }
+  await execute("fund ephemeral transaction/account payers with local SOL", [issuer, attacker, wallet].map((fundee) =>
+    getTransferSolInstruction({ source: admin, destination: fundee.address, amount: 1_000_000_000n })));
+  // Match the shipping configuration verifier's SHA-256(genesis string) domain.
   const domain = createHash("sha256").update(genesis).digest();
   function instruction(name: string, metas: AccountMeta[], args: Uint8Array = new Uint8Array()): Instruction {
     return { programAddress: PROGRAM, accounts: metas, data: Buffer.concat([discriminator("global", name), args]) };
@@ -244,9 +290,24 @@ async function main() {
   const claimedSnapshot = await accounts([...firstWatch, walletAta]);
   await execute("fresh-signature repeated claim is an economic no-op", [claim(first, wallet, walletAta)]);
   assert.deepEqual(await accounts([...firstWatch, walletAta]), claimedSnapshot);
-  const transfer = await buildFeatherTransfer({ mint, sender: wallet, recipient: recipient.address, payer: admin, amount: 123_456n });
+  const claimSlot = Number(receipts.at(-1)!.slot);
+  const claimFinalityDeadline = Date.now() + 45_000;
+  while (await rpc<number>("getSlot", [{ commitment: "finalized" }]) < claimSlot) {
+    assert(Date.now() < claimFinalityDeadline, "Claim finality gate timed out");
+    await delay(200);
+  }
+  const transfer = await prepareFeatherTransfer({
+    runtime: { cluster: "localnet", rpcUrl: endpoint.toString(), genesisHash: genesis, programAddress: PROGRAM },
+    sender: wallet, recipient: recipient.address, displayAmount: "123.456",
+  });
   assert.equal(transfer.source, walletAta);
-  await execute("application helper transfers actual claimed feathers", transfer.instructions);
+  assert.equal(transfer.mint, mint);
+  assert.equal(transfer.amount, 123_456n);
+  assert.equal(transfer.finalizedBalance, 1_000_000n);
+  assert(transfer.observedSlot >= BigInt(claimSlot));
+  assert.equal(transfer.message.feePayer.address, wallet.address);
+  assert.deepEqual(transfer.message.lifetimeConstraint, transfer.lifetime);
+  await execute("prepare + submit shipping helpers transfer finalized claimed feathers with wallet signature", transfer.message.instructions, null, [], 0, transfer);
   const [from, to] = await accounts([walletAta, transfer.destination]);
   for (const account of [from, to]) assert.equal(account?.owner, TOKEN_PROGRAM_ADDRESS);
   const sourceData = getTokenDecoder().decode(bytes(from));
@@ -261,6 +322,126 @@ async function main() {
   const afterTransfer = await accounts([...firstWatch, walletAta, transfer.destination]);
   await execute("transfer away does not reopen claim capacity", [claim(first, wallet, walletAta)]);
   assert.deepEqual(await accounts([...firstWatch, walletAta, transfer.destination]), afterTransfer);
+
+  // Market and escrow tests precede campaign exhaustion. Every account is created
+  // by real instructions; no account mutation RPC or synthetic seat funding.
+  const marketClose = (await chainTime()) + 600n;
+  const seatsRent = await rpc<number>("getMinimumBalanceForRentExemption", [32_816]);
+  async function marketFixture(id: bigint) {
+    const seats = await generateKeyPairSigner();
+    const [market, bump] = await getProgramDerivedAddress({ programAddress: PROGRAM, seeds: [Buffer.from("market"), keyBytes(config), u64(id)] });
+    const [vault] = await findAssociatedTokenPda({ mint, owner: market, tokenProgram: TOKEN_PROGRAM_ADDRESS });
+    const [locator, locatorBump] = await getProgramDerivedAddress({ programAddress: PROGRAM, seeds: [Buffer.from("seat"), keyBytes(market), keyBytes(wallet.address)] });
+    return { id, seats, market, bump, vault, locator, locatorBump };
+  }
+  type MarketFixture = Awaited<ReturnType<typeof marketFixture>>;
+  function createMarket(item: MarketFixture, authority = admin, payout = 100_000n, fee = 25, closes = marketClose, resolves = marketClose + 60n) {
+    return [getCreateAccountInstruction({ payer: admin, newAccount: item.seats, lamports: BigInt(seatsRent), space: 32_816n, programAddress: PROGRAM }),
+      instruction("create_market", [signer(authority), ro(config), rw(item.market), rw(item.seats.address), ro(mint), rw(item.vault), ro(TOKEN_PROGRAM_ADDRESS), ro(ASSOCIATED_TOKEN_PROGRAM_ADDRESS), ro(SYSTEM_PROGRAM_ADDRESS)],
+        Buffer.concat([u64(item.id), u64(payout), u16(fee), i64(closes), i64(resolves)]))];
+  }
+  const book = await marketFixture(1n);
+  const secondBook = await marketFixture(2n);
+  const marketWatch = [config, mint, book.market, book.seats.address, book.vault, book.locator, walletAta, transfer.destination];
+  await execute("non-admin market creation rolls back seats allocation", createMarket(book, attacker), 2001, marketWatch, 1);
+  await execute("invalid payout rolls back market vault and seats", createMarket(book, admin, 1n), 6008, marketWatch, 1);
+  await execute("excessive market fee rejected atomically", createMarket(book, admin, 100_000n, 10_001), 6008, marketWatch, 1);
+  await execute("past market close rejected atomically", createMarket(book, admin, 100_000n, 25, (await chainTime()) - 1n), 6008, marketWatch, 1);
+  await execute("resolution before close rejected atomically", createMarket(book, admin, 100_000n, 25, marketClose, marketClose - 1n), 6008, marketWatch, 1);
+  for (const item of [book, secondBook]) {
+    const built = await buildCreateMarketInstructions({ programAddress: PROGRAM, marketId: item.id, admin, seats: item.seats,
+      seatsRentLamports: BigInt(seatsRent), payoutMilli: 100_000n, feeBps: 25, closesAt: marketClose, resolvesAt: marketClose + 60n });
+    assert.equal(built.market, item.market);
+    assert.equal(built.vault, item.vault);
+    await execute(`shipping builder creates market ${item.id}, large seats account and PDA ATA vault`, built.instructions);
+  }
+  function register(item: MarketFixture, owner = wallet, enrollmentAddress = first.record) {
+    return instruction("register_seat", [signer(owner), ro(config), ro(enrollmentAddress), ro(item.market), rw(item.seats.address), rw(item.locator), ro(SYSTEM_PROGRAM_ADDRESS)]);
+  }
+  await execute("foreign wallet cannot register another enrollment", [register(book, attacker)], 2006, marketWatch);
+  const clientSeat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: book.id, wallet, seats: book.seats.address });
+  assert.equal(clientSeat.locator, book.locator);
+  await execute("shipping builder registers wallet seat with zero initial cash", [clientSeat.instruction]);
+  await execute("duplicate registration cannot allocate another seat", [register(book)], /already in use|already initialized/i, marketWatch);
+  const locatorBytes = bytes((await accounts([book.locator]))[0]);
+  assert.deepEqual(locatorBytes, Buffer.concat([discriminator("account", "SeatLocator"), keyBytes(book.market), keyBytes(wallet.address), Buffer.alloc(4), Buffer.from([book.locatorBump])]));
+  const move = (name: "deposit" | "withdraw", amount: bigint, nonce: bigint,
+    options: { owner?: TransactionSigner; tokens?: Address; vault?: Address; seats?: Address; locator?: Address } = {}) =>
+    instruction(name, [signer(options.owner ?? wallet, false), ro(config), rw(book.market), rw(options.seats ?? book.seats.address), ro(options.locator ?? book.locator), ro(mint), rw(options.tokens ?? walletAta), rw(options.vault ?? book.vault), ro(TOKEN_PROGRAM_ADDRESS)], Buffer.concat([u64(amount), u64(nonce)]));
+  async function escrowState(available: bigint, nonce: bigint, vaultAmount: bigint, walletAmount: bigint) {
+    const [marketAccount, seatsAccount, vaultAccount, walletAccount, recipientAccount] = await accounts([book.market, book.seats.address, book.vault, walletAta, transfer.destination]);
+    assert.equal(marketAccount?.owner, PROGRAM);
+    assert.equal(seatsAccount?.owner, PROGRAM);
+    const marketData = bytes(marketAccount);
+    assert.equal(marketData.length, 195);
+    assert.deepEqual(marketData.subarray(0, 8), discriminator("account", "Market"));
+    assert.deepEqual(marketData.subarray(8, 136), Buffer.concat([keyBytes(config), keyBytes(admin.address), keyBytes(book.seats.address), keyBytes(book.vault)]));
+    assert.equal(marketData.readBigUInt64LE(136), book.id);
+    assert.equal(marketData.readBigUInt64LE(144), 100_000n);
+    assert.equal(marketData.readBigInt64LE(152), marketClose);
+    assert.equal(marketData.readBigInt64LE(160), marketClose + 60n);
+    assert.equal(marketData.readBigUInt64LE(168), available);
+    assert.equal(marketData.readBigUInt64LE(176), 0n); // no positions/collateral
+    assert.equal(marketData.readBigUInt64LE(184), 0n); // no trade fees
+    assert.equal(marketData.readUInt16LE(192), 25);
+    assert.equal(marketData[194], book.bump);
+    const seatData = bytes(seatsAccount);
+    assert.equal(seatData.length, 32_816);
+    assert.deepEqual(seatData.subarray(0, 8), discriminator("account", "Seats"));
+    assert.deepEqual(seatData.subarray(8, 40), keyBytes(book.market));
+    assert.equal(seatData.readUInt32LE(40), 1);
+    assert.deepEqual(seatData.subarray(48, 112), Buffer.concat([keyBytes(wallet.address), keyBytes(first.record)]));
+    assert.equal(seatData.readBigUInt64LE(112), available);
+    assert.deepEqual(seatData.subarray(120, 160), Buffer.alloc(40)); // reserved cash and all positions
+    assert.equal(seatData.readBigUInt64LE(160), nonce);
+    assert.deepEqual(seatData.subarray(168), Buffer.alloc(32_816 - 168)); // no trading / other seats
+    for (const account of [vaultAccount, walletAccount, recipientAccount]) assert.equal(account?.owner, TOKEN_PROGRAM_ADDRESS);
+    const vaultData = getTokenDecoder().decode(bytes(vaultAccount));
+    assert.equal(vaultData.owner, book.market);
+    assert.equal(vaultData.mint, mint);
+    assert.equal(vaultData.amount, vaultAmount);
+    assert.deepEqual(vaultData.delegate, { __option: "None" });
+    assert.deepEqual(vaultData.closeAuthority, { __option: "None" });
+    const walletData = getTokenDecoder().decode(bytes(walletAccount));
+    const recipientData = getTokenDecoder().decode(bytes(recipientAccount));
+    assert.equal(walletData.amount, walletAmount);
+    assert.equal(recipientData.amount, 123_456n);
+    assert.equal(walletData.amount + recipientData.amount + vaultData.amount, 1_000_000n);
+    assert(vaultAmount >= available, "Vault must cover seat liabilities");
+    await supply(1_000_000n, 1_000_000n);
+  }
+  await escrowState(0n, 0n, 0n, 876_544n);
+  await execute("zero deposit rejected", [move("deposit", 0n, 0n)], 6012, marketWatch);
+  await execute("insufficient token deposit CPI rolls back cash and nonce", [move("deposit", 876_545n, 0n)], 1, marketWatch);
+  await execute("deposit rejects skipped nonce", [move("deposit", 1n, 1n)], 6011, marketWatch);
+  const clientDeposit = await buildDepositInstruction({ programAddress: PROGRAM, marketId: book.id, wallet, seats: book.seats.address, amount: 400_000n, expectedNonce: 0n });
+  await execute("shipping builder deposits claimed wallet tokens into escrow", [clientDeposit.instruction]);
+  await escrowState(400_000n, 1n, 400_000n, 476_544n);
+  await execute("fresh-signature deposit replay cannot double credit", [move("deposit", 400_000n, 0n)], 6011, marketWatch);
+  await execute("foreign wallet cannot withdraw owner's seat", [move("withdraw", 1n, 1n, { owner: attacker })], 2006, marketWatch);
+  await execute("withdraw cannot redirect to another wallet ATA", [move("withdraw", 1n, 1n, { tokens: transfer.destination })], 2015, marketWatch);
+  await execute("wrong vault rejected", [move("withdraw", 1n, 1n, { vault: secondBook.vault })], 2001, [...marketWatch, secondBook.vault]);
+  await execute("foreign market seats rejected", [move("deposit", 1n, 1n, { seats: secondBook.seats.address })], 2001, [...marketWatch, secondBook.seats.address]);
+  await execute("zero withdrawal rejected", [move("withdraw", 0n, 1n)], 6012, marketWatch);
+  await execute("withdrawal above available rejected", [move("withdraw", 400_001n, 1n)], 6012, marketWatch);
+  await execute("later failure rolls back successful deposit CPI and nonce", [move("deposit", 100n, 1n), move("withdraw", 500_000n, 2n)], 6012, marketWatch, 1);
+  await escrowState(400_000n, 1n, 400_000n, 476_544n);
+  await execute("admin cannot directly transfer PDA vault tokens", [getTransferCheckedInstruction({ source: book.vault, destination: walletAta, mint, authority: admin, amount: 1n, decimals: 3 })], 4, marketWatch);
+  const clientWithdrawal = await buildWithdrawInstruction({ programAddress: PROGRAM, marketId: book.id, wallet, seats: book.seats.address, amount: 150_000n, expectedNonce: 1n });
+  await execute("shipping builder withdraws through market PDA to owner ATA", [clientWithdrawal.instruction]);
+  await escrowState(250_000n, 2n, 250_000n, 626_544n);
+  await execute("fresh-signature withdrawal replay cannot double pay", [move("withdraw", 150_000n, 1n)], 6011, marketWatch);
+  const donation = await buildFeatherTransfer({ mint, sender: wallet, recipient: book.market, payer: admin, amount: 1_000n });
+  assert.equal(donation.destination, book.vault);
+  await execute("unsolicited real token vault donation", donation.instructions);
+  await escrowState(250_000n, 2n, 251_000n, 625_544n);
+  await execute("vault surplus does not grant extra withdrawable cash", [move("withdraw", 250_001n, 2n)], 6012, marketWatch);
+  const clientFinalWithdrawal = await buildWithdrawInstruction({ programAddress: PROGRAM, marketId: book.id, wallet, seats: book.seats.address, amount: 250_000n, expectedNonce: 2n });
+  await execute("shipping builder withdraws exact remaining available cash", [clientFinalWithdrawal.instruction]);
+  await escrowState(0n, 3n, 1_000n, 875_544n);
+  await execute("empty seat cannot withdraw donated surplus", [move("withdraw", 1n, 3n)], 6012, marketWatch);
+  await execute("final withdrawal nonce remains consumed", [move("withdraw", 250_000n, 2n)], 6011, marketWatch);
+
   const timed = await enrollment(expiring.address);
   const timedExpiry = (await chainTime()) + 4n;
   await execute("authorize short-lived unpaid grant", [authorize(timed, 500_000n, timedExpiry)]);
@@ -274,11 +455,31 @@ async function main() {
   const overflow = await enrollment(recipient.address);
   await execute("campaign lifetime authorization cap enforced", [authorize(overflow, 1n, expires)], 6004, [config, mint, overflow.record, overflow.identity]);
   await supply(2_000_000n, 1_000_000n);
+  const finalReceiptSlot = Number(receipts.at(-1)!.slot);
+  const finalityDeadline = Date.now() + 45_000;
+  while (await rpc<number>("getSlot", [{ commitment: "finalized" }]) < finalReceiptSlot) {
+    assert(Date.now() < finalityDeadline, "Finalized reader gate timed out");
+    await delay(200);
+  }
+  const shippingRead = await readGooseyEscrow({ cluster: "localnet", rpcUrl: endpoint.toString(), genesisHash: genesis, programAddress: PROGRAM }, { marketId: book.id, wallet: wallet.address });
+  assert.equal(shippingRead.registered, true);
+  assert.equal(shippingRead.seat?.availableCash, 0n);
+  assert.equal(shippingRead.seat?.nextNonce, 3n);
+  assert.equal(shippingRead.vaultAmount, 1_000n);
+  assert.equal(shippingRead.vaultSurplus, 1_000n);
+  assert.equal(shippingRead.walletTokenAmount, 875_544n);
+  assert.equal(shippingRead.exchangeVerified, false);
+  console.log("PASS shipping readGooseyEscrow verifies real finalized accounts and donation surplus");
   console.log(JSON.stringify({ result: "PASS", rpc: endpoint.toString(), genesis, program: PROGRAM, programData,
     validator: await rpc("getVersion"), config, mint, mintAuthority, admin: admin.address, enrollmentAuthority: issuer.address,
     sourceAta: walletAta, recipientAta: transfer.destination, totalAuthorized: "2000000", totalMinted: "1000000",
-    sourceUnits: "876544", recipientUnits: "123456", decimals: 3, receipts,
-    scope: "Actual deployed Goosey initialize/authorize_enrollment/claim_feathers and real helper SPL transfer. Vault/market instructions are not exercised; escrow, matching, resolution, grant recovery and browser wallets are not tested. Validator left running. No keys written or printed.",
+    sourceUnits: "875544", recipientUnits: "123456", decimals: 3,
+    market: book.market, seats: book.seats.address, vault: book.vault, vaultUnits: "1000", availableCash: "0", nextNonce: "3",
+    transactionCaseCount: receipts.length, clientBuilders: "src/lib/solana/escrow-client.ts", receipts,
+    finalizedReader: { passed: true, slot: shippingRead.finalizedSlot.toString(), source: "src/lib/solana/escrow-read.ts" },
+    preparedTransfer: { passed: true, observedSlot: transfer.observedSlot.toString(), feePayer: wallet.address, source: "src/lib/solana/prepare-transfer.ts" },
+    preparedSubmissions,
+    scope: "Actual deployed issuance, prepared/signed/submitted wallet transfer, market creation, seat registration, token CPI deposits/withdrawals, nonce rejection, donation surplus and atomic rollback. Matching, resolution, reserved positions, seat capacity exhaustion, concurrent sends, RPC restart/recovery and browser wallets are not tested. This suite does not stop its supplied validator; the isolated runner owns lifecycle. This suite writes or prints no private keys.",
   }, null, 2));
 }
 main().catch((error: unknown) => { console.error(error instanceof Error ? error.message : "Foundation E2E failed"); process.exitCode = 1; });

@@ -61,3 +61,9 @@ The shipping `escrow-client.ts` builders created two markets, allocated the larg
 An unsolicited 1,000-base-unit vault donation did not increase available cash. After withdrawing all legitimate deposits, the wallet held 875,544 units, the transfer recipient 123,456, and the vault 1,000: exactly 1,000,000 minted units. Available cash was zero and next nonce was three. The shipping `readGooseyEscrow` independently verified the finalized account snapshot at slot 93, including the donation surplus and all-seat cash reconciliation.
 
 Not yet proven here: CLOB matching, oracle and feather payout, reserved-position handling, seat-capacity exhaustion, concurrent sends, account/wallet linking with durable one-use nonces, browser signing/rejection flows, indexer rebuild, restart/fork recovery, or devnet execution. The website remains database-backed until those integrations are implemented and tested.
+
+### Independently repeated prepare/sign/submit path
+
+`npm run test:chain:isolated` now owns a fresh validator lifecycle. An independent main-agent run passed all 53 cases on genesis `8B5kFZ4Ep445nFCka77Q6mh3ochizCJqcswtoczsdwdF`, RPC port 54619. Evidence and the binary-hash manifest are retained under `/tmp/goosey-solana-runner-oElw0p/`. The runner stopped its owned children after success and left shared ports 18999/8080 untouched.
+
+The real transfer used `prepareFeatherTransfer` after finalized claim state, signed with the ephemeral participant wallet, and sent using `submitSignedFeatherTransfer`. Its receipt callback ran before submission; actual transaction metadata and token balances then verified the result. Transfer signature: `3Xg3pr8PY7DUMViBKVMHmZkFzjnsxJQvna6AvjDj5oVwbCiR2wXxCZh6yP4PD8cfhiAjoJT2bSQjDPwMKquCq3qm`. The finalized escrow reader independently passed at slot 122. This verifies the shipping preparation/submission code, not a browser extension or crash-durable browser receipt store: the test callback records its receipt in memory.

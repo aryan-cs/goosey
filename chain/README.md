@@ -13,8 +13,18 @@ On 2026-09-19:
 - `cargo test --manifest-path chain/Cargo.toml`: 3 exact-arithmetic tests passed.
 - `cargo-build-sbf --manifest-path chain/programs/goosey-exchange/Cargo.toml`: compilation passed, but the default SBPFv0 artifact was rejected by the local validator's deployment feature policy. Successful compilation alone did not establish runtime compatibility.
 - Host Rust 1.98.1; platform-tools v1.54 / SBF Rust 1.89 supplied by main; Solana CLI 4.2.2; cargo-build-sbf 4.1.0; Anchor crates 1.2.0. Cargo.lock is committed for reproducibility.
-- The explicit v3 artifact was deployed and the real initialize/enroll/claim/transfer RPC suite passed. See [artifact, signatures and verification limits](../docs/solana-foundation-qa.md). Escrow and full exchange runtime checks are still outstanding.
+- The explicit v3 artifact was deployed and the real initialize/enroll/claim/transfer RPC suite passed. The expanded 53-case suite also verifies market creation, deposits, withdrawals, donation surplus, rollback, and the shipping finalized escrow reader. See [artifact, signatures and verification limits](../docs/solana-foundation-qa.md). Matching and the full exchange lifecycle remain outstanding.
 - `cargo fmt --check` could not run because the isolated host toolchain has no rustfmt component. No tooling was installed for formatting.
+
+## Repeatable isolated execution
+
+After compiling the actual program artifact, run:
+
+```sh
+GOOSEY_SOLANA_BIN_DIR=/path/to/solana/bin npm run test:chain:isolated
+```
+
+The runner creates a fresh loopback validator with a private ledger and fresh local-only upgrade key, reserves a random port block, snapshots/hashes the loaded ELF, and executes the real suite. It never resets or adopts the shared validator, reads a personal CLI wallet, or uses public testnets. Its help documents an optional validator executable and artifact override. It stops only its own child processes on success, failure, interruption or timeout; mode-0700 temporary directories retain private local-test keys and diagnostic logs. Do not fund these keys on any public network.
 
 Anchor 1.2.0's `CpiContext::new` takes the program **public key**. The mint-init macro references Token-2022 helpers, so the crate enables the corresponding compile-time features. Runtime accounts are explicitly classic `Program<Token>`/`Account<Mint>`/`Account<TokenAccount>`; this program does not accept Token-2022 mints. Bytemuck is pinned to 1.25.2 to satisfy the resolved SPL interfaces.
 
