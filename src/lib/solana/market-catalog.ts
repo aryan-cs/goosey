@@ -1,6 +1,6 @@
 import { createSolanaRpc } from "@solana/kit";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, requireDatabaseStartup } from "@/lib/db";
 import { ApiError } from "@/lib/market-service";
 import { isPrismaErrorCode } from "@/lib/prisma-errors";
 import { runSerializableTransaction, type TransactionRunner } from "@/lib/serializable-transaction";
@@ -44,6 +44,7 @@ export async function registerSolanaMarket(input: {
     GOOSEY_SOLANA_PROGRAM_ID: supplied.programAddress, GOOSEY_SOLANA_GENESIS_HASH: supplied.genesisHash });
   const signal = input.signal ?? AbortSignal.timeout(15_000);
   signal.throwIfAborted();
+  if (client === db) await requireDatabaseStartup();
   await runSerializableTransaction(client, tx => admin(tx, actorUserId));
   const rpc = createSolanaRpc(runtime.rpcUrl);
   // Public program address is only a neutral selected wallet for this complete

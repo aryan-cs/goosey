@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { registerSolanaMarket } from "./market-catalog";
 import type { TransactionRunner } from "@/lib/serializable-transaction";
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), terms: vi.fn(), genesis: vi.fn() }));
-vi.mock("@/lib/db", () => ({ db: {} }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), terms: vi.fn(), genesis: vi.fn(), startup: vi.fn() }));
+vi.mock("@/lib/db", () => ({ db: {}, requireDatabaseStartup: mocks.startup }));
 vi.mock("@/lib/market-service", () => ({ ApiError: class extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
 } }));
@@ -43,6 +43,11 @@ function database() {
   return { client: { $transaction: transaction } as unknown as TransactionRunner, user, find, createMarket, createBinding, audit, transaction };
 }
 describe("verified chain catalog registration", () => {
+  it("requires startup safety checks for the default application database", async () => {
+    mocks.startup.mockRejectedValue(new Error("Database startup refused"));
+    await expect(registerSolanaMarket(input())).rejects.toThrow("startup refused");
+    expect(mocks.startup).toHaveBeenCalledOnce(); expect(mocks.read).not.toHaveBeenCalled();
+  });
   it("creates only a DRAFT metadata row, immutable identity and audit without SQL collateral", async () => {
     const d = database(), result = await registerSolanaMarket(input(), d.client);
     expect(result.created).toBe(true);
