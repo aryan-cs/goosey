@@ -2,6 +2,7 @@
 .item { display: grid; gap: 6px; min-width: 0; padding: 20px 0; border-bottom: 1px solid var(--border-subtle); }
 .item:first-child { padding-top: 4px; }
 .item:last-child { border-bottom: 0; padding-bottom: 0; }
+.time { color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; line-height: 18px; }
 .market { color: var(--ink); font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; transition: color 140ms ease; }
 .market:hover { color: var(--yes); }
 .user { color: var(--ink-muted); font-size: 12px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

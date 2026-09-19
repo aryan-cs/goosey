@@ -1,18 +1,13 @@
 import Link from "next/link";
+import type { PublicTradeActivity } from "@/lib/public-trade-activity";
+import { formatRelativeTime } from "@/lib/relative-time";
 import { formatFeathers } from "@/lib/view-models";
 import { FeatherIcon } from "./brand";
 import styles from "./home-activity.module.css";
 
-export function HomeActivity({ trades }: { trades: Array<{
-  id: string;
-  action: string;
-  side: string;
-  quantity: number;
-  amountMilli: bigint;
-  user: { username: string; profilePublic: boolean };
-  market: { slug: string; shortTitle: string };
-}> }) {
+export function HomeActivity({ trades, now = new Date() }: { trades: PublicTradeActivity[]; now?: Date }) {
   return <ul className={styles.list}>{trades.map(trade => <li key={trade.id} className={styles.item}>
+    <time className={styles.time} dateTime={trade.createdAt.toISOString()} title={`${trade.createdAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Toronto" })} Toronto time`}>{formatRelativeTime(trade.createdAt, now)}</time>
     <Link className={styles.market} href={`/markets/${trade.market.slug}`}>{trade.market.shortTitle}</Link>
     <span className={styles.user} title={`@${trade.user.username}`}>@{trade.user.username}</span>
     <div className={styles.trade}>
