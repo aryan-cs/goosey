@@ -6,13 +6,37 @@
 .discussion article:target,
 .discussion article[data-linked="true"] {
   outline: 2px solid var(--yes);
-  outline-offset: 3px;
+  outline-offset: -2px;
   border-radius: var(--radius-sm);
+}
+
+.discussion :global(.comment) {
+  grid-template-columns: 38px minmax(0, 1fr);
+  padding: 20px;
+  gap: 12px;
+}
+
+.discussion :global(.reply-comment) {
+  grid-template-columns: 30px minmax(0, 1fr);
+  padding: 16px;
 }
 
 .content {
   min-width: 0;
 }
+
+.content > header {
+  min-height: 38px;
+  align-content: center;
+  row-gap: 2px;
+}
+
+.content > header > strong { min-width: 0; overflow-wrap: anywhere; }
+
+.discussion :global(.reply-comment) .content > header { min-height: 30px; }
+
+.content > p { margin: 12px 0 8px; }
+.content > footer { flex-wrap: wrap; }
 
 .replyComposer {
   margin-top: 12px;
@@ -33,6 +57,19 @@
 }
 
 @media (max-width: 600px) {
+  .discussion :global(.comment) {
+    grid-template-columns: 32px minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .content > header { min-height: 32px; }
+
+  .discussion :global(.reply-comment) {
+    grid-template-columns: 30px minmax(0, 1fr);
+    padding: 12px;
+    gap: 8px;
+  }
+
   .discussion :global(.comment-replies) {
     padding-left: 8px;
     margin-left: -24px;
