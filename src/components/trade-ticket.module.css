@@ -1,0 +1,33 @@
+.ticket:global(.trade-ticket) {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: var(--space-panel);
+}
+
+.ticket :global(.trade-ticket-header) { align-items: center; }
+.ticket :global(.trade-ticket-header > div) { min-width: 0; }
+.ticket :global(.trade-ticket-header h2) { margin-top: 8px; overflow-wrap: anywhere; }
+.ticket :global(.trade-market-title) { margin: -8px 0 0; line-height: 1.5; overflow-wrap: anywhere; }
+.ticket :global(.segmented) { min-width: 0; }
+.ticket :global(.segmented button) { min-height: 44px; }
+.ticket :global(.side-grid) { margin: 0; }
+
+.quantityGroup { display: grid; gap: 8px; min-width: 0; }
+.quantityGroup :global(.field-label) { margin: 0; }
+.quantityGroup :global(.quick-values) { margin: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.quantityGroup :global(.quick-values button) { min-height: 40px; }
+.quantityGroup :global(.quantity-input input) { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+
+.ticket :global(.trade-breakdown) { display: grid; gap: 12px; margin: 0; padding-block: 20px; font-size: 14px; line-height: 1.5; }
+.ticket :global(.trade-breakdown > div) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); align-items: baseline; gap: 16px; margin: 0; }
+.ticket :global(.trade-breakdown dd) { display: flex; align-items: center; justify-content: flex-end; gap: 6px; text-align: right; font-family: var(--font-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ticket :global(.trade-breakdown dd > svg) { flex: 0 0 auto; margin: 0; }
+.ticket :global(.review-note) { margin: 0; line-height: 1.5; }
+.ticket :global(.trade-actions) { margin: 0; }
+.ticket :global(.trade-submit) { min-width: 0; white-space: normal; }
+
+@media (max-width: 809.98px) {
+  .ticket:global(.trade-ticket) { padding: var(--space-panel-mobile); }
+  .quantityGroup :global(.quick-values button) { min-height: 44px; }
+}

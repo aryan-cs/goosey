@@ -1,10 +1,11 @@
 "use client";
+import styles from "./trade-ticket.module.css";
 import { FeatherIcon } from "./brand";
 import { authPageHref } from "@/lib/auth-destination";
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/client-api";
 import { MAX_TRADE_QUANTITY, tradePayoutMilli, validTradeQuantity } from "@/lib/trade-quantity";
 
@@ -130,23 +131,24 @@ export function TradeTicket({
   }
 
   return (
-    <section className="trade-ticket" aria-labelledby="trade-ticket-title">
-      <div className="trade-ticket-header"><div><span className="eyebrow">Trade</span><h2 id="trade-ticket-title">{outcomeLabel ? `${action === "BUY" ? "Buy" : "Sell"} ${outcomeLabel}` : "Choose YES or NO"}</h2></div><ShieldCheck aria-label="Trade protected" /></div>
-      <p className="trade-market-title">{marketTitle}</p>
+    <section className={`trade-ticket ${styles.ticket}`} aria-labelledby="trade-ticket-title">
+      <div className="trade-ticket-header"><div><span className="eyebrow">Trade</span><h2 id="trade-ticket-title">{outcomeLabel ?? "Choose YES or NO"}</h2></div></div>
+      {!outcomeLabel && <p className="trade-market-title">{marketTitle}</p>}
       {state === "success" ? (
         <div className="trade-success" role="status"><CheckCircle2 /><h3>Trade placed</h3><button className="button button-secondary" onClick={() => edit()}><RotateCcw /> Make another trade</button></div>
       ) : <>
         <div className="segmented" aria-label="Trade action">{(["BUY", "SELL"] as Action[]).map((value) => <button aria-pressed={action === value} className={action === value ? "active" : ""} onClick={() => edit({ action: value })} key={value}>{value === "BUY" ? "Buy" : "Sell"}</button>)}</div>
-        {outcomeLabel ? <p className="review-note">{outcomeLabel} pays 100 feathers per contract if it is the winning option. Selling reduces your existing holding.</p> : <div className="side-grid" aria-label="Contract side">
+        {!outcomeLabel && <div className="side-grid" aria-label="Contract side">
           <button className={outcome === "YES" ? "yes selected" : "yes"} aria-pressed={outcome === "YES"} onClick={() => edit({ outcome: "YES" })}><span>Yes</span><strong>{Math.round(yesProbability * 100)}%</strong></button>
           <button className={outcome === "NO" ? "no selected" : "no"} aria-pressed={outcome === "NO"} onClick={() => edit({ outcome: "NO" })}><span>No</span><strong>{Math.round(noProbability * 100)}%</strong></button>
         </div>}
-        <label className="field-label" htmlFor="trade-quantity">Contracts</label>
+        <div className={styles.quantityGroup}><label className="field-label" htmlFor="trade-quantity">Contracts</label>
         <div className="quantity-input"><input id="trade-quantity" inputMode="numeric" min={1} max={MAX_TRADE_QUANTITY} step={1} type="number" value={quantity} aria-invalid={!quantityValid} aria-describedby={!quantityValid ? "trade-quantity-error" : undefined} disabled={state !== "editing"} onChange={(event) => { setQuantity(event.currentTarget.valueAsNumber || 0); setError(null); }} /><span>contracts</span></div>
         {!quantityValid && <p id="trade-quantity-error" className="form-error" role="alert">Enter a whole number from 1 to 100,000 contracts.</p>}
         {state === "editing" && <div className="quick-values" aria-label="Quick quantities">{[1, 5, 10, 25].map((value) => <button onClick={() => setQuantity(value)} key={value}>{value}</button>)}</div>}
+        </div>
         <dl className="trade-breakdown">
-          {quote ? <><div><dt>Average price</dt><dd>{featherText(quote.averagePriceMilli)} <FeatherIcon width={15} height={15} /></dd></div><div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% {outcomeLabel ?? "Yes"}</dd></div><div><dt>Fee</dt><dd>{featherText(quote.feeMilli)} <FeatherIcon width={15} height={15} /></dd></div>{action === "BUY" && <div><dt>Potential profit if correct</dt><dd>{featherText(potentialProfitMilli)} <FeatherIcon width={15} height={15} /></dd></div>}<div className="trade-total"><dt>{action === "BUY" ? "Total cost" : "You receive"}</dt><dd>{featherText(quotedTotal)} <FeatherIcon width={15} height={15} /></dd></div></> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div><dt>Maximum payout</dt><dd><FeatherIcon width={15} height={15} /> {estimatedPayout}</dd></div>{balanceMilli !== undefined && <div><dt>Available</dt><dd>{featherText(balanceMilli)} <FeatherIcon width={15} height={15} /></dd></div>}</>}
+          {quote ? <><div><dt>Average price</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.averagePriceMilli)}</dd></div><div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% {outcomeLabel ?? "Yes"}</dd></div><div><dt>Fee</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.feeMilli)}</dd></div>{action === "BUY" && <div><dt>Potential profit if correct</dt><dd><FeatherIcon width={15} height={15} /> {featherText(potentialProfitMilli)}</dd></div>}<div className="trade-total"><dt>{action === "BUY" ? "Total cost" : "You receive"}</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div></> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div><dt>Maximum payout</dt><dd><FeatherIcon width={15} height={15} /> {estimatedPayout}</dd></div>{balanceMilli !== undefined && <div><dt>Available</dt><dd><FeatherIcon width={15} height={15} /> {featherText(balanceMilli)}</dd></div>}</>}
         </dl>
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
         {state === "review" && <p className="review-note">Check the price before you confirm. Quotes can change or expire.</p>}
