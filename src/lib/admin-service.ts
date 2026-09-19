@@ -43,6 +43,7 @@ export const createMarketSchema = z
     icon: z.string().trim().min(1).max(40).regex(/^[a-z0-9-]+$/).default("sparkles"),
     closesAt: instantSchema,
     resolvesAt: instantSchema,
+    pricingModel: z.enum(["LMSR", "ORDER_BOOK"]).default("LMSR"),
     liquidityParameter: z.number().int().min(1).max(1_000_000).default(40),
     payoutMilli: z.literal("100000").transform((value) => BigInt(value)).default(100_000n),
     feeBps: z.number().int().min(0).max(1_000).default(0),
@@ -67,7 +68,11 @@ export const resolutionSchema = z
   })
   .strict();
 
-type CreateMarketInput = z.infer<typeof createMarketSchema>;
+type ParsedCreateMarketInput = z.infer<typeof createMarketSchema>;
+type CreateMarketInput = Omit<ParsedCreateMarketInput, "pricingModel"> & {
+  /** Direct service callers from before pricing-model selection remain LMSR. */
+  pricingModel?: ParsedCreateMarketInput["pricingModel"];
+};
 type ResolutionInput = z.infer<typeof resolutionSchema>;
 type LifecycleAction = "PAUSE" | "RESUME" | "CLOSE";
 type ResolutionConflictCode = "PROPOSER_CONFLICT" | "RESOLVER_CONFLICT";
@@ -91,7 +96,7 @@ async function treasuryAccount(tx: Prisma.TransactionClient) {
   });
 }
 
-async function requireActiveAdmin(tx: Prisma.TransactionClient, actorUserId: string): Promise<void> {
+export async function requireActiveAdmin(tx: Prisma.TransactionClient, actorUserId: string): Promise<void> {
   const actor = await tx.user.findUnique({
     where: { id: actorUserId },
     select: { role: true, status: true },
@@ -140,6 +145,7 @@ function publicMarket(market: Market) {
     id: market.id,
     slug: market.slug,
     status: market.status,
+    pricingModel: market.pricingModel,
     resolution: market.resolution,
     version: market.version,
     closesAt: market.closesAt,
@@ -154,36 +160,98 @@ export async function createAdminMarket(input: {
   market: CreateMarketInput;
 }) {
   await consumeRateLimit(prisma, `admin-market-create:${input.actorUserId}`, 10, 60_000);
+  const operationAt = new Date();
+  const idempotencyExpiresAt = new Date(operationAt.getTime() + 24 * 60 * 60 * 1_000);
   return runSerializableTransaction(prisma, async (tx) => {
     await requireActiveAdmin(tx, input.actorUserId);
+    const normalizedMarket: ParsedCreateMarketInput = {
+      ...input.market,
+      pricingModel: input.market.pricingModel ?? "LMSR",
+    };
     // Administrative idempotency is principal-scoped: one administrator must
     // never be able to replay or conflict with another administrator's request.
     const scope = `ADMIN_MARKET_CREATE:${input.actorUserId}`;
-    const requestHash = createHash("sha256").update(jsonStringify(input.market)).digest("hex");
+    const route = "/api/admin/markets";
+    const requestHash = createHash("sha256").update(jsonStringify(normalizedMarket)).digest("hex");
+    const { pricingModel: _pricingModel, ...legacyMarket } = normalizedMarket;
+    void _pricingModel;
+    const legacyRequestHash = createHash("sha256").update(jsonStringify(legacyMarket)).digest("hex");
+    const existingRequest = await tx.idempotencyRequest.findUnique({
+      where: { userId_route_key: { userId: input.actorUserId, route, key: input.idempotencyKey } },
+    });
+    if (existingRequest) {
+      if (existingRequest.requestHash !== requestHash) {
+        throw new ApiError(409, "IDEMPOTENCY_CONFLICT", "This idempotency key was used for another market request.");
+      }
+      if (existingRequest.status === "COMPLETED" && existingRequest.responseBody) {
+        const stored = JSON.parse(existingRequest.responseBody) as {
+          market: ReturnType<typeof publicMarket>;
+          subsidyMilli: string;
+        };
+        return {
+          market: {
+            ...stored.market,
+            closesAt: new Date(stored.market.closesAt),
+            resolvesAt: new Date(stored.market.resolvesAt),
+            resolvedAt: stored.market.resolvedAt ? new Date(stored.market.resolvedAt) : null,
+          },
+          subsidyMilli: BigInt(stored.subsidyMilli),
+          replayed: true,
+        };
+      }
+      throw new ApiError(409, "REQUEST_IN_PROGRESS", "This market request is already being processed.");
+    }
+
     const previous = await tx.journalEntry.findUnique({
       where: { idempotencyScope_idempotencyKey: { idempotencyScope: scope, idempotencyKey: input.idempotencyKey } },
     });
     if (previous) {
       const metadata = JSON.parse(previous.metadata) as { requestHash?: string; subsidyMilli?: string };
-      if (metadata.requestHash !== requestHash) {
+      const legacyLmsrReplay = normalizedMarket.pricingModel === "LMSR" && metadata.requestHash === legacyRequestHash;
+      if (metadata.requestHash !== requestHash && !legacyLmsrReplay) {
         throw new ApiError(409, "IDEMPOTENCY_CONFLICT", "This idempotency key was used for another market request.");
       }
       const market = await tx.market.findUnique({ where: { id: previous.referenceId } });
       if (!market) throw new Error("Idempotent market journal references a missing market");
-      return {
+      const replay = {
         market: publicMarket(market),
         subsidyMilli: BigInt(metadata.subsidyMilli ?? "0"),
         replayed: true,
       };
+      await tx.idempotencyRequest.create({
+        data: {
+          userId: input.actorUserId,
+          route,
+          key: input.idempotencyKey,
+          requestHash,
+          status: "COMPLETED",
+          responseCode: 201,
+          responseBody: jsonStringify({ ...replay, replayed: false }),
+          expiresAt: idempotencyExpiresAt,
+        },
+      });
+      return replay;
     }
+    await tx.idempotencyRequest.create({
+      data: {
+        userId: input.actorUserId,
+        route,
+        key: input.idempotencyKey,
+        requestHash,
+        expiresAt: idempotencyExpiresAt,
+      },
+    });
 
-    const subsidyMilli = initialSubsidyMilli(input.market.liquidityParameter, input.market.payoutMilli);
-    if (input.market.eventId) {
-      const eventExists = await tx.marketEvent.count({ where: { id: input.market.eventId } });
+    const orderBook = normalizedMarket.pricingModel === "ORDER_BOOK";
+    const subsidyMilli = orderBook
+      ? 0n
+      : initialSubsidyMilli(normalizedMarket.liquidityParameter, normalizedMarket.payoutMilli);
+    if (normalizedMarket.eventId) {
+      const eventExists = await tx.marketEvent.count({ where: { id: normalizedMarket.eventId } });
       if (!eventExists) throw new ApiError(404, "EVENT_NOT_FOUND", "The selected event does not exist.");
     }
-    const treasury = await treasuryAccount(tx);
-    const { eventId, ...marketData } = input.market;
+    const treasury = orderBook ? null : await treasuryAccount(tx);
+    const { eventId, ...marketData } = normalizedMarket;
     const market = await tx.market.create({
       data: {
         ...marketData,
@@ -196,7 +264,7 @@ export async function createAdminMarket(input: {
             balanceMilli: subsidyMilli,
           },
         },
-        priceHistory: { create: { yesProbabilityBps: 5_000 } },
+        priceHistory: orderBook ? undefined : { create: { yesProbabilityBps: 5_000 } },
       },
       include: { collateralAccount: true },
     });
@@ -204,37 +272,44 @@ export async function createAdminMarket(input: {
       where: { id: market.collateralAccountId },
       data: { ownerId: market.id },
     });
-    await tx.ledgerAccount.update({
-      where: { id: treasury.id },
-      data: { balanceMilli: { decrement: subsidyMilli } },
-    });
-    const postings = [
-      { ledgerAccountId: treasury.id, amountMilli: -subsidyMilli },
-      { ledgerAccountId: market.collateralAccountId, amountMilli: subsidyMilli },
-    ];
-    assertBalanced(postings);
-    await tx.journalEntry.create({
-      data: {
-        type: "MARKET_SUBSIDY",
-        referenceType: "MARKET",
-        referenceId: market.id,
-        idempotencyScope: scope,
-        idempotencyKey: input.idempotencyKey,
-        actorUserId: input.actorUserId,
-        metadata: jsonStringify({ subsidyMilli, liquidityParameter: market.liquidityParameter, requestHash }),
-        postings: { create: postings },
-      },
-    });
+    if (treasury) {
+      await tx.ledgerAccount.update({
+        where: { id: treasury.id },
+        data: { balanceMilli: { decrement: subsidyMilli } },
+      });
+      const postings = [
+        { ledgerAccountId: treasury.id, amountMilli: -subsidyMilli },
+        { ledgerAccountId: market.collateralAccountId, amountMilli: subsidyMilli },
+      ];
+      assertBalanced(postings);
+      await tx.journalEntry.create({
+        data: {
+          type: "MARKET_SUBSIDY",
+          referenceType: "MARKET",
+          referenceId: market.id,
+          idempotencyScope: scope,
+          idempotencyKey: input.idempotencyKey,
+          actorUserId: input.actorUserId,
+          metadata: jsonStringify({ subsidyMilli, liquidityParameter: market.liquidityParameter, requestHash }),
+          postings: { create: postings },
+        },
+      });
+    }
     await tx.auditLog.create({
       data: {
         actorUserId: input.actorUserId,
         action: "MARKET_CREATED",
         entityType: "MARKET",
         entityId: market.id,
-        metadata: jsonStringify({ status: market.status, subsidyMilli }),
+        metadata: jsonStringify({ status: market.status, pricingModel: market.pricingModel, subsidyMilli }),
       },
     });
-    return { market: publicMarket(market), subsidyMilli, replayed: false };
+    const result = { market: publicMarket(market), subsidyMilli, replayed: false };
+    await tx.idempotencyRequest.update({
+      where: { userId_route_key: { userId: input.actorUserId, route, key: input.idempotencyKey } },
+      data: { status: "COMPLETED", responseCode: 201, responseBody: jsonStringify(result) },
+    });
+    return result;
   });
 }
 

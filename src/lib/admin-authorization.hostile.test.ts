@@ -123,6 +123,10 @@ describe("hostile admin service authorization", () => {
     const journalFind = vi.fn().mockResolvedValue(null);
     runWith({
       user: { findUnique: vi.fn().mockResolvedValue(activeAdmin(ADMIN_B)) },
+      idempotencyRequest: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "admin-market-request" }),
+      },
       journalEntry: { findUnique: journalFind },
       ledgerAccount: {
         upsert: vi.fn().mockRejectedValue(new Error("stop after idempotency lookup")),
