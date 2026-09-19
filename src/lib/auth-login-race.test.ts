@@ -1,4 +1,5 @@
-import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -15,7 +16,12 @@ describe("login versus password-reset session revocation", () => {
   let oldPasswordHash = "";
 
   beforeAll(async () => {
-    copyFileSync(join(process.cwd(), "prisma/dev.db"), databasePath);
+    await database.$connect();
+    execFileSync(join(process.cwd(), "node_modules/.bin/prisma"), ["db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"], {
+      env: { ...process.env, DATABASE_URL: `file:${databasePath}` },
+      stdio: "pipe",
+      timeout: 20_000,
+    });
     oldPasswordHash = await hashPassword("old password verified before reset");
     const user = await database.user.create({
       data: {

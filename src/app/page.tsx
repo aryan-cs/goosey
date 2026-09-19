@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MarketCanvasToolbar } from "@/components/market-canvas-toolbar";
 import { ArrowRight, Radio, Sparkles, Trophy, Users } from "lucide-react";
 import { FeatherIcon, GooseMark } from "@/components/brand";
 import { db } from "@/lib/db";
@@ -48,11 +49,7 @@ export default async function HomePage() {
       </section>
 
       <section className="market-canvas" aria-label="Live prediction markets">
-        <div className="market-canvas-toolbar">
-          <div><span className="canvas-brand-dot" aria-hidden="true" /><strong>Goosey markets</strong></div>
-          <Link href="/search">Search markets</Link>
-          <Link href="/markets">Browse all</Link>
-        </div>
+        <MarketCanvasToolbar />
         <div className="home-layout">
           <div className="home-main">
             <section aria-labelledby="featured-heading">

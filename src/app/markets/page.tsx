@@ -1,4 +1,5 @@
 import Link from "next/link";
+import styles from "./markets.module.css";
 import { Filter, Search } from "lucide-react";
 import { db } from "@/lib/db";
 import { marketSummary } from "@/lib/view-models";
@@ -26,7 +27,7 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
   });
 
   return <div className="page-shell browse-page">
-    <header className="page-header"><span className="eyebrow">Hack the North + Waterloo</span><h1>Markets</h1><p>Pick a question, choose YES or NO, and see what everyone thinks.</p><Link className="button button-secondary" href="/markets/suggest">Suggest a market</Link></header>
+    <header className={styles.header}><h1>Markets</h1><p>Hack the North + Waterloo. Pick a question and choose your side.</p><Link className={`button button-secondary ${styles.suggest}`} href="/markets/suggest">Suggest a market</Link></header>
     <div className="browse-layout">
       <form className="market-filters" action="/markets">
         <label className="search-field"><Search /><span className="sr-only">Search markets</span><input type="search" name="q" defaultValue={query} placeholder="Search questions and topics" /></label>

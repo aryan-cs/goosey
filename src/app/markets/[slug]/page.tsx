@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { FeatherIcon } from "@/components/brand";
+import { MarketStatusLabel } from "@/components/market-status";
 import { notFound } from "next/navigation";
-import { Bookmark, CalendarClock, ChevronRight, Scale, Share2, ShieldCheck } from "lucide-react";
+import { Bookmark, CalendarClock, ChevronRight, Share2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { formatFeathers, marketProbabilityBps } from "@/lib/view-models";
 import { ProbabilityChart } from "@/components/market";
@@ -37,7 +38,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
     <div className="market-detail-layout">
       <article className="market-detail-main">
         <header className="market-detail-header">
-          <div><span className="eyebrow">{market.category}</span><h1>{market.title}</h1><div className="market-meta"><span className={open ? "status-open" : "status-closed"}>{open ? "Open" : market.status.toLowerCase()}</span><span><CalendarClock /> Closes {market.closesAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</span><span><FeatherIcon /> {formatFeathers(market.volumeMilli)} volume</span></div></div>
+          <div><span className="eyebrow">{market.category}</span><h1>{market.title}</h1><div className="market-meta"><MarketStatusLabel status={open ? "open" : market.status === "OPEN" ? "closed" : market.status} /><span><CalendarClock /> Closes {market.closesAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</span><span><FeatherIcon /> {formatFeathers(market.volumeMilli)} volume</span></div></div>
           <div className="market-header-actions"><WatchlistButton marketId={market.id} signedIn={Boolean(user)} icon={<Bookmark />} /><ShareButton title={market.title} icon={<Share2 />} /></div>
         </header>
 
@@ -45,7 +46,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
         <section className="chance-panel" aria-labelledby="chance-heading"><div className="section-heading"><div><span className="eyebrow">YES or NO</span><h2 id="chance-heading">Current forecast</h2></div></div><div className="chance-row"><span>YES</span><strong>{(yesBps / 100).toFixed(0)}%</strong>{orderBookMarket ? <a className="yes-pill" href="#order-book">Trade YES</a> : <MarketTradeLink className="yes-pill" outcome="YES" probability={Math.round(yesBps / 100)} />}<span className="muted-copy">Pays 100 feathers</span></div><div className="chance-row"><span>NO</span><strong>{((10_000 - yesBps) / 100).toFixed(0)}%</strong>{orderBookMarket ? <a className="no-pill" href="#order-book">Trade NO</a> : <MarketTradeLink className="no-pill" outcome="NO" probability={Math.round((10_000 - yesBps) / 100)} />}<span className="muted-copy">Pays 100 feathers</span></div></section>
 
         <section className="market-copy"><span className="eyebrow">About this market</span><h2>What to know</h2><p>{market.description}</p></section>
-        <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow eyebrow-with-icon"><Scale /> How it is decided</span><h2 id="rules-heading">Market rules</h2></div><ShieldCheck /></div><p>{market.rules}</p><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>100 feathers</dd></div></dl></section>
+        <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow">How it is decided</span><h2 id="rules-heading">Market rules</h2></div></div><p>{market.rules}</p><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>100 feathers</dd></div></dl></section>
 
         <section className="activity-panel" aria-labelledby="activity-heading"><div className="section-heading"><h2 id="activity-heading">Recent activity</h2></div>{market.trades.length ? <ul className="trade-feed">{market.trades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><span><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> {trade.action.toLowerCase()} {trade.quantity} {trade.side}</span><time>{trade.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No trades yet. Be the first.</p>}</section>
         <CommentSection marketId={market.id} currentUserId={user?.id} endpoint={`/api/markets/${market.slug}/comments`} />

@@ -1,0 +1,14 @@
+.fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.legend { padding: 0; color: var(--ink); font-size: 15px; font-weight: 600; }
+.help { margin: 6px 0 14px; color: var(--ink-muted); font-size: 13px; line-height: 1.5; }
+.choices { display: flex; width: fit-content; max-width: 100%; gap: 4px; padding: 4px; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.choice { position: relative; display: block; cursor: pointer; }
+.choice input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
+.choice span { display: flex; align-items: center; justify-content: center; min-width: 70px; min-height: 40px; padding: 8px 16px; border-radius: 6px; color: var(--ink-secondary); font-size: 13px; font-weight: 500; }
+.choice:hover span { color: var(--ink); background: var(--surface-raised); }
+.choice input:checked + span { color: var(--ink); background: var(--surface); font-weight: 600; }
+.choice input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.status, .error { margin: 10px 0 0; font-size: 12px; line-height: 1.5; }
+.status { color: var(--ink-muted); }
+.error { color: var(--no); }
+@media (max-width: 360px) { .choice span { min-width: 60px; padding-inline: 10px; } }

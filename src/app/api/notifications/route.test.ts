@@ -1,3 +1,4 @@
+vi.mock("@/lib/notification-preferences", () => ({ getNotificationFilter: vi.fn().mockResolvedValue({}) }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -70,4 +71,22 @@ describe("/api/notifications ownership scoping", () => {
     });
     await expect(response.json()).resolves.toEqual({ markedRead: 2 });
   });
+});
+
+it("applies the same preferences to the inbox, unread count, and mark-all action", async () => {
+  const { getNotificationFilter } = await import("@/lib/notification-preferences");
+  const filter = { type: { notIn: ["TRADE_CONFIRMED", "COMPLETE_SET_REDEEMED"] } };
+  vi.clearAllMocks();
+  mocks.requireUser.mockResolvedValue({ id: "user-a" });
+  mocks.findMany.mockResolvedValue([]);
+  mocks.count.mockResolvedValue(0);
+  mocks.updateMany.mockResolvedValue({ count: 0 });
+  vi.mocked(getNotificationFilter).mockResolvedValue(filter);
+  try {
+    expect((await GET(request("GET"))).status).toBe(200);
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: "user-a", ...filter }) }));
+    expect(mocks.count).toHaveBeenCalledWith({ where: { userId: "user-a", readAt: null, ...filter } });
+    expect((await PATCH(request("PATCH"))).status).toBe(200);
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { userId: "user-a", readAt: null, ...filter }, data: { readAt: expect.any(Date) } });
+  } finally { vi.mocked(getNotificationFilter).mockResolvedValue({}); }
 });

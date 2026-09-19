@@ -21,6 +21,7 @@ model User {
   bio                    String                       @default("")
   profilePublic          Boolean                      @default(false)
   leaderboardVisible     Boolean                      @default(false)
+  notificationPreferences String                       @default("{}")
   balanceMilli           BigInt                       @default(0)
   realizedPnlMilli       BigInt                       @default(0)
   createdAt              DateTime                     @default(now()) @db.Timestamptz(3)

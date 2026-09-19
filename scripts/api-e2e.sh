@@ -11,12 +11,9 @@ COOKIE_JAR_TWO="${RUN_DIR}/cookies-two.txt"
 COOKIE_JAR_ADMIN="${RUN_DIR}/cookies-admin.txt"
 COOKIE_JAR_EXTRA="${RUN_DIR}/cookies-extra.txt"
 SERVER_LOG="${RUN_DIR}/server.log"
-INVITE_ONE="goosey-smoke-${RANDOM}-$$-one"
-INVITE_TWO="goosey-smoke-${RANDOM}-$$-two"
 
 cd "$PROJECT_DIR"
 cp prisma/dev.db "$DB_FILE"
-DATABASE_URL="file:${DB_FILE}" E2E_INVITE_CODES="${INVITE_ONE},${INVITE_TWO}" npx tsx scripts/setup-e2e-invites.ts
 
 DATABASE_PROVIDER="sqlite" DATABASE_URL="file:${DB_FILE}" APP_URL="$ORIGIN" NEXT_PUBLIC_APP_URL="$ORIGIN" RATE_LIMIT_KEY_SECRET="$(openssl rand -hex 32)" npm start -- --hostname 127.0.0.1 --port "$PORT" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
@@ -42,7 +39,7 @@ done
 
 EMAIL="smoke-${RANDOM}-$$@uwaterloo.ca"
 USERNAME="smoke_${RANDOM}_$$"
-REGISTER=$(curl -fsS -c "$COOKIE_JAR" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL\",\"username\":\"$USERNAME\",\"displayName\":\"Smoke Forecaster\",\"password\":\"CorrectHorseBattery42!\",\"accessCode\":\"$INVITE_ONE\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register")
+REGISTER=$(curl -fsS -c "$COOKIE_JAR" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL\",\"username\":\"$USERNAME\",\"displayName\":\"Smoke Forecaster\",\"password\":\"CorrectHorseBattery42!\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register")
 [[ "$(jq -r '.balanceMilli' <<<"$REGISTER")" == "0" ]]
 [[ "$(jq -r '.emailVerification.required' <<<"$REGISTER")" == "true" ]]
 [[ "$(curl -sS -o "${RUN_DIR}/unverified-portfolio.json" -w '%{http_code}' -b "$COOKIE_JAR" "$ORIGIN/api/portfolio")" == "403" ]]
@@ -140,11 +137,9 @@ COMMENT_ID=$(jq -r '.comment.id' <<<"$COMMENT")
 
 EMAIL_TWO="smoke-two-${RANDOM}-$$@uwaterloo.ca"
 USERNAME_TWO="smoke_two_${RANDOM}_$$"
-curl -fsS -c "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL_TWO\",\"username\":\"$USERNAME_TWO\",\"displayName\":\"Second Forecaster\",\"password\":\"CorrectHorseBattery43!\",\"accessCode\":\"$INVITE_TWO\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register" | jq -e '.balanceMilli == "0" and .emailVerification.required == true' >/dev/null
+curl -fsS -c "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL_TWO\",\"username\":\"$USERNAME_TWO\",\"displayName\":\"Second Forecaster\",\"password\":\"CorrectHorseBattery43!\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register" | jq -e '.balanceMilli == "0" and .emailVerification.required == true' >/dev/null
 VERIFY_TOKEN_TWO=$(DATABASE_URL="file:${DB_FILE}" npx tsx scripts/setup-e2e-verification.ts "$EMAIL_TWO")
 curl -fsS -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"token\":\"$VERIFY_TOKEN_TWO\"}" "$ORIGIN/api/auth/email-verification/confirm" | jq -e '.verified == true and .welcomeGrantIssued == true' >/dev/null
-REUSED_INVITE=$(curl -sS -o /dev/null -w '%{http_code}' -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"reused-${RANDOM}-$$@uwaterloo.ca\",\"username\":\"reused_${RANDOM}_$$\",\"displayName\":\"Reused Invite\",\"password\":\"CorrectHorseBattery44!\",\"accessCode\":\"$INVITE_TWO\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register")
-[[ "$REUSED_INVITE" == "403" ]]
 OTHER_EDIT=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR_TWO" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"body":"Unauthorized edit attempt."}' "$ORIGIN/api/comments/$COMMENT_ID")
 [[ "$OTHER_EDIT" == "403" ]]
 OTHER_DELETE=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR_TWO" -X DELETE -H "Origin: $ORIGIN" "$ORIGIN/api/comments/$COMMENT_ID")

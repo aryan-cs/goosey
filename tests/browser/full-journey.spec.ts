@@ -16,7 +16,6 @@ test("complete participant and administrator journey", async ({ page, request },
   const password = "Goosey-browser-journey-2026!";
   const adminEmail = `admin-${suffix}@goosey.test`;
   const adminPassword = "Goosey-admin-browser-2026!";
-  const inviteCode = `HTN-${randomBytes(12).toString("hex")}`;
   const comment = `Wi-Fi reliability matters for live demos (${suffix}).`;
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
@@ -30,10 +29,9 @@ test("complete participant and administrator journey", async ({ page, request },
   });
 
   try {
-    const admin = await db.user.create({
+    await db.user.create({
       data: { email: adminEmail, username: `admin_${suffix.replace(/-/g, "_").slice(-14)}`, displayName: "Browser Journey Admin", passwordHash: await hash(adminPassword, 4), emailVerifiedAt: new Date(), role: "ADMIN", status: "ACTIVE" },
     });
-    await db.registrationInvite.create({ data: { codeHash: sha256(inviteCode), label: `Browser journey ${suffix}`, maxUses: 1, createdById: admin.id } });
 
     await test.step("public discovery, search, and anonymous admin boundary", async () => {
       await page.goto("/");
@@ -53,12 +51,10 @@ test("complete participant and administrator journey", async ({ page, request },
       expect((await request.get("/api/admin/audit-logs")).status()).toBe(401);
     });
 
-    await test.step("invite signup is gated until email verification", async () => {
+    await test.step("signup is gated until email verification", async () => {
       await page.goto("/signup");
       await page.getByLabel("Username").fill(username);
-      await page.getByLabel("Display name").fill("Browser Journey Hacker");
       await page.getByLabel("Email").fill(email);
-      await page.getByLabel("Invite code").fill(inviteCode);
       await page.getByLabel("Password", { exact: true }).fill(password);
       await page.getByRole("checkbox", { name: /community rules/i }).check();
       await page.getByRole("button", { name: /Create account/i }).click();
@@ -77,7 +73,7 @@ test("complete participant and administrator journey", async ({ page, request },
       const verified = await db.user.findUniqueOrThrow({ where: { email } });
       expect(verified.emailVerifiedAt).not.toBeNull();
       expect(verified.balanceMilli).toBe(10_000_000n);
-      expect(await db.registrationInviteClaim.count({ where: { userId: verified.id } })).toBe(1);
+      expect(await db.registrationInviteClaim.count({ where: { userId: verified.id } })).toBe(0);
     });
 
     await test.step("logout and login preserve the verified account", async () => {
@@ -141,7 +137,6 @@ test("complete participant and administrator journey", async ({ page, request },
 
     await test.step("profile, leaderboard, and ordinary-user admin boundary", async () => {
       await page.goto("/settings/profile");
-      await page.getByLabel("Display name").fill("Browser Journey Hacker");
       await page.getByLabel("Bio").fill("Testing Goosey from signup through settlement-safe trading.");
       await page.getByRole("checkbox", { name: /public profile/i }).check();
       await page.getByRole("checkbox", { name: /public leaderboard/i }).check();

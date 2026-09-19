@@ -4,8 +4,9 @@ import Link from "next/link";
 import { normalizeChartPoints } from "@/lib/chart-series";
 import { ProbabilityPlot } from "./probability-plot";
 export { ProbabilityChart } from "./probability-plot";
-import { ArrowDownRight, ArrowUpRight, Bookmark, Clock3, MessageCircle, Radio, TrendingUp } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Bookmark, Clock3, MessageCircle, TrendingUp } from "lucide-react";
 import { FeatherIcon } from "./brand";
+import { MarketStatusLabel } from "./market-status";
 import { WatchlistButton } from "./watchlist-button";
 
 export type MarketStatus = "scheduled" | "open" | "live" | "paused" | "closed" | "resolving" | "resolved" | "void";
@@ -63,7 +64,7 @@ export function MarketCard({ market, priority = false }: { market: MarketSummary
       </div>
       <Link className="market-title-link" href={`/markets/${market.slug}`}><h3>{market.title}</h3></Link>
       <div className="status-row">
-        <span className={`status-pill status-${market.status}`}>{market.status === "live" && <Radio size={12} />} {market.status}</span>
+        <MarketStatusLabel status={market.status} />
         <span><Clock3 size={14} /> {market.closesAt}</span>
       </div>
       {lead && (
