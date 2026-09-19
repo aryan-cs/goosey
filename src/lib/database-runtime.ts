@@ -54,7 +54,7 @@ export function resolveDatabaseRuntime(
   return {
     provider,
     datasourceUrl: postgresUrl(
-      env.POSTGRES_DATABASE_URL,
+      env.POSTGRES_DATABASE_URL ?? env.NEON_DATABASE_URL,
       "POSTGRES_DATABASE_URL",
       env.NODE_ENV === "production",
     ),

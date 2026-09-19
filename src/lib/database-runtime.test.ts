@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { resolveDatabaseRuntime } from "./database-runtime";
 
 describe("database runtime provider contract", () => {
+  it("supports protected Neon integration URLs without changing provider or TLS requirements", () => {
+    const env = { DATABASE_PROVIDER: "postgresql", NODE_ENV: "production", NEON_DATABASE_URL: "postgresql://app:secret@db.example.com/goosey?sslmode=require" };
+    expect(resolveDatabaseRuntime(env).datasourceUrl).toBe(env.NEON_DATABASE_URL);
+    expect(() => resolveDatabaseRuntime({ ...env, NEON_DATABASE_URL: "postgresql://db.example.com/goosey" })).toThrow(/must set sslmode/);
+    expect(() => resolveDatabaseRuntime({ ...env, POSTGRES_DATABASE_URL: "invalid" })).toThrow(/valid PostgreSQL/);
+    expect(() => resolveDatabaseRuntime({ ...env, DATABASE_PROVIDER: undefined })).toThrow(/explicitly set/);
+  });
   it("preserves SQLite as the non-production default", () => {
     expect(resolveDatabaseRuntime({ DATABASE_URL: "file:./dev.db", NODE_ENV: "development" })).toEqual({
       provider: "sqlite",
