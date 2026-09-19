@@ -26,23 +26,24 @@ async function main() {
   assert(genesis && keyPath.startsWith("/tmp/goosey-matcher-cu.") && output.startsWith("/tmp/goosey-matcher-cu."));
   assert.notEqual(program, "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
   let id = 0;
-  async function rpc(method: string, params: unknown[] = []): Promise<any> {
+  async function rpc<T = unknown>(method: string, params: unknown[] = []): Promise<T> {
     const response = await fetch(endpoint, { method: "POST", redirect: "error", signal: AbortSignal.timeout(10_000),
       headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }) });
     const body = await response.json();
     assert(!body.error, JSON.stringify(body.error));
-    return body.result;
+    return body.result as T;
   }
   assert.equal(await rpc("getGenesisHash"), genesis);
   const raw = Uint8Array.from(JSON.parse(await readFile(keyPath, "utf8")));
   const payer = await createKeyPairSignerFromBytes(raw); raw.fill(0);
-  const deployed = (await rpc("getAccountInfo", [program, { encoding: "base64" }])).value;
+  const deployed = (await rpc<{ value: { executable: boolean; data: [string, string] } | null }>("getAccountInfo", [program, { encoding: "base64" }])).value;
   assert(deployed?.executable, "Separate benchmark must already be deployed");
-  const receipts: any[] = [];
+  type TransactionResult = { slot: number; meta: { err: unknown; computeUnitsConsumed?: number; logMessages?: string[] } };
+  const receipts: Array<{name: string; signature: string; slot: number; cu: number | undefined; error: unknown; logs: string[] | undefined}> = [];
   let serial = 0;
   async function execute(name: string, instructions: Instruction[], failure = false, measure = true) {
     assert.equal(await rpc("getGenesisHash"), genesis);
-    const latest = (await rpc("getLatestBlockhash", [{ commitment: "confirmed" }])).value;
+    const latest = (await rpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>("getLatestBlockhash", [{ commitment: "confirmed" }])).value;
     const budget = Buffer.alloc(5); budget[0] = 2; budget.writeUInt32LE(1_400_000 - ++serial, 1);
     const message = pipe(createTransactionMessage({ version: 0 }),
       tx => setTransactionMessageFeePayerSigner(payer, tx),
@@ -53,9 +54,9 @@ async function main() {
     const wire = getBase64EncodedWireTransaction(signed);
     assert.equal(await rpc("sendTransaction", [wire, { encoding: "base64", skipPreflight: true, maxRetries: 5 }]), signature);
     const deadline = Date.now() + 45_000;
-    let lastResend = Date.now(), tx: any;
+    let lastResend = Date.now(), tx: TransactionResult | null = null;
     while (Date.now() < deadline) {
-      tx = await rpc("getTransaction", [signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
+      tx = await rpc<TransactionResult | null>("getTransaction", [signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
       if (tx) break;
       if (Date.now() - lastResend > 1_000) { await rpc("sendTransaction", [wire, { encoding: "base64", skipPreflight: true, maxRetries: 5 }]); lastResend = Date.now(); }
       await delay(80);
@@ -85,10 +86,11 @@ async function main() {
       { address: payer.address, role: AccountRole.READONLY_SIGNER }], data: b };
   }
   async function state(book: Address) {
-    const account = (await rpc("getAccountInfo", [book, { encoding: "base64", commitment: "confirmed" }])).value;
+    const account = (await rpc<{ value: { executable: boolean; data: [string, string] } | null }>("getAccountInfo", [book, { encoding: "base64", commitment: "confirmed" }])).value;
+    assert(account, "Benchmark book account missing");
     return Buffer.from(account.data[0], "base64");
   }
-  const rent = BigInt(await rpc("getMinimumBalanceForRentExemption", [69_712]));
+  const rent = BigInt(await rpc<number>("getMinimumBalanceForRentExemption", [69_712]));
   async function populated(n: number, mode: "fills" | "expiry" | "stp" = "fills", overrides: Options = {}) {
     const book = await generateKeyPairSigner();
     await execute(`initialize-${n}-${mode}`, [getCreateAccountInstruction({ payer, newAccount: book, lamports: rent,

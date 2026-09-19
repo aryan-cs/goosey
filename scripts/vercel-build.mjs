@@ -11,6 +11,14 @@ function run(script) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+// One-off, explicitly requested publication, guarded by destination and backup.
+// This is build-only configuration; ordinary deploys do not publish records.
+if (env.GOOSEY_CEREMONY_RELEASE_MODE) {
+  if (!["preview", "apply"].includes(env.GOOSEY_CEREMONY_RELEASE_MODE)) throw new Error("Invalid release mode");
+  const result = spawnSync("node", ["scripts/production-release.mjs", ...(env.GOOSEY_CEREMONY_RELEASE_MODE === "apply" ? ["--apply"] : [])], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
 // Explicit opt-in: preview builds must not silently mutate shared databases.
 if (env.GOOSEY_DEPLOY_MIGRATIONS === "1") run("db:migrate:deploy:postgres");
 run("build");

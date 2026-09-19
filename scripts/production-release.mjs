@@ -11,4 +11,3 @@ run('node',['--import','tsx','scripts/publish-dance-markets.ts','--system-operat
 run('node',['--import','tsx','scripts/launch-selected-markets.ts','--system-operator','--slug=htn-2026-all-toronto-team-wins',...(apply?['--apply']:[])],{GOOSEY_CONFIRM_MARKET_LAUNCH:'htn-2026-all-toronto-team-wins'});
 run('node',['--import','tsx','scripts/publish-speaker-market.ts',...(apply?['--apply']:[])]);
 run('node',['--import','tsx','scripts/production-inspection.ts']);
-run('node',['scripts/vercel-build.mjs']);
