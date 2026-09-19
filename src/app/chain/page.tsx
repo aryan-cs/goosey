@@ -54,7 +54,7 @@ export default async function ChainDirectory({ searchParams }: {
           <h2><Link href={item.href}>{item.title}</Link></h2>
           <p className={styles.description}>{item.description}</p>
           <dl className={styles.details}><div><dt>Winning contract payout</dt><dd>{feathers(item.payoutMilli)} 🪶</dd></div>
-            <div><dt>Scheduled close</dt><dd><time dateTime={item.closesAt.toISOString()}>{item.closesAt.toLocaleString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET</time></dd></div></dl>
+            <div><dt>Scheduled close</dt><dd><time dateTime={item.closesAt.toISOString()}>{item.closesAt.toLocaleString("en-CA", { timeZone: "America/Toronto", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET</time></dd></div></dl>
           <Link className={styles.marketLink} href={item.href}>View verified market <ArrowRight size={16} aria-hidden="true" /></Link>
         </article>)}</section>}
     <nav className={styles.pagination} aria-label="On-chain navigation">
