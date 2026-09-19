@@ -12,7 +12,7 @@ args = parser.parse_args()
 selected = json.loads((root / 'prisma/selected-markets.json').read_text())
 markets = [dict(slug=m['slug'], title=m['title'], shortTitle=m['shortTitle'],
                 qYes=0, qNo=0, orderBook=False) for m in selected]
-assert len(markets) == 3 and all(m['openingProbability'] == 0.5 for m in selected)
+assert len(markets) == 6 and all(m['openingProbability'] == 0.5 for m in selected)
 rows = []
 for m in markets:
     rows.append('  {' + ','.join([json.dumps(m['shortTitle']), json.dumps(m['title']),
@@ -20,12 +20,14 @@ for m in markets:
 expected = json.loads((root / 'badge/market-order-v2.json').read_text())
 if [m['slug'] for m in markets] != expected:
     raise SystemExit('Market order changed: migrate paper_v2 before rebuilding')
+initial = json.loads((root / 'badge/market-order-v2-initial.json').read_text())
+assert len(initial) == 3 and expected[:3] == initial, 'Legacy paper_v2 prefix must stay unchanged'
 code = (root / 'badge/src/main.lua').read_text().replace('__MARKETS__', '\n'.join(rows))
 # Only remove full-line comments, blank lines and leading indentation. Keep
 # literals and statement boundaries intact; smaller source reduces load buffers.
 code = '\n'.join(line.lstrip() for line in code.splitlines()
                  if line.strip() and not line.lstrip().startswith('--')) + '\n'
-manifest = 'slug=goosey_base\nname=Goosey\nicon=GSY\napi=2\nheap_kb=96\nversion=0.7.0\nauthor=Goosey\n'
+manifest = 'slug=goosey_base\nname=Goosey\nicon=GSY\napi=2\nheap_kb=96\nversion=0.7.1\nauthor=Goosey\n'
 out = args.output
 out.mkdir(parents=True, exist_ok=True)
 (out / 'goosey.lua').write_text('--[==[badge-app\n' + manifest + ']==]\n\n' + code)

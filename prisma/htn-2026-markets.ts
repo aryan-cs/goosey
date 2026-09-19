@@ -9,7 +9,7 @@ export interface HtnMarket {
 export const htnMarkets: HtnMarket[] = selectedMarkets;
 export const htnEvents = [{
   slug: "htn-2026-selected-finals", title: "Closing ceremony predictions",
-  shortTitle: "Closing ceremony", description: "The current three-market selection.",
+  shortTitle: "Closing ceremony", description: "The current six-market selection.",
   category: "Hack the North", featured: true, color: "green", icon: "sparkles",
   startsAt: "2026-09-18T00:00:00-04:00", endsAt: "2026-09-20T16:30:00-04:00",
   marketSlugs: htnMarkets.map(m => m.slug),

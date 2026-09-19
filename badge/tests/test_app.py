@@ -89,7 +89,7 @@ press('B','A');has('Order saved');assert g.writes==1;snapshot('05-receipt')
 # The next A leaves receipt, a repeated A only opens a ticket.
 press('A','A');assert g.writes==1
 press('RIGHT','DOWN','DOWN','RIGHT','RIGHT','DOWN','A','A');has('Sold 3 YES');assert g.writes==2
-parts=[int(x) for x in g.saved['paper_v2'].split(',')];assert parts[1]<=1000000 and parts[2:]==[0]*6
+parts=[int(x) for x in g.saved['paper_v2'].split(',')];assert parts[1]<=1000000 and parts[2:]==[0]*12
 press('A','A','RIGHT');review();has('Not enough shares');assert g.writes==2
 # Buy NO, then verify saved portfolio and account.
 press('B','RIGHT','A');review();press('A');has('Bought 1 NO');saved=g.saved['paper_v2']
@@ -129,8 +129,8 @@ for i in range(14):
     buy();press('A')
 snapshot('07-paper-history')
 assert max(len(list(w.points.values())) for w in g.widgets.values() if w.kind=='line')==12
-g.saved['paper_v2']='1,0,'+','.join(['0']*6);g.fresh();press('A','A');review();has('Not enough paper feathers')
-g.saved['paper_v2']='1,,20,'+','.join(['0']*6);g.fresh();has('10000.00')
+g.saved['paper_v2']='1,0,'+','.join(['0']*12);g.fresh();press('A','A');review();has('Not enough paper feathers')
+g.saved['paper_v2']='1,,20,'+','.join(['0']*12);g.fresh();has('10000.00')
 assert (output/'goosey.lua').stat().st_size<48*1024
 print('PASS: A/B navigation, settings return without trading, all full titles, list/detail layout,')
 print('buy/sell accounting, repeated button safety, saved portfolio, failed/malformed saves,')
@@ -147,7 +147,7 @@ assert not line.hide
 assert line.points[1][1]==0 and line.points[2][1]==170
 assert 'pts' in g.visible()
 # Hidden order-book slot remains in save schema; visible list wraps among ten.
-g.fresh();press('UP','A');has('Waterloo team')
+g.fresh();press('UP','A');has('selfie')
 assert 'order book' not in g.visible().lower()
 
 # Legacy save is untouched and never interpreted under new market identities.
@@ -158,3 +158,12 @@ has('10000.00');assert g.saved['paper_v1']==legacy
 press('UP','A');buy();g.on_exit();g.fresh()
 assert g.saved['paper_v1']==legacy
 settings_item(2);press('UP');has('1Y')
+
+# Original three-market wallet expands without loss or a write on read.
+g.saved['paper_v2']='1,123456,2,3,4,5,6,7';before_writes=g.writes;g.fresh()
+has('1234.56');assert g.writes==before_writes
+settings_item(2);has('2Y\n3N');has('4Y\n5N');has('6Y\n7N')
+press('DOWN','DOWN','DOWN');has('0Y\n0N')
+press('A');buy()
+record=[int(v) for v in g.saved['paper_v2'].split(',')]
+assert len(record)==14 and record[2:8]==[2,3,4,5,6,7]

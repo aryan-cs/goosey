@@ -46,5 +46,53 @@
     "resolvesAt": "2026-09-20T16:30:00-04:00",
     "openingProbability": 0.5,
     "pricingRationale": "Neutral starting price; not an evidence-based forecast."
+  },
+  {
+    "slug": "htn-2026-winner-stage-dance",
+    "title": "Will a winning team member do the worm, dab, or floss on stage?",
+    "shortTitle": "Will a winning team member do the worm, dab, or floss on stage?",
+    "description": "Will a winning team member do the worm, dab, or floss on stage?",
+    "rules": "YES if a listed member of any officially announced overall winning Hack the North 2026 team visibly performs at least one of the worm, a dab, or the floss while on the official stage during closing ceremonies. A recognizable worm body-wave, dab pose, or floss dance movement qualifies. Sponsor-only winners, audience members, screen footage and offstage performances do not count. Verify team membership against official overall results. Use the full official closing-ceremony recording. NO requires complete usable evidence; if the event is cancelled or the evidence is insufficient, VOID. Trading closes before closing ceremonies and must not reopen after the outcome is known.",
+    "resolutionSource": "Full official closing-ceremony recording; official overall winner list when applicable.",
+    "category": "Hack the North",
+    "icon": "sparkles",
+    "color": "green",
+    "featured": true,
+    "closesAt": "2026-09-20T14:30:00-04:00",
+    "resolvesAt": "2026-09-20T16:30:00-04:00",
+    "openingProbability": 0.5,
+    "pricingRationale": "Neutral starting price; not an evidence-based forecast."
+  },
+  {
+    "slug": "htn-2026-stage-job-request",
+    "title": "Will someone ask for a job on stage?",
+    "shortTitle": "Will someone ask for a job on stage?",
+    "description": "Will someone ask for a job on stage?",
+    "rules": "YES if a person physically on the official stage during closing ceremonies explicitly asks for a job, internship, interview or referral, audibly on the official microphone. A clear joke request counts. General job talk, hiring announcements, audience shouts and private conversations do not count. Use the full official closing-ceremony recording. NO requires complete usable evidence; if the event is cancelled or the evidence is insufficient, VOID. Trading closes before closing ceremonies and must not reopen after the outcome is known.",
+    "resolutionSource": "Full official closing-ceremony recording; official overall winner list when applicable.",
+    "category": "Hack the North",
+    "icon": "sparkles",
+    "color": "green",
+    "featured": true,
+    "closesAt": "2026-09-20T14:30:00-04:00",
+    "resolvesAt": "2026-09-20T16:30:00-04:00",
+    "openingProbability": 0.5,
+    "pricingRationale": "Neutral starting price; not an evidence-based forecast."
+  },
+  {
+    "slug": "htn-2026-stage-selfie",
+    "title": "Will someone take a selfie from the stage?",
+    "shortTitle": "Will someone take a selfie from the stage?",
+    "description": "Will someone take a selfie from the stage?",
+    "rules": "YES if a person physically on the official stage during closing ceremonies visibly takes a photo of themselves, alone or with others, using a camera or phone. A group selfie counts. Merely posing for another photographer, filming without taking a photo, audience selfies and prerecorded images do not count. Use the full official closing-ceremony recording. NO requires complete usable evidence; if the event is cancelled or the evidence is insufficient, VOID. Trading closes before closing ceremonies and must not reopen after the outcome is known.",
+    "resolutionSource": "Full official closing-ceremony recording; official overall winner list when applicable.",
+    "category": "Hack the North",
+    "icon": "sparkles",
+    "color": "green",
+    "featured": true,
+    "closesAt": "2026-09-20T14:30:00-04:00",
+    "resolvesAt": "2026-09-20T16:30:00-04:00",
+    "openingProbability": 0.5,
+    "pricingRationale": "Neutral starting price; not an evidence-based forecast."
   }
 ]

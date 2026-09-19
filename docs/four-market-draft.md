@@ -18,3 +18,13 @@ or positions. Existing deployed database retirement requires reconciliation
 with the teammate managing that database. No live database was changed here.
 The badge uses paper_v2 for a separate local wallet; paper_v1 remains untouched
 and recoverable with the old catalog. It is not migrated into unrelated assets.
+
+Added stage markets:
+
+- Will a winning team member do the worm, dab, or floss on stage? (any one qualifies)
+- Will someone ask for a job on stage?
+- Will someone take a selfie from the stage?
+
+All refer to official closing ceremonies. Resolution details and evidence rules
+are in the shared catalog. Existing three-market paper_v2 saves expand without
+resetting balances or holdings.
