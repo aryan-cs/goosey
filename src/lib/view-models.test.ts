@@ -2,9 +2,14 @@ import type { Market } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { marketProbabilityBps, marketSummary } from "./view-models";
 
-const market = { id: "book", slug: "book", title: "Campus prediction", category: "Campus", pricingModel: "ORDER_BOOK", status: "OPEN", resolution: null, closesAt: new Date("2099-01-01"), yesShares: 10, noShares: 10, payoutMilli: 100_000n, liquidityParameter: 100, volumeMilli: 0n, commentCount: 0 } as Market;
+const market = { executionBackend: "DATABASE", collateralAccountId: "collateral", id: "book", slug: "book", title: "Campus prediction", category: "Campus", pricingModel: "ORDER_BOOK", status: "OPEN", resolution: null, closesAt: new Date("2099-01-01"), yesShares: 10, noShares: 10, payoutMilli: 100_000n, liquidityParameter: 100, volumeMilli: 0n, commentCount: 0 } as Market;
 
 describe("market presentation marks", () => {
+  it("rejects chain defaults even with a caller-supplied probability or terminal result", () => {
+    const chain = { ...market, executionBackend: "SOLANA", collateralAccountId: null, status: "RESOLVED", resolution: "YES" };
+    expect(() => marketProbabilityBps(chain)).toThrow(expect.objectContaining({ code: "MARKET_BACKEND_MISMATCH" }));
+    expect(() => marketSummary(chain, 10000)).toThrow(expect.objectContaining({ code: "MARKET_BACKEND_MISMATCH" }));
+  });
   it("does not turn equal order-book inventories into a synthetic 50% price", () => {
     expect(marketProbabilityBps(market)).toBeNull();
     const summary = marketSummary(market);

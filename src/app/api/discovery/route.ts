@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { NextResponse } from "next/server";
 
 import { apiErrorResponse, jsonResponse, prisma } from "@/lib/market-service";
@@ -15,7 +16,7 @@ const marketSelect = {
   shortTitle: true,
   category: true,
   status: true,
-  pricingModel: true,
+  executionBackend: true, collateralAccountId: true, pricingModel: true,
   acceptingOrders: true,
   resolution: true,
   payoutMilli: true,
@@ -43,10 +44,11 @@ const marketSelect = {
 
 type Marks = Awaited<ReturnType<typeof loadMarketMarks>>;
 
-function marketCard<T extends { id: string; pricingModel: string; payoutMilli: bigint; updatedAt: Date; orderFills: Array<{ createdAt: Date; canonicalYesPriceMilli: bigint }>; priceHistory: Array<{ createdAt: Date; yesProbabilityBps: number }> }>(market: T, marks: Marks) {
+function marketCard<T extends { id: string; collateralAccountId: string | null; pricingModel: string; payoutMilli: bigint; updatedAt: Date; orderFills: Array<{ createdAt: Date; canonicalYesPriceMilli: bigint }>; priceHistory: Array<{ createdAt: Date; yesProbabilityBps: number }> }>(market: T, marks: Marks) {
   const mark = marks.get(market.id)!;
   const probability = mark.probabilityYesBps;
-  const { priceHistory, orderFills, ...card } = market;
+  const { priceHistory, orderFills, collateralAccountId, ...card } = market;
+  void collateralAccountId; // Used only by the boundary check, not public output.
   return {
     ...card,
     probabilityYesBps: probability,
@@ -71,16 +73,16 @@ export async function GET(): Promise<NextResponse> {
     return await runSerializableTransaction(prisma, async (tx) => {
       const [featuredEvents, trending, newest, closingSoon, moverCandidates] = await Promise.all([
         tx.marketEvent.findMany({
-          where: { featured: true, endsAt: { gt: now }, markets: { some: { status: "OPEN", closesAt: { gt: now } } } },
+          where: { featured: true, endsAt: { gt: now }, markets: { some: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: now } } } },
           orderBy: [{ startsAt: "asc" }, { id: "asc" }],
           take: 6,
-          select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true, _count: { select: { markets: { where: { status: "OPEN", closesAt: { gt: now } } } } } },
+          select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true, _count: { select: { markets: { where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: now } } } } } },
         }),
-        tx.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ featured: "desc" }, { traderCount: "desc" }, { volumeMilli: "desc" }, { id: "asc" }], take: 12, select: marketSelect }),
-        tx.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 12, select: marketSelect }),
-        tx.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ closesAt: "asc" }, { id: "asc" }], take: 12, select: marketSelect }),
+        tx.market.findMany({ where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: now } }, orderBy: [{ featured: "desc" }, { traderCount: "desc" }, { volumeMilli: "desc" }, { id: "asc" }], take: 12, select: marketSelect }),
+        tx.market.findMany({ where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: now } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 12, select: marketSelect }),
+        tx.market.findMany({ where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: now } }, orderBy: [{ closesAt: "asc" }, { id: "asc" }], take: 12, select: marketSelect }),
         tx.market.findMany({
-          where: { status: "OPEN", closesAt: { gt: now } },
+          where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: now } },
           take: 100,
           select: marketSelect,
         }),

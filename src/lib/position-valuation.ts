@@ -1,4 +1,5 @@
 import type { Market, Position, Prisma } from "@prisma/client";
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 import { liquidationValueMilli, sideLiquidationValuesMilli } from "./portfolio";
 import { marketProbabilityBps } from "./view-models";
 import { selectMarketMark } from "./order-book-pricing";
@@ -17,16 +18,17 @@ export interface PositionValuation {
 
 /** Call inside the same snapshot used to read holdings and cash. */
 export async function loadPositionValuations(tx: Prisma.TransactionClient, positions: Holding[], now = new Date()): Promise<Map<string, PositionValuation>> {
+  for (const position of positions) assertDatabaseFinancialMarket(position.market);
   const marketIds = [...new Set(positions.filter((p) => p.market.pricingModel === "ORDER_BOOK").map((p) => p.marketId))];
   const byMarket = new Map<string, ValuationOrder[]>();
   const lastByMarket = new Map<string, { canonicalYesPriceMilli: bigint; createdAt: Date }>();
   if (marketIds.length) {
     const [orders, markets] = await Promise.all([
       tx.marketOrder.findMany({
-        where: { marketId: { in: marketIds }, user: { status: "ACTIVE", role: "USER" }, status: { in: ["OPEN", "PARTIALLY_FILLED"] }, remainingQuantity: { gt: 0 }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        where: { market: DATABASE_MARKET_FILTER, marketId: { in: marketIds }, user: { status: "ACTIVE", role: "USER" }, status: { in: ["OPEN", "PARTIALLY_FILLED"] }, remainingQuantity: { gt: 0 }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
         select: { marketId: true, userId: true, stpOwnerId: true, bookSide: true, limitPriceMilli: true, remainingQuantity: true, status: true, expiresAt: true },
       }),
-      tx.market.findMany({ where: { id: { in: marketIds } }, select: { id: true, orderFills: { orderBy: { tradeSequence: "desc" }, take: 1, select: { canonicalYesPriceMilli: true, createdAt: true } } } }),
+      tx.market.findMany({ where: { ...DATABASE_MARKET_FILTER, id: { in: marketIds } }, select: { id: true, orderFills: { orderBy: { tradeSequence: "desc" }, take: 1, select: { canonicalYesPriceMilli: true, createdAt: true } } } }),
     ]);
     for (const order of orders) {
       const group = byMarket.get(order.marketId) ?? [];

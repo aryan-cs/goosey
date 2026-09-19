@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "./market-backend";
 import type { Prisma } from "@prisma/client";
 
 export interface PublicTradeActivity {
@@ -33,7 +34,7 @@ export async function loadPublicTradeActivity(
   }
   const [trades, fills] = await Promise.all([
     tx.trade.findMany({
-      where: { market: { status: { not: "DRAFT" } } },
+      where: { market: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit,
       select: {
@@ -43,7 +44,7 @@ export async function loadPublicTradeActivity(
       },
     }),
     tx.orderFill.findMany({
-      where: { market: { status: { not: "DRAFT" } } },
+      where: { market: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit,
       select: {

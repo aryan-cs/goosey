@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "./market-backend";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -163,13 +164,14 @@ export async function loadTradeHistory(
   const cursor = input.cursor ? validateCursor(input.cursor) : undefined;
   const [legacyRows, fillRows] = await Promise.all([
     tx.trade.findMany({
-      where: { userId, ...sourceBoundary("LMSR", cursor) },
+      where: { market: DATABASE_MARKET_FILTER, userId, ...sourceBoundary("LMSR", cursor) },
       select: legacySelect,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
     }),
     tx.orderFill.findMany({
       where: {
+        market: DATABASE_MARKET_FILTER,
         OR: [{ makerOrder: { userId } }, { takerOrder: { userId } }],
         ...sourceBoundary("ORDER_BOOK", cursor),
       },

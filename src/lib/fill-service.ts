@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { assertDatabaseFinancialMarket, DATABASE_MARKET_FILTER } from "./market-backend";
 import { z } from "zod";
 
 import { ApiError, prisma } from "@/lib/market-service";
@@ -134,7 +135,7 @@ export async function listUserFills(input: { userId: string } & ListFillsQuery) 
   const rows = await prisma.orderFill.findMany({
     where: {
       ...ownership,
-      ...(input.marketSlug ? { market: { slug: input.marketSlug } } : {}),
+      market: { ...DATABASE_MARKET_FILTER, ...(input.marketSlug ? { slug: input.marketSlug } : {}) },
       ...(input.cursor ? {
         AND: [{ OR: [
           { createdAt: { lt: input.cursor.createdAt } },
@@ -164,9 +165,10 @@ export async function listPublicTrades(input: {
 }) {
   const market = await prisma.market.findUnique({
     where: { slug: input.marketSlug },
-    select: { id: true, slug: true, status: true, pricingModel: true, payoutMilli: true, tradeSequence: true },
+    select: { executionBackend: true, collateralAccountId: true, id: true, slug: true, status: true, pricingModel: true, payoutMilli: true, tradeSequence: true },
   });
   if (!market || market.status === "DRAFT") throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+  assertDatabaseFinancialMarket(market);
   if (market.pricingModel !== "ORDER_BOOK") {
     throw new ApiError(422, "ORDER_BOOK_UNAVAILABLE", "This market does not use the order-book engine.");
   }

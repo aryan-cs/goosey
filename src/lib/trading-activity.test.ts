@@ -35,7 +35,7 @@ describe("trading activity aggregation", () => {
 
     expect(activity.get("alice")).toEqual({ trades: 3, marketsTraded: 1 });
     expect(database.marketOrder.findMany).toHaveBeenCalledWith({
-      where: { userId: { in: ["alice"] }, filledQuantity: { gt: 0 } },
+      where: { market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: { in: ["alice"] }, filledQuantity: { gt: 0 } },
       select: {
         userId: true,
         marketId: true,
@@ -76,11 +76,11 @@ describe("trading activity aggregation", () => {
 
     expect(database.trade.groupBy).toHaveBeenCalledWith({
       by: ["userId", "marketId"],
-      where: { userId: { in: ["alice", "bob"] } },
+      where: { market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: { in: ["alice", "bob"] } },
       _count: { _all: true },
     });
     expect(database.marketOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId: { in: ["alice", "bob"] }, filledQuantity: { gt: 0 } },
+      where: { market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: { in: ["alice", "bob"] }, filledQuantity: { gt: 0 } },
     }));
     expect([...activity.entries()]).toEqual([
       ["alice", { trades: 3, marketsTraded: 2 }],

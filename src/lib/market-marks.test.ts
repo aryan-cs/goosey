@@ -16,6 +16,7 @@ const tx = {
 function market(overrides: Partial<MarketMarkInput> = {}): MarketMarkInput {
   return {
     id: "market",
+    executionBackend: "DATABASE", collateralAccountId: "collateral",
     pricingModel: "ORDER_BOOK",
     status: "OPEN",
     resolution: null,
@@ -30,6 +31,12 @@ function market(overrides: Partial<MarketMarkInput> = {}): MarketMarkInput {
 }
 
 describe("market mark batch loading", () => {
+  it.each(["LMSR", "ORDER_BOOK"])("rejects chain %s input before any SQL reads, including a duplicate ID", async (pricingModel) => {
+    groupBy.mockClear(); findMarkets.mockClear();
+    await expect(loadMarketMarks(tx, [market(), market({ executionBackend: "SOLANA", collateralAccountId: null, pricingModel })], NOW))
+      .rejects.toMatchObject({ code: "MARKET_BACKEND_MISMATCH" });
+    expect(groupBy).not.toHaveBeenCalled(); expect(findMarkets).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     groupBy.mockResolvedValue([]);
@@ -93,7 +100,7 @@ describe("market mark batch loading", () => {
     expect(groupBy).toHaveBeenCalledWith({
       by: ["marketId", "bookSide", "limitPriceMilli"],
       where: {
-        marketId: { in: ["market"] },
+        market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, marketId: { in: ["market"] },
         user: { status: "ACTIVE", role: "USER" },
         status: { in: ["OPEN", "PARTIALLY_FILLED"] },
         remainingQuantity: { gt: 0 },
@@ -102,7 +109,7 @@ describe("market mark batch loading", () => {
       _sum: { remainingQuantity: true },
     });
     expect(findMarkets).toHaveBeenCalledWith({
-      where: { id: { in: ["market"] } },
+      where: { ...{ executionBackend: "DATABASE", collateralAccountId: { not: null } }, id: { in: ["market"] } },
       select: {
         id: true,
         orderFills: {

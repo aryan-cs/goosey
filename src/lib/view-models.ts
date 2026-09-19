@@ -1,4 +1,5 @@
 import type { Market, MarketPriceSnapshot } from "@prisma/client";
+import { assertDatabaseFinancialMarket } from "./market-backend";
 import { formatDistanceToNowStrict } from "date-fns";
 import type { MarketSummary, MarketStatus } from "@/components/market";
 import { probabilityYesBps } from "@/lib/market-maker";
@@ -11,7 +12,8 @@ export function formatFeathers(milli: bigint, maximumFractionDigits = 0): string
   return new Intl.NumberFormat("en-CA", { maximumFractionDigits }).format(whole);
 }
 
-export function marketProbabilityBps(market: Pick<Market, "yesShares" | "noShares" | "liquidityParameter" | "payoutMilli" | "status" | "resolution"> & { pricingModel?: string }) {
+export function marketProbabilityBps(market: Pick<Market, "executionBackend" | "collateralAccountId" | "yesShares" | "noShares" | "liquidityParameter" | "payoutMilli" | "status" | "resolution"> & { pricingModel?: string }) {
+  assertDatabaseFinancialMarket(market);
   if (market.status === "RESOLVED" && market.resolution === "YES") return 10_000;
   if (market.status === "RESOLVED" && market.resolution === "NO") return 0;
   if (market.status === "VOID") return 5_000;
@@ -39,6 +41,7 @@ export function marketSummary(
   market: Market & { priceHistory?: MarketPriceSnapshot[]; orderFills?: Array<{ canonicalYesPriceMilli: bigint; createdAt: Date }> },
   probabilityBps: number | null = marketProbabilityBps(market),
 ): MarketSummary {
+  assertDatabaseFinancialMarket(market);
   const yesBps = probabilityBps;
   const history = market.pricingModel === "ORDER_BOOK"
     ? [...(market.orderFills ?? [])].reverse().map((fill) => ({ createdAt: fill.createdAt, yesProbabilityBps: Number(impliedProbabilityBps(fill.canonicalYesPriceMilli, market.payoutMilli)) }))

@@ -116,7 +116,7 @@ describe("leaderboard reserved cash", () => {
 
     expect(mocks.reservations).toHaveBeenCalledWith({
       where: {
-        userId: { in: ["alice_id", "bob_id"] },
+        market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: { in: ["alice_id", "bob_id"] },
         cashAccountId: { not: null },
       },
       select: {
@@ -148,7 +148,7 @@ describe("leaderboard reserved cash", () => {
           id: "position-a", userId: "alice_id", marketId: "market-a",
           yesShares: 0, noShares: 1,
           market: {
-            id: "market-a", pricingModel: "LMSR", yesShares: 1_000, noShares: 1,
+            executionBackend: "DATABASE", collateralAccountId: "collateral", id: "market-a", pricingModel: "LMSR", yesShares: 1_000, noShares: 1,
             liquidityParameter: 40, payoutMilli: 100_000n, feeBps: 100,
             status: "OPEN", resolution: null,
           },

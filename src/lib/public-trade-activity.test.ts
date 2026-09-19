@@ -26,7 +26,7 @@ describe("unified public trade activity", () => {
     expect(await loadPublicTradeActivity(client, 3)).toEqual([]);
     for (const delegate of [tx.trade, tx.orderFill]) {
       expect(delegate.findMany).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-        where: { market: { status: { not: "DRAFT" } } }, take: 3,
+        where: { market: { ...{ executionBackend: "DATABASE", collateralAccountId: { not: null } }, status: { not: "DRAFT" } } }, take: 3,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       }));
     }

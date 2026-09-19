@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse, jsonResponse, prisma, requireUser } from "@/lib/market-service";
 import { loadPositionValuations } from "@/lib/position-valuation";
@@ -25,18 +26,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         select: { balanceMilli: true },
       }),
       tx.position.findMany({
-        where: { userId: user.id, OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] },
+        where: { market: DATABASE_MARKET_FILTER, userId: user.id, OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] },
         include: { market: true },
         orderBy: { updatedAt: "desc" },
       }),
       tx.trade.findMany({
-        where: { userId: user.id },
+        where: { market: DATABASE_MARKET_FILTER, userId: user.id },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: 100,
         include: { market: { select: { slug: true, title: true } } },
       }),
       tx.orderReservation.findMany({
-        where: { userId: user.id, cashAccountId: { not: null } },
+        where: { market: DATABASE_MARKET_FILTER, userId: user.id, cashAccountId: { not: null } },
         select: { cashAccount: { select: { balanceMilli: true } } },
       }),
       ]);

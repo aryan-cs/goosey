@@ -43,7 +43,7 @@ function holding(id = "holding-yes", yesShares = 5, noShares = 0) {
     netCostMilli: 2_000n, yesCostBasisMilli: 2_000n, noCostBasisMilli: 0n,
     realizedPnlMilli: -123n, updatedAt: now,
     market: {
-      id: "market-1", slug: "goose-race", title: "Goose race", pricingModel: "ORDER_BOOK",
+      executionBackend: "DATABASE", collateralAccountId: "collateral", id: "market-1", slug: "goose-race", title: "Goose race", pricingModel: "ORDER_BOOK",
       status: "OPEN", resolution: null as string | null, acceptingOrders: true,
       closesAt: new Date("2099-01-01"), payoutMilli: 1_000n, feeBps: 100,
     },
@@ -85,11 +85,11 @@ describe("portfolio API snapshot and executable valuations", () => {
       where: { ownerType_ownerId_purpose: { ownerType: "USER", ownerId: "participant", purpose: "USER_FEATHERS" } },
     }));
     expect(mocks.tx.position.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId: "participant", OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] },
+      where: { market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: "participant", OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] },
     }));
-    expect(mocks.tx.trade.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: "participant" }, take: 100 }));
+    expect(mocks.tx.trade.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: "participant" }, take: 100 }));
     expect(mocks.tx.orderReservation.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId: "participant", cashAccountId: { not: null } },
+      where: { market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, userId: "participant", cashAccountId: { not: null } },
     }));
     expect(mocks.tx.marketOrder.findMany).toHaveBeenCalledOnce();
     expect(mocks.tx.market.findMany).toHaveBeenCalledOnce();

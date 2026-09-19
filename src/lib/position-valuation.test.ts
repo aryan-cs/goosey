@@ -6,7 +6,7 @@ const now = new Date("2026-09-19T14:00:00Z");
 function holding() {
   return {
     id: "position", userId: "holder", marketId: "market", yesShares: 10, noShares: 0,
-    market: { id: "market", pricingModel: "ORDER_BOOK", status: "OPEN", resolution: null, payoutMilli: 100_000n, feeBps: 100, closesAt: new Date(now.getTime() + 60_000), acceptingOrders: true },
+    market: { executionBackend: "DATABASE", collateralAccountId: "collateral", id: "market", pricingModel: "ORDER_BOOK", status: "OPEN", resolution: null, payoutMilli: 100_000n, feeBps: 100, closesAt: new Date(now.getTime() + 60_000), acceptingOrders: true },
   } as Parameters<typeof loadPositionValuations>[1][number];
 }
 
@@ -20,14 +20,20 @@ function client(last = true) {
 }
 
 describe("position valuation snapshot", () => {
+  it.each(["OPEN", "RESOLVING", "RESOLVED", "VOID"])("never values chain positions from SQL defaults at %s", async (status) => {
+    const db = client(), position = holding();
+    Object.assign(position.market, { executionBackend: "SOLANA", collateralAccountId: null, status, resolution: "YES" });
+    await expect(loadPositionValuations(db.tx, [position], now)).rejects.toMatchObject({ code: "MARKET_BACKEND_MISMATCH" });
+    expect(db.orders).not.toHaveBeenCalled(); expect(db.markets).not.toHaveBeenCalled();
+  });
   it("loads scoped active depth, uses real liquidity, and excludes own orders from proceeds", async () => {
     const db = client();
     const results = await loadPositionValuations(db.tx, [holding()], now);
     expect(results.get("position")).toMatchObject({ valueMilli: 118_800n, yes: 118_800n, no: 0n, unfilledYes: 6, unfilledNo: 0, probabilityYesBps: 4000, method: "ORDER_BOOK_LIQUIDATION" });
     expect(db.orders).toHaveBeenCalledWith(expect.objectContaining({ where: {
-      marketId: { in: ["market"] }, user: { status: "ACTIVE", role: "USER" }, status: { in: ["OPEN", "PARTIALLY_FILLED"] }, remainingQuantity: { gt: 0 }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      market: { executionBackend: "DATABASE", collateralAccountId: { not: null } }, marketId: { in: ["market"] }, user: { status: "ACTIVE", role: "USER" }, status: { in: ["OPEN", "PARTIALLY_FILLED"] }, remainingQuantity: { gt: 0 }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     } }));
-    expect(db.markets).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ["market"] } } }));
+    expect(db.markets).toHaveBeenCalledWith(expect.objectContaining({ where: { ...{ executionBackend: "DATABASE", collateralAccountId: { not: null } }, id: { in: ["market"] } } }));
   });
 
   it("does not invent a 50 percent forecast when no market price exists", async () => {

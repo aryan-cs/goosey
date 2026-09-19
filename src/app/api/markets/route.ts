@@ -1,3 +1,4 @@
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const now = new Date();
 
     const where: Prisma.MarketWhereInput = {
+      ...DATABASE_MARKET_FILTER,
       status: parsed.status,
       ...(parsed.status === "OPEN" ? { closesAt: { gt: now } } : {}),
       ...(parsed.category ? { category: parsed.category } : {}),
@@ -70,7 +72,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           description: true,
           category: true,
           status: true,
-          pricingModel: true,
+          executionBackend: true, collateralAccountId: true, pricingModel: true,
           acceptingOrders: true,
           resolution: true,
           featured: true,
@@ -107,6 +109,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const { priceHistory, orderFills, ...summary } = market;
         return {
           ...summary,
+          collateralAccountId: undefined,
           probabilityYesBps: probability,
           probabilitySource: mark.source,
           probabilityStale: mark.stale,
