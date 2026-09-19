@@ -220,7 +220,7 @@ function CommentSectionContent({ marketId, marketSlug, focusedCommentId, current
       {focusedCommentId && <p className="status-message">Linked discussion · <Link href={`${marketHref}#discussion-heading`}>View all discussion</Link></p>}
       <form className="comment-composer" onSubmit={submit}>
         <label htmlFor="comment-body">Add a comment</label>
-        <textarea id="comment-body" value={body} maxLength={maxLength} rows={3} disabled={!canPost || sending} onChange={(event) => setBody(event.target.value)} placeholder={canPost === null ? "Checking your account..." : canPost ? "What do you think, and why?" : "Sign in to join the discussion"} />
+        <textarea id="comment-body" value={body} maxLength={maxLength} rows={3} disabled={!canPost || sending} onChange={(event) => setBody(event.target.value)} placeholder={canPost === null ? "Checking your account..." : canPost ? "Start typing here..." : "Sign in to join the discussion"} />
         {canPost === false && <p className="signed-out-guidance"><Link href={`/login?next=${encodeURIComponent(returnHref)}`}>Sign in</Link> to comment, reply, or report a problem.</p>}
         <div><span className={body.length > maxLength * .9 ? "near-limit" : ""}>{body.length}/{maxLength}</span><button className="button button-primary" disabled={!canPost || !body.trim() || sending}>{sending ? "Posting…" : "Post"}</button></div>
       </form>
