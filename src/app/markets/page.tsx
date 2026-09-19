@@ -2,6 +2,7 @@ import Link from "next/link";
 import styles from "./markets.module.css";
 import { Filter, Search } from "lucide-react";
 import { db } from "@/lib/db";
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { marketSummary } from "@/lib/view-models";
 import { MarketListRow } from "@/components/market";
 import { EmptyState } from "@/components/states";
@@ -19,6 +20,7 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
   const markets = await runSerializableTransaction(db, async (tx) => {
     const rows = await tx.market.findMany({
     where: {
+      ...DATABASE_MARKET_FILTER,
       ...(category ? { category } : {}),
       ...(query ? { OR: [{ title: { contains: query } }, { description: { contains: query } }] } : {}),
       status: "OPEN",

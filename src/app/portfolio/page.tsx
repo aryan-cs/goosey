@@ -9,6 +9,7 @@ import { MetricCard, PositionRow, SectionHeader } from "@/components/data-primit
 import { EmptyState } from "@/components/states";
 import { RedemptionForm } from "@/components/redemption-form";
 import { db } from "@/lib/db";
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { loadPositionValuations } from "@/lib/position-valuation";
 import { getServerUser } from "@/lib/server-session";
 import { formatFeathers } from "@/lib/view-models";
@@ -40,11 +41,11 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   }
   const [positions, history, cashRecord, wallet, reservations, valuations] = await runSerializableTransaction(db, async (db) => {
     const result = await Promise.all([
-    db.position.findMany({ where: { userId: user.id, OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] }, include: { market: true }, orderBy: { updatedAt: "desc" } }),
+    db.position.findMany({ where: { market: DATABASE_MARKET_FILTER, userId: user.id, OR: [{ yesShares: { gt: 0 } }, { noShares: { gt: 0 } }] }, include: { market: true }, orderBy: { updatedAt: "desc" } }),
     view !== "history" || invalidCursor ? Promise.resolve({ items: [], nextCursor: null }) : loadTradeHistory(db, user.id, { limit: 30, cursor }),
     db.user.findUniqueOrThrow({ where: { id: user.id }, select: { balanceMilli: true } }),
     db.ledgerAccount.findUnique({ where: { ownerType_ownerId_purpose: { ownerType: "USER", ownerId: user.id, purpose: "USER_FEATHERS" } }, select: { balanceMilli: true } }),
-    db.orderReservation.findMany({ where: { userId: user.id, cashAccountId: { not: null } }, select: { cashAccount: { select: { balanceMilli: true } } } }),
+    db.orderReservation.findMany({ where: { market: DATABASE_MARKET_FILTER, userId: user.id, cashAccountId: { not: null } }, select: { cashAccount: { select: { balanceMilli: true } } } }),
     ]);
     return [...result, await loadPositionValuations(db, result[0])] as const;
   });

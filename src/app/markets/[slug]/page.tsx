@@ -11,6 +11,7 @@ import { MarketStatusLabel } from "@/components/market-status";
 import { notFound, redirect } from "next/navigation";
 import { Bookmark, CalendarClock, ChevronRight, Share2 } from "lucide-react";
 import { db } from "@/lib/db";
+import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
 import { formatFeathers } from "@/lib/view-models";
 import { loadMarketMarks } from "@/lib/market-marks";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
@@ -35,7 +36,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
   const user = await getServerUser();
   const data = await runSerializableTransaction(db, async (tx) => {
     const market = await tx.market.findUnique({
-    where: { slug },
+    where: { slug, AND: [DATABASE_MARKET_FILTER] },
     include: {
       _count: { select: { orders: true, orderFills: true, trades: true, settlements: true } },
       priceHistory: { orderBy: { createdAt: "desc" }, take: 500 },
