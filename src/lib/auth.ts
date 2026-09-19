@@ -8,7 +8,7 @@ import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
 export const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "goosey_session";
 
-const DEFAULT_STARTING_FEATHERS = "10000";
+const DEFAULT_STARTING_FEATHERS = "1000";
 const MAX_STARTING_FEATHERS = 1_000_000n;
 
 export class WelcomeGrantConfigurationError extends Error {

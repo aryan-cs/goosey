@@ -61,7 +61,7 @@ describe("account recovery tokens", () => {
   });
 
   it("accepts only positive bounded whole-feather welcome grants", () => {
-    expect(parseWelcomeGrantMilli(undefined)).toBe(10_000_000n);
+    expect(parseWelcomeGrantMilli(undefined)).toBe(1_000_000n);
     expect(parseWelcomeGrantMilli("1")).toBe(1_000n);
     expect(parseWelcomeGrantMilli(" 1000000 ")).toBe(1_000_000_000n);
     for (const value of ["", "0", "-1", "1.5", "1e3", "1000001", "not-a-number"]) {

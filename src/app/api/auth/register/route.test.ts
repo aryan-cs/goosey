@@ -11,7 +11,7 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/lib/auth", () => ({
   registerUser: mocks.registerUser,
   setSessionCookie: mocks.setSessionCookie,
-  WELCOME_GRANT_MILLI: 10_000_000n,
+  WELCOME_GRANT_MILLI: 1_000_000n,
   emailVerificationState: () => ({ required: true }),
 }));
 vi.mock("@/lib/security", async (importOriginal) => ({
@@ -63,7 +63,7 @@ describe("POST /api/auth/register without invitations", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toMatchObject({
       balanceMilli: "0",
-      pendingWelcomeGrantMilli: "10000000",
+      pendingWelcomeGrantMilli: "1000000",
       emailVerification: { required: true },
     });
   });

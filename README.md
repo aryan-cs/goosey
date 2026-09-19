@@ -98,7 +98,7 @@ Copy `.env.example` to `.env`. Never commit `.env` or production secrets.
 | `POSTGRES_TEST_DATABASE_URL` | empty | Opt-in test-only URL with permission to create/drop a uniquely named schema. `npm run test:postgres` never uses it unless explicitly supplied. |
 | `SESSION_COOKIE_NAME` | `goosey_session` | Implemented opaque-session cookie name. Code sets `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` in production; production should configure a `__Host-` prefixed name. |
 | `SESSION_TTL_DAYS` | `14` | Absolute session lifetime; expiry is checked server-side. Idle expiry is not implemented. |
-| `STARTING_FEATHERS` | `10000` | One-time welcome grant in whole feathers, posted only after participant email verification through a unique balanced journal and matching user/wallet cache updates. |
+| `STARTING_FEATHERS` | `1000` | One-time welcome grant in whole feathers, posted only after participant email verification through a unique balanced journal and matching user/wallet cache updates. |
 | `ADMIN_EMAIL` | empty | When paired with `ADMIN_PASSWORD`, local seed creates a new `ADMIN`; it refuses to promote an existing email. |
 | `ADMIN_PASSWORD` | empty | Local seed requires at least 12 characters. Do not keep a bootstrap credential in production; rotate it and require step-up authentication. |
 | `GOOSEY_ADMIN_EMAIL` | empty | Email consumed only by `npm run admin:create`; it is normalized before a create-only uniqueness check. |

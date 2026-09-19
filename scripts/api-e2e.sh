@@ -52,7 +52,7 @@ EMAIL_UNAVAILABLE=$(curl -sS -o "${RUN_DIR}/email-unavailable.json" -w '%{http_c
 jq -e '.error.code == "EMAIL_UNAVAILABLE"' "${RUN_DIR}/email-unavailable.json" >/dev/null
 VERIFY_TOKEN=$(DATABASE_URL="file:${DB_FILE}" npx tsx scripts/setup-e2e-verification.ts "$EMAIL")
 curl -fsS -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"token\":\"$VERIFY_TOKEN\"}" "$ORIGIN/api/auth/email-verification/confirm" | jq -e '.verified == true and .welcomeGrantIssued == true' >/dev/null
-curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/me" | jq -e '.balanceMilli == "10000000"' >/dev/null
+curl -fsS -b "$COOKIE_JAR" "$ORIGIN/api/me" | jq -e '.balanceMilli == "1000000"' >/dev/null
 
 MARKETS=$(curl -fsS "$ORIGIN/api/markets?limit=1")
 MARKET_ID=$(jq -r '.items[0].id' <<<"$MARKETS")

@@ -72,7 +72,7 @@ test("complete participant and administrator journey", async ({ page, request },
       await expect(page).toHaveURL(/\/markets$/);
       const verified = await db.user.findUniqueOrThrow({ where: { email } });
       expect(verified.emailVerifiedAt).not.toBeNull();
-      expect(verified.balanceMilli).toBe(10_000_000n);
+      expect(verified.balanceMilli).toBe(1_000_000n);
       expect(await db.registrationInviteClaim.count({ where: { userId: verified.id } })).toBe(0);
     });
 
