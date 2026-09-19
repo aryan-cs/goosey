@@ -1,0 +1,60 @@
+.discussion h2,
+.discussion article {
+  scroll-margin-top: 120px;
+}
+
+.discussion article:target,
+.discussion article[data-linked="true"] {
+  outline: 2px solid var(--yes);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.content {
+  min-width: 0;
+}
+
+.replyComposer {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+.replyActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.content > .replyCount {
+  color: var(--ink-muted);
+  font-size: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+  .discussion :global(.comment-replies) {
+    padding-left: 8px;
+    margin-left: -24px;
+  }
+
+  .replyComposer {
+    padding: 10px;
+  }
+
+  .replyComposer > div {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .replyActions {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    font-family: var(--font-sans, inherit);
+  }
+
+  .replyActions button {
+    padding-inline: 10px;
+  }
+}

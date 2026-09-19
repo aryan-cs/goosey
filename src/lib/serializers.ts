@@ -57,7 +57,21 @@ type CommentForSerialization = {
   updatedAt: Date;
   user: { id: string; username: string; displayName: string };
   replies?: CommentForSerialization[];
+  replyCount?: number;
+  repliesNextCursor?: string | null;
 };
+
+export function encodeCommentReplyCursor(input: {
+  parentId: string;
+  createdAt: Date;
+  id: string;
+}): string {
+  return encodeCursor({
+    parentId: input.parentId,
+    createdAt: input.createdAt.toISOString(),
+    id: input.id,
+  });
+}
 
 export type SerializedComment = Omit<
   CommentForSerialization,

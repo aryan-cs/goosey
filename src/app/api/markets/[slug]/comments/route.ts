@@ -11,7 +11,13 @@ import {
   prisma,
   requireUser,
 } from "@/lib/market-service";
-import { decodeCursor, encodeCursor, jsonStringify, serializeComment } from "@/lib/serializers";
+import {
+  decodeCursor,
+  encodeCommentReplyCursor,
+  encodeCursor,
+  jsonStringify,
+  serializeComment,
+} from "@/lib/serializers";
 import { getAuthenticatedUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +27,7 @@ const listSchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(100).default(30),
     cursor: z.string().max(500).optional(),
+    comment: z.string().cuid().optional(),
     sort: z.enum(["top", "newest"]).default("newest"),
   })
   .strict();
@@ -39,6 +46,7 @@ const createSchema = z
     disclosePosition: z.boolean().default(false),
   })
   .strict();
+const REPLY_PAGE_SIZE = 25;
 
 export async function GET(
   request: NextRequest,
@@ -47,11 +55,87 @@ export async function GET(
   try {
     const { slug } = paramsSchema.parse(await context.params);
     const query = listSchema.parse(Object.fromEntries(request.nextUrl.searchParams));
+    if (query.comment && query.cursor !== undefined) {
+      throw new ApiError(400, "INVALID_REQUEST", "Focused comment retrieval cannot use a cursor.");
+    }
     const cursor = decodeCursor(query.cursor);
     if (query.cursor && !cursor?.id) throw new ApiError(400, "INVALID_CURSOR", "Cursor is invalid.");
     const market = await prisma.market.findUnique({ where: { slug }, select: { id: true, status: true } });
     const viewer = market?.status === "DRAFT" ? await getAuthenticatedUser(request) : null;
     if (!market || (market.status === "DRAFT" && viewer?.role !== "ADMIN")) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
+    if (query.comment) {
+      const requested = await prisma.comment.findFirst({
+        where: {
+          id: query.comment,
+          marketId: market.id,
+          status: { in: ["VISIBLE", "DELETED"] },
+        },
+        select: { id: true, parentId: true, createdAt: true },
+      });
+      if (!requested) throw new ApiError(404, "COMMENT_NOT_FOUND", "Comment not found.");
+
+      const root = await prisma.comment.findFirst({
+        where: {
+          id: requested.parentId ?? requested.id,
+          marketId: market.id,
+          parentId: null,
+          status: { in: ["VISIBLE", "DELETED"] },
+        },
+        include: {
+          user: { select: { id: true, username: true, displayName: true } },
+          replies: {
+            where: {
+              marketId: market.id,
+              status: { in: ["VISIBLE", "DELETED"] },
+              ...(requested.parentId
+                ? {
+                    OR: [
+                      { createdAt: { gt: requested.createdAt } },
+                      { createdAt: requested.createdAt, id: { gte: requested.id } },
+                    ],
+                  }
+                : {}),
+            },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            take: REPLY_PAGE_SIZE + 1,
+            include: { user: { select: { id: true, username: true, displayName: true } } },
+          },
+          _count: {
+            select: {
+              replies: {
+                where: {
+                  marketId: market.id,
+                  status: { in: ["VISIBLE", "DELETED"] },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!root) throw new ApiError(404, "COMMENT_NOT_FOUND", "Comment not found.");
+
+      const { replies, _count, ...comment } = root;
+      const replyPage = replies.slice(0, REPLY_PAGE_SIZE);
+      const lastReply = replyPage.at(-1);
+      const item = serializeComment({
+        ...comment,
+        replies: replyPage,
+        replyCount: _count.replies,
+        repliesNextCursor:
+          replies.length > REPLY_PAGE_SIZE && lastReply
+            ? encodeCommentReplyCursor({
+                parentId: root.id,
+                createdAt: lastReply.createdAt,
+                id: lastReply.id,
+              })
+            : null,
+      });
+      return jsonResponse({
+        items: [item],
+        nextCursor: null,
+        focusedCommentId: requested.id,
+      });
+    }
     const rows = await prisma.comment.findMany({
       where: {
         marketId: market.id,
@@ -68,13 +152,35 @@ export async function GET(
         replies: {
           where: { status: { in: ["VISIBLE", "DELETED"] } },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          take: 25,
+          take: REPLY_PAGE_SIZE + 1,
           include: { user: { select: { id: true, username: true, displayName: true } } },
+        },
+        _count: {
+          select: {
+            replies: { where: { status: { in: ["VISIBLE", "DELETED"] } } },
+          },
         },
       },
     });
     const hasMore = rows.length > query.limit;
-    const items = rows.slice(0, query.limit).map(serializeComment);
+    const items = rows.slice(0, query.limit).map((row) => {
+      const { replies, _count, ...comment } = row;
+      const replyPage = replies.slice(0, REPLY_PAGE_SIZE);
+      const lastReply = replyPage.at(-1);
+      return serializeComment({
+        ...comment,
+        replies: replyPage,
+        replyCount: _count.replies,
+        repliesNextCursor:
+          replies.length > REPLY_PAGE_SIZE && lastReply
+            ? encodeCommentReplyCursor({
+                parentId: row.id,
+                createdAt: lastReply.createdAt,
+                id: lastReply.id,
+              })
+            : null,
+      });
+    });
     return jsonResponse({
       items,
       nextCursor: hasMore ? encodeCursor({ id: items.at(-1)!.id }) : null,
@@ -113,13 +219,26 @@ export async function POST(
       if (["DRAFT"].includes(market.status)) {
         throw new ApiError(403, "COMMENTS_UNAVAILABLE", "Comments are unavailable for this market.");
       }
+      let threadId: string | null = null;
+      let replyRecipientId: string | null = null;
       if (body.parentId) {
         const parent = await tx.comment.findUnique({
           where: { id: body.parentId },
           select: { marketId: true, parentId: true, status: true, userId: true },
         });
-        if (!parent || parent.marketId !== market.id || parent.parentId || parent.status !== "VISIBLE") {
+        if (!parent || parent.marketId !== market.id || parent.status !== "VISIBLE") {
           throw new ApiError(422, "INVALID_PARENT", "Reply target is not available.");
+        }
+        threadId = parent.parentId ?? body.parentId;
+        replyRecipientId = parent.userId;
+        if (parent.parentId) {
+          const root = await tx.comment.findUnique({
+            where: { id: parent.parentId },
+            select: { marketId: true, parentId: true, status: true },
+          });
+          if (!root || root.marketId !== market.id || root.parentId || root.status !== "VISIBLE") {
+            throw new ApiError(422, "INVALID_PARENT", "Reply thread is not available.");
+          }
         }
       }
       const position = body.disclosePosition
@@ -139,7 +258,7 @@ export async function POST(
         data: {
           userId: user.id,
           marketId: market.id,
-          parentId: body.parentId ?? null,
+          parentId: threadId,
           body: body.body,
           positionSideSnapshot: side,
           positionQtySnapshot: quantity,
@@ -150,19 +269,16 @@ export async function POST(
         where: { id: market.id },
         data: { commentCount: { increment: 1 } },
       });
-      if (body.parentId) {
-        const parent = await tx.comment.findUniqueOrThrow({ where: { id: body.parentId }, select: { userId: true } });
-        if (parent.userId !== user.id) {
-          await tx.notification.create({
-            data: {
-              userId: parent.userId,
-              type: "COMMENT_REPLY",
-              title: `${user.displayName} replied to you`,
-              body: body.body.slice(0, 180),
-              href: `/markets/${slug}#discussion-heading`,
-            },
-          });
-        }
+      if (replyRecipientId && replyRecipientId !== user.id) {
+        await tx.notification.create({
+          data: {
+            userId: replyRecipientId,
+            type: "COMMENT_REPLY",
+            title: `${user.displayName} replied to you`,
+            body: body.body.slice(0, 180),
+            href: `/markets/${encodeURIComponent(slug)}?comment=${encodeURIComponent(created.id)}#discussion-heading`,
+          },
+        });
       }
       const response = { comment: serializeComment(created) };
       await tx.idempotencyRequest.update({ where: { userId_route_key: { userId: user.id, route, key: idempotencyKey } }, data: { status: "COMPLETED", responseCode: 201, responseBody: jsonStringify(response) } });

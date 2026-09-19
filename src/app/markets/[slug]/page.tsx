@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { z } from "zod";
 import { FeatherIcon } from "@/components/brand";
 import { MarketStatusLabel } from "@/components/market-status";
 import { notFound } from "next/navigation";
@@ -18,6 +19,8 @@ export const dynamic = "force-dynamic";
 export default async function MarketPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug } = await params;
   const query = await searchParams;
+  const focusedComment = query.comment === undefined ? null : z.string().max(128).cuid().safeParse(query.comment);
+  const focusedCommentId = focusedComment?.success ? focusedComment.data : undefined;
   const initialOutcome = query.outcome === "NO" ? "NO" : "YES";
   const user = await getServerUser();
   const market = await db.market.findUnique({
@@ -49,7 +52,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
         <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow">How it is decided</span><h2 id="rules-heading">Market rules</h2></div></div><p>{market.rules}</p><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>100 feathers</dd></div></dl></section>
 
         <section className="activity-panel" aria-labelledby="activity-heading"><div className="section-heading"><h2 id="activity-heading">Recent activity</h2></div>{market.trades.length ? <ul className="trade-feed">{market.trades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><span><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> {trade.action.toLowerCase()} {trade.quantity} {trade.side}</span><time>{trade.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No trades yet. Be the first.</p>}</section>
-        <CommentSection marketId={market.id} currentUserId={user?.id} endpoint={`/api/markets/${market.slug}/comments`} />
+        <CommentSection marketSlug={market.slug} focusedCommentId={focusedCommentId} marketId={market.id} currentUserId={user?.id} endpoint={`/api/markets/${market.slug}/comments`} />
       </article>
       {orderBookMarket
         ? <OrderBookPanel marketSlug={market.slug} marketTitle={market.shortTitle} payoutMilli={market.payoutMilli.toString()} signedIn={Boolean(user)} disabled={!open} />
