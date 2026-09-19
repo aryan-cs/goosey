@@ -3,12 +3,13 @@ import bcrypt from "bcryptjs";
 import type { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import { randomToken, sha256 } from "@/lib/security";
+import { deterministicSecretToken, randomToken, RegistrationDeviceInUseError, sha256 } from "@/lib/security";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
 export const INTERACTIVE_ROLES = ["USER", "ADMIN"];
 
 export const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "goosey_session";
+export const REGISTRATION_DEVICE_COOKIE_NAME = "goosey_registration_device";
 
 const DEFAULT_STARTING_FEATHERS = "1000";
 const MAX_STARTING_FEATHERS = 1_000_000n;
@@ -148,6 +149,32 @@ export function clearSessionCookie(response: NextResponse): void {
   });
 }
 
+export function setRegistrationDeviceCookie(response: NextResponse, token: string): void {
+  response.cookies.set({
+    name: REGISTRATION_DEVICE_COOKIE_NAME,
+    value: token,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 5 * 365 * 24 * 60 * 60,
+  });
+}
+
+async function bindRegistrationDevice(
+  tx: Prisma.TransactionClient,
+  token: string,
+  userId: string,
+): Promise<void> {
+  const tokenHash = deterministicSecretToken("registration-device-v1", token);
+  await tx.registrationDevice.upsert({
+    where: { tokenHash },
+    create: { tokenHash, userId },
+    // Preserve the first account ever bound to this browser identity.
+    update: { tokenHash },
+  });
+}
+
 export async function revokeRequestSession(request: NextRequest): Promise<void> {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return;
@@ -259,54 +286,80 @@ export async function registerUser(input: {
   displayName: string;
   password: string;
   inviteCodeHash?: string | null;
+  registrationDeviceToken?: string | null;
   userAgent?: string | null;
   ipHash?: string | null;
 }, database: typeof db = db): Promise<{ user: PublicUser; session: SessionRecord }> {
   const passwordHash = await hashPassword(input.password);
+  const registrationDeviceHash = input.registrationDeviceToken
+    ? deterministicSecretToken("registration-device-v1", input.registrationDeviceToken)
+    : null;
 
-  return runSerializableTransaction(database, async (tx) => {
-    const invite = input.inviteCodeHash ? await tx.registrationInvite.findUnique({ where: { codeHash: input.inviteCodeHash } }) : null;
-    if (input.inviteCodeHash) {
-      if (!invite || invite.status !== "ACTIVE" || (invite.expiresAt && invite.expiresAt <= new Date())) throw new RegistrationInviteError();
-      const consumed = await tx.registrationInvite.updateMany({
-        where: { id: invite.id, status: "ACTIVE", useCount: { lt: invite.maxUses }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
-        data: { useCount: { increment: 1 } },
+  try {
+    return await runSerializableTransaction(database, async (tx) => {
+      if (registrationDeviceHash) {
+        const existingDevice = await tx.registrationDevice.findUnique({
+          where: { tokenHash: registrationDeviceHash },
+          select: { id: true },
+        });
+        if (existingDevice) throw new RegistrationDeviceInUseError();
+      }
+      const invite = input.inviteCodeHash ? await tx.registrationInvite.findUnique({ where: { codeHash: input.inviteCodeHash } }) : null;
+      if (input.inviteCodeHash) {
+        if (!invite || invite.status !== "ACTIVE" || (invite.expiresAt && invite.expiresAt <= new Date())) throw new RegistrationInviteError();
+        const consumed = await tx.registrationInvite.updateMany({
+          where: { id: invite.id, status: "ACTIVE", useCount: { lt: invite.maxUses }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+          data: { useCount: { increment: 1 } },
+        });
+        if (consumed.count !== 1) throw new RegistrationInviteError();
+      }
+      const user = await tx.user.create({
+        data: {
+          email: input.email,
+          username: input.username,
+          displayName: input.displayName,
+          passwordHash,
+          balanceMilli: 0n,
+        },
+        select: publicUserSelect,
       });
-      if (consumed.count !== 1) throw new RegistrationInviteError();
+
+      if (registrationDeviceHash) {
+        await tx.registrationDevice.create({ data: { tokenHash: registrationDeviceHash, userId: user.id } });
+      }
+      if (invite) await tx.registrationInviteClaim.create({ data: { inviteId: invite.id, userId: user.id } });
+
+      await tx.ledgerAccount.create({
+        data: {
+          ownerType: "USER",
+          ownerId: user.id,
+          purpose: "USER_FEATHERS",
+          balanceMilli: 0n,
+        },
+      });
+      if (!requiresEmailVerification(user)) await grantWelcomeFeathers(tx, user.id);
+      const session = await createSession(tx, user.id, {
+        userAgent: input.userAgent,
+        ipHash: input.ipHash,
+      });
+      return { user, session };
+    });
+  } catch (error) {
+    if (
+      error && typeof error === "object" && "code" in error && error.code === "P2002" &&
+      "meta" in error && error.meta && typeof error.meta === "object" && "target" in error.meta &&
+      (Array.isArray(error.meta.target) ? error.meta.target : [error.meta.target]).includes("tokenHash")
+    ) {
+      throw new RegistrationDeviceInUseError();
     }
-    const user = await tx.user.create({
-      data: {
-        email: input.email,
-        username: input.username,
-        displayName: input.displayName,
-        passwordHash,
-        balanceMilli: 0n,
-      },
-      select: publicUserSelect,
-    });
-
-    if (invite) await tx.registrationInviteClaim.create({ data: { inviteId: invite.id, userId: user.id } });
-
-    await tx.ledgerAccount.create({
-      data: {
-        ownerType: "USER",
-        ownerId: user.id,
-        purpose: "USER_FEATHERS",
-        balanceMilli: 0n,
-      },
-    });
-    if (!requiresEmailVerification(user)) await grantWelcomeFeathers(tx, user.id);
-    const session = await createSession(tx, user.id, {
-      userAgent: input.userAgent,
-      ipHash: input.ipHash,
-    });
-    return { user, session };
-  });
+    throw error;
+  }
 }
 
 export async function loginUser(input: {
   email: string;
   password: string;
+  registrationDeviceToken?: string | null;
   userAgent?: string | null;
   ipHash?: string | null;
 }): Promise<{ user: PublicUser; session: SessionRecord } | null> {
@@ -321,13 +374,14 @@ export async function loginUser(input: {
   return createSessionForVerifiedLoginSnapshot(db, record, {
     userAgent: input.userAgent,
     ipHash: input.ipHash,
-  });
+  }, input.registrationDeviceToken);
 }
 
 export async function createSessionForVerifiedLoginSnapshot(
   database: typeof db,
   verifiedSnapshot: PublicUser & { passwordHash: string },
   metadata: SessionMetadata = {},
+  registrationDeviceToken?: string | null,
 ): Promise<{ user: PublicUser; session: SessionRecord } | null> {
   return runSerializableTransaction(
     database,
@@ -347,6 +401,7 @@ export async function createSessionForVerifiedLoginSnapshot(
       });
       if (!current) return null;
       if (current.emailVerifiedAt === null && !requiresEmailVerification(current)) await grantWelcomeFeathers(tx, current.id);
+      if (registrationDeviceToken) await bindRegistrationDevice(tx, registrationDeviceToken, current.id);
       const session = await createSession(tx, current.id, metadata);
       return { user: current, session };
     },

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { registerUser, createSessionForVerifiedLoginSnapshot, emailVerificationState, grantWelcomeFeathers } from "./auth";
+import { createRegistrationDeviceToken } from "./security";
 
 describe("signup without a verification email", () => {
   const directory = mkdtempSync(join(tmpdir(), "goosey-signup-"));
@@ -20,7 +21,8 @@ describe("signup without a verification email", () => {
   it("creates a usable session and grants exactly once without claiming verified ownership", async () => {
     vi.stubEnv("REQUIRE_EMAIL_VERIFICATION", "");
     vi.stubEnv("STARTING_FEATHERS", "1000");
-    const result = await registerUser({ email: "new@example.com", username: "newgoose", displayName: "New Goose", password: "a long test password" }, database);
+    const registrationDeviceToken = createRegistrationDeviceToken();
+    const result = await registerUser({ email: "new@example.com", username: "newgoose", displayName: "New Goose", password: "a long test password", registrationDeviceToken }, database);
     expect(emailVerificationState(result.user).required).toBe(false);
     expect(result.user.emailVerifiedAt).toBeNull();
     expect(result.session.token).toHaveLength(43);
@@ -32,6 +34,19 @@ describe("signup without a verification email", () => {
     expect((await database.user.findUniqueOrThrow({ where: { id: user.id } })).balanceMilli).toBe(1_000_000n);
     expect((await database.ledgerPosting.findMany()).reduce((sum, row) => sum + row.amountMilli, 0n)).toBe(0n);
     expect(await database.accountToken.count()).toBe(0);
+    expect(await database.registrationDevice.count()).toBe(1);
+    expect((await database.registrationDevice.findFirstOrThrow()).tokenHash).not.toBe(registrationDeviceToken);
+
+    await expect(registerUser({
+      email: "second@example.com",
+      username: "secondgoose",
+      displayName: "Second Goose",
+      password: "another long test password",
+      registrationDeviceToken,
+    }, database)).rejects.toMatchObject({ name: "RegistrationDeviceInUseError" });
+    expect(await database.user.count()).toBe(1);
+    expect(await database.session.count()).toBe(2);
+    expect(await database.journalEntry.count({ where: { type: "WELCOME_GRANT" } })).toBe(1);
   });
 
   it("still defers the grant when verification is explicitly required", async () => {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { emailVerificationState, registerUser, setSessionCookie, WELCOME_GRANT_MILLI } from "@/lib/auth";
+import { emailVerificationState, REGISTRATION_DEVICE_COOKIE_NAME, registerUser, setRegistrationDeviceCookie, setSessionCookie, WELCOME_GRANT_MILLI } from "@/lib/auth";
 import { authRouteError, InvalidRequestError, noStore, readJsonObject } from "@/lib/http";
 import {
   assertMutationOrigin,
@@ -9,6 +9,7 @@ import {
   canonicalizeUsername,
   enforceRateLimit,
   identityRateLimitKey,
+  isValidRegistrationDeviceToken,
   isValidPassword,
   normalizeDisplayName,
   requestRateLimitKey,
@@ -38,11 +39,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     await enforceRateLimit(identityRateLimitKey("register:email", email), 2, 24 * 60 * 60 * 1_000);
+    const registrationDeviceToken = request.cookies.get(REGISTRATION_DEVICE_COOKIE_NAME)?.value;
+    if (!isValidRegistrationDeviceToken(registrationDeviceToken)) throw new InvalidRequestError();
     const result = await registerUser({
       email,
       username,
       displayName,
       password: body.password,
+      registrationDeviceToken,
       userAgent: request.headers.get("user-agent"),
     });
 
@@ -57,6 +61,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 201 },
     );
     setSessionCookie(response, result.session);
+    setRegistrationDeviceCookie(response, registrationDeviceToken);
     return noStore(response);
   } catch (error) {
     return authRouteError(error);

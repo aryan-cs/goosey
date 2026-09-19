@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { isPrismaErrorCode } from "@/lib/prisma-errors";
 import { NextResponse } from "next/server";
 
-import { InvalidOriginError, RateLimitError } from "@/lib/security";
+import { InvalidOriginError, RateLimitError, RegistrationDeviceInUseError } from "@/lib/security";
 
 export const MAX_AUTH_BODY_BYTES = 16 * 1_024;
 
@@ -82,6 +82,9 @@ export function authRouteError(error: unknown): NextResponse {
   }
   if (error instanceof InvalidRequestError) {
     return jsonError(400, "INVALID_REQUEST", "Invalid request.");
+  }
+  if (error instanceof RegistrationDeviceInUseError) {
+    return jsonError(409, "DEVICE_ACCOUNT_EXISTS", "This device has already created an account. Sign in to the existing account instead.");
   }
   if (isPrismaErrorCode(error, "P2002")) {
     return jsonError(409, "ACCOUNT_UNAVAILABLE", "Unable to create this account.");

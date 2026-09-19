@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalizeEmail, canonicalizeUsername, constantTimeEqual, deterministicSecretToken, isValidPassword, randomToken, sha256 } from "./security";
+import { canonicalizeEmail, canonicalizeUsername, constantTimeEqual, createRegistrationDeviceToken, deterministicSecretToken, isValidPassword, isValidRegistrationDeviceToken, randomToken, sha256 } from "./security";
 
 describe("identity validation", () => {
   it("canonicalizes ordinary email and rejects malformed variants", () => {
@@ -42,5 +42,13 @@ describe("token primitives", () => {
     expect(deterministicSecretToken("registration-invite", "admin:key")).toBe(retry);
     expect(deterministicSecretToken("another-purpose", "admin:key")).not.toBe(retry);
     expect(deterministicSecretToken("registration-invite", "admin:other-key")).not.toBe(retry);
+  });
+
+  it("authenticates server-issued registration-device cookies", () => {
+    const token = createRegistrationDeviceToken();
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/);
+    expect(isValidRegistrationDeviceToken(token)).toBe(true);
+    expect(isValidRegistrationDeviceToken(`${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`)).toBe(false);
+    expect(isValidRegistrationDeviceToken("x".repeat(87))).toBe(false);
   });
 });

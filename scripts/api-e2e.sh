@@ -57,7 +57,8 @@ done
 
 EMAIL="smoke-${RANDOM}-$$@uwaterloo.ca"
 USERNAME="smoke_${RANDOM}_$$"
-REGISTER=$(curl -fsS -c "$COOKIE_JAR" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL\",\"username\":\"$USERNAME\",\"displayName\":\"Smoke Forecaster\",\"password\":\"CorrectHorseBattery42!\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register")
+curl -fsS -c "$COOKIE_JAR" "$ORIGIN/api/auth/registration-device" >/dev/null
+REGISTER=$(curl -fsS -b "$COOKIE_JAR" -c "$COOKIE_JAR" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL\",\"username\":\"$USERNAME\",\"displayName\":\"Smoke Forecaster\",\"password\":\"CorrectHorseBattery42!\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register")
 [[ "$(jq -r '.balanceMilli' <<<"$REGISTER")" == "0" ]]
 [[ "$(jq -r '.emailVerification.required' <<<"$REGISTER")" == "true" ]]
 [[ "$(curl -sS -o "${RUN_DIR}/unverified-portfolio.json" -w '%{http_code}' -b "$COOKIE_JAR" "$ORIGIN/api/portfolio")" == "403" ]]
@@ -192,7 +193,8 @@ COMMENT_ID=$(jq -r '.comment.id' <<<"$COMMENT")
 
 EMAIL_TWO="smoke-two-${RANDOM}-$$@uwaterloo.ca"
 USERNAME_TWO="smoke_two_${RANDOM}_$$"
-curl -fsS -c "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL_TWO\",\"username\":\"$USERNAME_TWO\",\"displayName\":\"Second Forecaster\",\"password\":\"CorrectHorseBattery43!\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register" | jq -e '.balanceMilli == "0" and .emailVerification.required == true' >/dev/null
+curl -fsS -c "$COOKIE_JAR_TWO" "$ORIGIN/api/auth/registration-device" >/dev/null
+curl -fsS -b "$COOKIE_JAR_TWO" -c "$COOKIE_JAR_TWO" -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"email\":\"$EMAIL_TWO\",\"username\":\"$USERNAME_TWO\",\"displayName\":\"Second Forecaster\",\"password\":\"CorrectHorseBattery43!\",\"acceptedCodeOfConduct\":true}" "$ORIGIN/api/auth/register" | jq -e '.balanceMilli == "0" and .emailVerification.required == true' >/dev/null
 VERIFY_TOKEN_TWO=$(DATABASE_URL="file:${DB_FILE}" npx tsx scripts/setup-e2e-verification.ts "$EMAIL_TWO")
 curl -fsS -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d "{\"token\":\"$VERIFY_TOKEN_TWO\"}" "$ORIGIN/api/auth/email-verification/confirm" | jq -e '.verified == true and .welcomeGrantIssued == true' >/dev/null
 OTHER_EDIT=$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR_TWO" -X PATCH -H "Origin: $ORIGIN" -H 'Content-Type: application/json' -d '{"body":"Unauthorized edit attempt."}' "$ORIGIN/api/comments/$COMMENT_ID")

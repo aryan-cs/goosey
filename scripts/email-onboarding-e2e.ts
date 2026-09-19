@@ -175,7 +175,9 @@ try {
   const participants: { email: string; cookie: string; id: string }[] = [];
   for (const username of ["email_yes", "email_no"]) {
     const email = `${username}@email-journey.goosey.test`;
-    const registration = await api("/api/auth/register", 201, { email, username, password, acceptedCodeOfConduct: true });
+    const device = await api("/api/auth/registration-device", 204);
+    assert(device.cookie, "Device bootstrap must issue a registration cookie");
+    const registration = await api("/api/auth/register", 201, { email, username, password, acceptedCodeOfConduct: true }, device.cookie);
     assert(registration.cookie, "Registration must issue a session");
     assert.equal(registration.body.balanceMilli, "0");
     const id = record(registration.body.user).id;

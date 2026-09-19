@@ -3,9 +3,10 @@ import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({ loginUser: vi.fn(), setSessionCookie: vi.fn(), enforceRateLimit: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: {} }));
-vi.mock("@/lib/auth", () => ({ loginUser: mocks.loginUser, setSessionCookie: mocks.setSessionCookie, emailVerificationState: () => ({ required: false }) }));
+vi.mock("@/lib/auth", () => ({ loginUser: mocks.loginUser, setSessionCookie: mocks.setSessionCookie, REGISTRATION_DEVICE_COOKIE_NAME: "goosey_registration_device", emailVerificationState: () => ({ required: false }) }));
 vi.mock("@/lib/security", async (importOriginal) => ({ ...await importOriginal<typeof import("@/lib/security")>(), enforceRateLimit: mocks.enforceRateLimit }));
 import { POST } from "./route";
+import { createRegistrationDeviceToken } from "@/lib/security";
 
 const credentials = { email: "hacker@example.com", password: "correct horse battery staple" };
 function request(body: unknown) {
@@ -26,5 +27,13 @@ describe("login request tampering", () => {
     expect(response.status).toBe(200);
     expect(mocks.loginUser).toHaveBeenCalledWith({ ...credentials, userAgent: null });
     expect(mocks.setSessionCookie).toHaveBeenCalledOnce();
+  });
+  it("binds a valid registration-device cookie after verified login", async () => {
+    mocks.loginUser.mockResolvedValue({ user: { id: "server-user", role: "USER" }, session: { token: "server-session" } });
+    const deviceToken = createRegistrationDeviceToken();
+    const base = request(credentials);
+    const response = await POST(new NextRequest(base.url, { method: "POST", headers: { ...Object.fromEntries(base.headers), cookie: `goosey_registration_device=${deviceToken}` }, body: JSON.stringify(credentials) }));
+    expect(response.status).toBe(200);
+    expect(mocks.loginUser).toHaveBeenCalledWith({ ...credentials, registrationDeviceToken: deviceToken, userAgent: null });
   });
 });

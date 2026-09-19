@@ -27,6 +27,13 @@ export class RateLimitError extends Error {
   }
 }
 
+export class RegistrationDeviceInUseError extends Error {
+  constructor() {
+    super("This device has already created an account.");
+    this.name = "RegistrationDeviceInUseError";
+  }
+}
+
 export function randomToken(): string {
   return randomBytes(32).toString("base64url");
 }
@@ -38,6 +45,20 @@ export function deterministicSecretToken(purpose: string, identity: string): str
   return createHmac("sha256", TOKEN_DERIVATION_SECRET)
     .update(`${purpose}\u0000${identity.normalize("NFKC")}`, "utf8")
     .digest("base64url");
+}
+
+const REGISTRATION_DEVICE_TOKEN_PATTERN = /^([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{43})$/;
+
+export function createRegistrationDeviceToken(): string {
+  const identifier = randomToken();
+  return `${identifier}.${deterministicSecretToken("registration-device-cookie-v1", identifier)}`;
+}
+
+export function isValidRegistrationDeviceToken(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = REGISTRATION_DEVICE_TOKEN_PATTERN.exec(value);
+  if (!match) return false;
+  return constantTimeEqual(match[2], deterministicSecretToken("registration-device-cookie-v1", match[1]));
 }
 
 export function constantTimeEqual(left: string, right: string): boolean {

@@ -44,6 +44,7 @@ model User {
   approvedSettlementRuns  MarketSettlementRun[]        @relation("SettlementRunApprover")
   createdInvites          RegistrationInvite[]         @relation("InviteCreator")
   inviteClaim             RegistrationInviteClaim?
+  registrationDevices     RegistrationDevice[]
   auditLogs               AuditLog[]                   @relation("AuditActor")
   notifications           Notification[]
   reportsMade             CommentReport[]              @relation("ReportAuthor")
@@ -975,4 +976,15 @@ model RegistrationInviteClaim {
 
   @@unique([inviteId, userId])
   @@index([inviteId, claimedAt])
+}
+
+model RegistrationDevice {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
 }

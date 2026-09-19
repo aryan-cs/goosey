@@ -21,7 +21,7 @@ async function fixture() {
 const migration = (name: string) => readFile(path.resolve("prisma/sqlite-upgrades", name + ".sql"), "utf8");
 const names = ["20260919210000_solana_wallet_links", "20260919220000_solana_event_journal",
   "20260919230000_solana_ingestion_visits", "20260919234000_solana_coverage_rotations",
-  "20260919235000_app_managed_solana_custody"];
+  "20260919235000_app_managed_solana_custody", "20260920001000_registration_devices"];
 describe("additive Solana SQLite upgrade (real disposable databases)", () => {
   it("applies every reviewed Solana migration atomically, preserves exact cash, backs up old schema and rechecks completed schemas", async () => {
     const f = await fixture();

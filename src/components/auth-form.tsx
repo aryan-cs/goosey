@@ -29,8 +29,10 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSubmitting(true); setError(null); keyRef.current ??= idempotencyKey();
     const form = new FormData(event.currentTarget);
-    const payload = { email: String(form.get("email") ?? "").trim(), password: String(form.get("password") ?? ""), ...(register ? { username: String(form.get("username") ?? "").trim(), acceptedCodeOfConduct: form.get("acceptedCodeOfConduct") === "on" } : {}) };
     try {
+      const deviceResponse = await fetch("/api/auth/registration-device", { credentials: "same-origin", cache: "no-store" });
+      if (!deviceResponse.ok) throw new Error("Device verification is unavailable. Try again.");
+      const payload = { email: String(form.get("email") ?? "").trim(), password: String(form.get("password") ?? ""), ...(register ? { username: String(form.get("username") ?? "").trim(), acceptedCodeOfConduct: form.get("acceptedCodeOfConduct") === "on" } : {}) };
       const response = await fetch(endpoint ?? `/api/auth/${register ? "register" : "login"}`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "Idempotency-Key": keyRef.current, ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}) }, body: JSON.stringify(payload) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error?.message ?? data?.message ?? `${register ? "Account creation" : "Sign in"} failed.`);
