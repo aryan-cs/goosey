@@ -1,0 +1,14 @@
+.list { list-style: none; padding: 0; margin: 0; }
+:global(.sidebar-panel):has(.list) { align-self: start; }
+.item { display: grid; gap: 6px; min-width: 0; padding: 20px 0; border-bottom: 1px solid var(--border-subtle); }
+.item:first-child { padding-top: 4px; }
+.item:last-child { border-bottom: 0; padding-bottom: 0; }
+.market { color: var(--ink); font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; transition: color 140ms ease; }
+.market:hover { color: var(--yes); }
+.user { color: var(--ink-muted); font-size: 12px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; font-size: 14px; line-height: 22px; }
+.trade > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.yes { color: var(--yes); }
+.no { color: var(--no); }
+.amount { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amount > svg { width: 16px; height: 16px; flex-shrink: 0; }
