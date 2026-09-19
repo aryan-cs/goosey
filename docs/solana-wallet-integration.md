@@ -39,7 +39,7 @@ Exact researched pins, verified through publisher npm metadata on the research d
 | `@solana/web3.js` | `1.98.4` | Compatible API family for Anchor; exact [package metadata](https://registry.npmjs.org/@solana%2fweb3.js/1.98.4). |
 | `@solana/spl-token`, alternative web3.js client only | `0.4.14` | Its web3.js peer range includes 1.98.4. The selected Kit implementation uses `@solana-program/token@0.16.1` instead. |
 
-The repository declares Node >=20.18.0 after the main integration's change, which is still too permissive if these Wallet Standard 1.1.1 packages are added. For that selection, set and test a concrete Node >=22 runtime (the inspected shell is Node 24.13.0), retain exact direct versions and a lockfile, and run browser/server bundle checks. This document does not edit dependencies. Avoid introducing a wallet React adapter solely for discovery; if one is selected, verify its published React 19 peer dependencies rather than assuming compatibility.
+The repository now installs `@wallet-standard/app`, `@wallet-standard/base`, and `@wallet-standard/features` at 1.1.1, plus `@solana/wallet-standard-features` at 1.5.0. Publisher registry metadata was rechecked before installation. Node minimum is now 22.14.0, matching existing CI; the development shell is 24.13.0. Direct versions and the lockfile are pinned. Both Prisma clients were regenerated after installation, typecheck passed, and localhost/readiness recovered successfully. Browser/server bundle and actual wallet-extension checks remain pending. No React wallet adapter was added solely for discovery; the browser boundary uses Wallet Standard directly.
 
 [Anchor's client documentation](https://www.anchor-lang.com/docs/clients/typescript) explicitly limits the client to web3.js v1. Keep bytes/address conversion at a small boundary if another feature uses Solana Kit. Do not combine versioned transaction classes from unrelated API generations. Wallet Standard transaction methods operate on serialized bytes; check the account's supported transaction versions before building v0 messages or address lookup tables. Prefer a small, fully decoded transaction for initial integration.
 
@@ -66,6 +66,33 @@ Prefer `solana:signIn` when supported. Use the maintained SIWS input/output type
 The current feature types expose optional offchain message formats, but the inspected util 1.1.4 SIWS parser handles the text message format. Initially do not request `useOffchainMessage`; reject unknown returned formats. Support another format only after its exact verification implementation and wallet interoperability are tested. If the wallet only supports `solana:signMessage`, use `createSignInMessage` with the same complete stored input, verify the exact returned message/signature, and apply the same checks. This fallback is explicit capability handling, never an empty transaction or a transfer to prove ownership.
 
 Keep link identity separate from chain authority. A valid cookie or linked address cannot sign a program instruction. Unlinking affects the application association; it does not transfer positions, cancel orders, or revoke previously signed transactions. Account switches invalidate unsigned drafts and pending link challenges; previously broadcast transactions remain tracked under their original wallet.
+
+### Existing SQLite database upgrade
+
+Fresh databases receive the wallet-link tables from the Prisma schema. An existing SQLite database must receive the additive `prisma/sqlite-upgrades/20260919210000_solana_wallet_links.sql` upgrade exactly once before wallet-link routes are enabled. Stop the web process and workers first so no writer can race the schema change. Do not run `prisma db push` against a participant database as a substitute for this reviewed upgrade.
+
+Create a verified online snapshot at a new absolute path before changing the database:
+
+```sh
+npm run db:backup:sqlite -- \
+  --source /absolute/path/to/goosey.db \
+  --output /absolute/path/to/goosey-before-wallet-links.db
+```
+
+Then apply the checked-in file as one immediate transaction. The command below enables foreign-key checking, aborts on the first error, ignores user SQLite initialization files, and verifies both referential integrity and file integrity afterward:
+
+```sh
+sqlite3 -batch -bail -init /dev/null /absolute/path/to/goosey.db <<'SQL'
+PRAGMA foreign_keys = ON;
+BEGIN IMMEDIATE;
+.read prisma/sqlite-upgrades/20260919210000_solana_wallet_links.sql
+COMMIT;
+PRAGMA foreign_key_check;
+PRAGMA integrity_check;
+SQL
+```
+
+`PRAGMA foreign_key_check` must print no rows and `PRAGMA integrity_check` must print exactly `ok`. The upgrade deliberately fails if it is applied twice; record its application in the deployment change log rather than rerunning it. Regenerate both Prisma clients with `npm run db:generate`, then start the application with the same database. PostgreSQL deployments use `npm run db:migrate:deploy:postgres`, which applies the corresponding timestamped migration through Prisma's migration ledger.
 
 ## Transaction intent and wallet failures
 

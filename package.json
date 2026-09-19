@@ -60,7 +60,11 @@
     "@solana-program/system": "0.14.1",
     "@solana-program/token": "0.16.1",
     "@solana/kit": "8.3.0",
+    "@solana/wallet-standard-features": "1.5.0",
     "@types/nodemailer": "^8.0.2",
+    "@wallet-standard/app": "1.1.1",
+    "@wallet-standard/base": "1.1.1",
+    "@wallet-standard/features": "1.1.1",
     "bcryptjs": "^3.0.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -89,6 +93,6 @@
     "seed": "tsx prisma/seed.ts"
   },
   "engines": {
-    "node": ">=20.18.0"
+    "node": ">=22.14.0"
   }
 }
