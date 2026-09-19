@@ -27,6 +27,33 @@
 }
 .trade-breakdown dd > .feather-icon { width: 1em; height: 1em; }
 
+/* Mixed text runs share the font baseline; icons retain their optical offset. */
+.probability-chart .chart-change {
+  display: inline-block;
+  font-family: var(--font-display);
+  line-height: 1.5;
+}
+.probability-chart .chart-change small {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+.trade-breakdown > div,
+.comment-content > header { align-items: baseline; }
+.trade-breakdown dd,
+.mini-leaderboard b,
+.market-list-meta > strong,
+.leader-score {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+.trade-breakdown dd > svg,
+.mini-leaderboard b > svg,
+.market-list-meta > strong > svg,
+.leader-score > svg { margin-inline-end: .3em; vertical-align: -.125em; }
+.leader-score { text-align: right; }
+
 /* Leading metadata icons stay beside the first line when dates wrap. */
 .market-meta > span:has(> svg),
 .status-row > span:has(> svg) {
@@ -87,6 +114,7 @@
 .podium-icon > .rank { font: 600 28px/1 var(--font-display); }
 
 @media (max-width: 809.98px) {
+  .leader-score { text-align: left; }
   .podium-icon > svg { width: 28px; height: 28px; }
   .podium-icon > .rank { font-size: 24px; }
 }
