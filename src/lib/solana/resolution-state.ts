@@ -59,3 +59,40 @@ export async function readResolutionState(program: Address, binding: ResolutionM
   return { address: canonical, market, creator, payoutMilli, closesAt, resolvesAt, proposer, approver,
     phase, nextProposalSequence, activeProposalSequence, outcome, outstandingYes, outstandingNo, claimsProcessed };
 }
+
+export type VerifiedResolutionState = Awaited<ReturnType<typeof readResolutionState>>;
+export type ResolutionSeatBalance = { yes: bigint; no: bigint; reservedCash: bigint; reservedYes: bigint; reservedNo: bigint };
+
+/** Phase-aware position backing. Cash+fees+collateral and actual token custody
+ * are separate mandatory checks in the enclosing snapshot verifier. */
+export function verifyPositionBacking(input: {
+  payoutMilli: bigint; collateral: bigint; seats: readonly ResolutionSeatBalance[];
+  resolution: VerifiedResolutionState | null; openOrders?: number;
+}) {
+  const { payoutMilli, collateral, seats, resolution } = input;
+  const yes = seats.reduce((sum, seat) => sum + seat.yes, 0n), no = seats.reduce((sum, seat) => sum + seat.no, 0n);
+  if (resolution && resolution.phase >= 1) {
+    if (resolution.outstandingYes !== yes || resolution.outstandingNo !== no
+      || resolution.claimsProcessed > BigInt(seats.length)
+      || seats.some(s => s.reservedCash !== 0n || s.reservedYes !== 0n || s.reservedNo !== 0n)
+      || (input.openOrders !== undefined && input.openOrders !== 0)) throw new Error("Resolution outstanding positions/reserves mismatch");
+  }
+  if (!resolution || resolution.phase < 3) {
+    if (yes !== no || yes * payoutMilli !== collateral) throw new Error("Total YES/NO positions do not reconcile to collateral");
+    return;
+  }
+  if (resolution.phase === 4) {
+    if (yes !== 0n || no !== 0n || collateral !== 0n) throw new Error("Finalized resolution retains positions/collateral");
+    return;
+  }
+  if (resolution.outcome === 0 || resolution.outcome === 1) {
+    if ((resolution.outcome === 0 ? yes : no) * payoutMilli !== collateral) throw new Error("Winning position liability does not match collateral");
+  } else if (resolution.outcome === 2) {
+    const claimable = seats.reduce((sum, seat) => sum + ((seat.yes + seat.no) * payoutMilli) / 2n, 0n);
+    // Each prior VOID claim can retain at most half a base unit of rounding
+    // dust. This exact doubled-unit check works even with unequal holdings.
+    const doubledDust = 2n * collateral - (yes + no) * payoutMilli;
+    if (collateral < claimable || doubledDust < 0n || doubledDust > resolution.claimsProcessed
+      || (payoutMilli % 2n === 0n && doubledDust !== 0n)) throw new Error("VOID payout liability/dust does not match collateral");
+  } else throw new Error("Missing resolved outcome");
+}

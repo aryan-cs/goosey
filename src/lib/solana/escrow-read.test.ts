@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { address, getAddressEncoder, type Address } from "@solana/kit";
+import { address, getAddressEncoder, getProgramDerivedAddress, type Address } from "@solana/kit";
 import { TOKEN_PROGRAM_ADDRESS, ASSOCIATED_TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import { describe, expect, it, vi } from "vitest";
 import { deriveGooseySeatAddresses } from "./escrow-client";
@@ -241,6 +241,44 @@ describe("finalized read orchestration (mocked RPC, not chain proof)", () => {
     f.seats.writeBigUInt64LE(amount - 1n, 112); f.seats.writeBigUInt64LE(1n, 120);
     f.configure();
     await expect(readGooseyEscrow(runtime, input, { rpc: f.rpc, includeOrderBook: true })).rejects.toThrow("full book");
+  });
+  async function setupResolution() {
+    const f = await setupBook(), resolution = anchor(268, "ResolutionState");
+    key(resolution, 8, f.p.market); key(resolution, 40, input.wallet);
+    resolution.writeBigUInt64LE(100_000n, 72); resolution.writeBigInt64LE(2_000_000_000n, 80); resolution.writeBigInt64LE(2_000_000_001n, 88);
+    for (const [index, wallet] of [seatsAddress, runtime.programAddress].entries()) {
+      const [enrollment] = await getProgramDerivedAddress({ programAddress: runtime.programAddress,
+        seeds: ["enrollment", getAddressEncoder().encode(f.p.config), getAddressEncoder().encode(wallet)] });
+      key(resolution, 96 + index * 64, wallet); key(resolution, 128 + index * 64, enrollment);
+    }
+    resolution.writeBigUInt64LE(1n, 225);
+    const [resolutionAddress] = await getProgramDerivedAddress({ programAddress: runtime.programAddress,
+      seeds: ["resolution", getAddressEncoder().encode(f.p.market)] });
+    const configureResolution = (account: unknown = f.account(resolution)) => f.batch.mockReset()
+      .mockResolvedValueOnce({ context: { slot: 11n }, value: [f.account(f.market)] })
+      .mockResolvedValueOnce({ context: { slot: 12n }, value: [...Object.values(f.accounts()), f.account(f.book), account] });
+    configureResolution(); return { ...f, resolution, resolutionAddress, configureResolution };
+  }
+  it("loads resolution with book and all financial accounts in exactly one finalized batch", async () => {
+    const f = await setupResolution();
+    const result = await readGooseyEscrow(runtime, input, { rpc: f.rpc, includeResolution: true });
+    expect(result.resolution).toMatchObject({ address: f.resolutionAddress, phase: 0, nextProposalSequence: 1n });
+    expect(result.orderBook?.reservesReconciled).toBe(true);
+    expect(f.getMultipleAccounts).toHaveBeenCalledTimes(2);
+    const { book } = await deriveGooseyBookAddress(runtime.programAddress, f.p.market);
+    expect(f.getMultipleAccounts).toHaveBeenNthCalledWith(2,
+      [f.p.config, f.p.featherMint, f.p.market, seatsAddress, f.p.locator, f.p.vault, f.p.walletTokens, book, f.resolutionAddress],
+      { encoding: "base64", commitment: "finalized", minContextSlot: 11n });
+    expect(result.finalizedSlot).toBe(12n);
+  });
+  it("never downgrades missing or malformed required resolution state to legacy checks", async () => {
+    for (const mode of ["missing", "owner", "binding", "outstanding"] as const) {
+      const f = await setupResolution();
+      if (mode === "binding") f.resolution[8] ^= 1;
+      if (mode === "outstanding") f.resolution.writeBigUInt64LE(1n, 235);
+      f.configureResolution(mode === "missing" ? null : f.account(f.resolution, mode === "owner" ? TOKEN_PROGRAM_ADDRESS : runtime.programAddress));
+      await expect(readGooseyEscrow(runtime, input, { rpc: f.rpc, includeResolution: true })).rejects.toThrow();
+    }
   });
   it("rejects stale snapshot context, short batches, and changed Seats binding", async () => {
     for (const mode of ["stale", "short", "binding"] as const) {

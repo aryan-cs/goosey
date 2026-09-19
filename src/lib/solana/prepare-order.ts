@@ -30,9 +30,10 @@ export async function prepareOrder(input: PrepareOrderInput) {
   const signal = input.signal ?? AbortSignal.timeout(15_000);
   signal.throwIfAborted();
   const rpc = createSolanaRpc(runtime.rpcUrl);
-  const snapshot = await readGooseyEscrow(runtime, { marketId: order.marketId, wallet: senderAddress }, { rpc, signal, includeOrderBook: true });
+  const snapshot = await readGooseyEscrow(runtime, { marketId: order.marketId, wallet: senderAddress }, { rpc, signal, includeOrderBook: true, includeResolution: true });
   signal.throwIfAborted();
   if (!snapshot.registered || !snapshot.seat) throw new Error("Register a market seat before placing orders");
+  if (!snapshot.resolution || snapshot.resolution.phase !== 0) throw new Error("Market resolution is missing or no longer open");
   if (!snapshot.orderBook?.reservesReconciled || snapshot.wallet !== senderAddress
     || typeof snapshot.finalizedSlot !== "bigint" || snapshot.finalizedSlot < 0n) throw new Error("Missing or mismatched verified order snapshot");
   const { seat, marketState, orderBook } = snapshot;
@@ -42,7 +43,7 @@ export async function prepareOrder(input: PrepareOrderInput) {
   const plan = await buildPlaceOrderInstruction({ ...order, programAddress: runtime.programAddress,
     wallet: sender, seats: snapshot.seats, expectedNonce: seat.nextNonce });
   if (sender.address !== senderAddress || plan.market !== snapshot.market || plan.config !== snapshot.config
-    || plan.vault !== snapshot.vault || plan.locator !== snapshot.locator || plan.book !== orderBook.book
+    || plan.vault !== snapshot.vault || plan.locator !== snapshot.locator || plan.book !== orderBook.book || plan.resolution !== snapshot.resolution.address
     || orderBook.market !== snapshot.market || orderBook.seats !== snapshot.seats
     || orderBook.payoutMilli !== marketState.payoutMilli || orderBook.feeBps !== marketState.feeBps) throw new Error("Order snapshot bindings changed");
   // New place_order starts chain_notional=0. This is a conservative full-limit

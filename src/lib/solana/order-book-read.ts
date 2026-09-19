@@ -1,5 +1,6 @@
 import { address, getAddressDecoder, getAddressEncoder, getProgramDerivedAddress, type Address } from "@solana/kit";
 import { deriveGooseyMarketAddresses } from "./escrow-client";
+import { readResolutionState, verifyPositionBacking, RESOLUTION_STATE_BYTES } from "./resolution-state";
 
 export const GOOSEY_ORDER_BOOK_BYTES = 69_720;
 const CAPACITY = 1024, NONE = 65535, SLOT_BASE = 88, BID_BASE = SLOT_BASE + CAPACITY * 64, ASK_BASE = BID_BASE + CAPACITY * 2;
@@ -49,11 +50,14 @@ function priority(a: Omit<CanonicalBookOrder, "heapIndex">, b: Omit<CanonicalBoo
 export async function readCanonicalOrderBook(input: {
   programAddress: Address; marketId: bigint;
   market: BookSnapshotAccount; seats: BookSnapshotAccount; book: BookSnapshotAccount;
+  resolution?: BookSnapshotAccount;
 }) {
   const programAddress = address(input.programAddress), marketId = input.marketId;
   const marketAddress = input.market.address, seatsAddress = input.seats.address, bookAddress = input.book.address;
   const market = bytesOf(input.market, programAddress, 195), seats = bytesOf(input.seats, programAddress, 32_816);
   const book = bytesOf(input.book, programAddress, GOOSEY_ORDER_BOOK_BYTES);
+  const resolutionAccount = input.resolution ? { ...input.resolution,
+    data: bytesOf(input.resolution, programAddress, RESOLUTION_STATE_BYTES) } : null;
   const canonical = await deriveGooseyMarketAddresses({ programAddress, marketId });
   const [canonicalBook] = await getProgramDerivedAddress({ programAddress, seeds: ["order_book", getAddressEncoder().encode(canonical.market)] });
   if (marketAddress !== canonical.market || bookAddress !== canonicalBook) throw new Error("Noncanonical market/book PDA");
@@ -69,7 +73,7 @@ export async function readCanonicalOrderBook(input: {
   const seatRows: Array<{ index: number; wallet: Address; availableCash: bigint; reservedCash: bigint; yes: bigint; no: bigint;
     reservedYes: bigint; reservedNo: bigint; nextNonce: bigint; everTraded: boolean; expectedReserve: { cash: bigint; yes: bigint; no: bigint } }> = [];
   const wallets = new Set<Address>();
-  let cash = 0n, yes = 0n, no = 0n;
+  let cash = 0n;
   for (let i = 0; i < 256; i++) {
     const o = 48 + i * 128;
     if (i >= count) { if (seats.subarray(o, o + 128).some(Boolean)) throw new Error("Nonzero unused seat"); continue; }
@@ -84,10 +88,14 @@ export async function readCanonicalOrderBook(input: {
       reservedNo: s.getBigUint64(o + 104, true), nextNonce: s.getBigUint64(o + 112, true), everTraded: seats[o + 120] === 1,
       expectedReserve: { cash: 0n, yes: 0n, no: 0n } };
     if (row.reservedYes > row.yes || row.reservedNo > row.no) throw new Error("Positions over-reserved");
-    seatRows.push(row); cash += row.availableCash + row.reservedCash; yes += row.yes; no += row.no;
+    seatRows.push(row); cash += row.availableCash + row.reservedCash;
   }
-  if (cash + m.getBigUint64(176, true) + m.getBigUint64(184, true) !== m.getBigUint64(168, true)
-    || yes !== no || yes * payout !== m.getBigUint64(176, true)) throw new Error("Market aggregate accounting mismatch");
+  if (cash + m.getBigUint64(176, true) + m.getBigUint64(184, true) !== m.getBigUint64(168, true)) throw new Error("Market aggregate accounting mismatch");
+  const resolution = resolutionAccount ? await readResolutionState(programAddress,
+    { market: marketAddress, config: canonical.config, creator: key(market, 40), payoutMilli: payout,
+      closesAt: m.getBigInt64(152, true), resolvesAt: m.getBigInt64(160, true) }, resolutionAccount) : null;
+  verifyPositionBacking({ payoutMilli: payout, collateral: m.getBigUint64(176, true), seats: seatRows, resolution,
+    openOrders: b.getUint16(78, true) });
   const revision = b.getBigUint64(56, true), nextSequence = b.getBigUint64(64, true);
   const bidLength = b.getUint16(74, true), askLength = b.getUint16(76, true), activeLength = b.getUint16(78, true), freeHead = b.getUint16(80, true);
   if (new TextDecoder().decode(book.subarray(0, 8)) !== "GOOSEYB1" || key(book, 8) !== marketAddress

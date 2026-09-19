@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { address, getAddressEncoder, getProgramDerivedAddress, type Address } from "@solana/kit";
 import { describe, expect, it } from "vitest";
 import { deriveGooseyMarketAddresses } from "./escrow-client";
-import { readResolutionState } from "./resolution-state";
+import { readResolutionState, verifyPositionBacking } from "./resolution-state";
 
 const program = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const creator = address("SysvarRent111111111111111111111111111111111");
@@ -75,5 +75,42 @@ describe("resolution state ABI", () => {
       f.bytes.writeBigUInt64LE(1n, f.holdingsOffset + (phase === 0 ? 16 : 0));
       await expect(f.read()).rejects.toThrow("lifecycle");
     }
+  });
+});
+
+describe("phase-aware position backing", () => {
+  const seat = (yes: bigint, no: bigint) => ({ yes, no, reservedCash: 0n, reservedYes: 0n, reservedNo: 0n });
+  it("preserves complete-set backing before resolution", () => {
+    expect(() => verifyPositionBacking({ payoutMilli: 3n, collateral: 3n, seats: [seat(1n, 0n), seat(0n, 1n)], resolution: null })).not.toThrow();
+    expect(() => verifyPositionBacking({ payoutMilli: 3n, collateral: 3n, seats: [seat(0n, 1n)], resolution: null })).toThrow("collateral");
+  });
+  it.each([0, 1])("backs only winning claims for outcome %s after partial payout", async outcome => {
+    const base = await (await fixture(3, null, outcome)).read();
+    const resolution = { ...base, outstandingYes: 2n, outstandingNo: 5n, claimsProcessed: 1n };
+    const seats = [seat(2n, 5n), seat(0n, 0n)];
+    const collateral = (outcome === 0 ? 2n : 5n) * 1000n;
+    expect(() => verifyPositionBacking({ payoutMilli: 1000n, collateral, seats, resolution, openOrders: 0 })).not.toThrow();
+    expect(() => verifyPositionBacking({ payoutMilli: 1000n, collateral: collateral + 1n, seats, resolution })).toThrow("liability");
+    expect(() => verifyPositionBacking({ payoutMilli: 1000n, collateral, seats, resolution, openOrders: 1 })).toThrow("reserves");
+    expect(() => verifyPositionBacking({ payoutMilli: 1000n, collateral, seats: [{ ...seats[0], reservedCash: 1n }, seats[1]], resolution })).toThrow("reserves");
+  });
+  it("validates per-seat VOID rounding dust across partial claims and finalization", async () => {
+    const base = await (await fixture(3, null, 2)).read();
+    const remaining = { ...base, outstandingYes: 0n, outstandingNo: 1n, claimsProcessed: 1n };
+    const seats = [seat(0n, 0n), seat(0n, 1n)];
+    expect(() => verifyPositionBacking({ payoutMilli: 3n, collateral: 2n, seats, resolution: remaining })).not.toThrow();
+    for (const collateral of [0n, 1n, 3n]) expect(() => verifyPositionBacking({ payoutMilli: 3n, collateral, seats, resolution: remaining })).toThrow("VOID");
+    const consumed = { ...remaining, outstandingNo: 0n, claimsProcessed: 2n };
+    const empty = [seat(0n, 0n), seat(0n, 0n)];
+    expect(() => verifyPositionBacking({ payoutMilli: 3n, collateral: 1n, seats: empty, resolution: consumed })).not.toThrow();
+    expect(() => verifyPositionBacking({ payoutMilli: 3n, collateral: 0n, seats: empty, resolution: { ...consumed, phase: 4 } })).not.toThrow();
+    expect(() => verifyPositionBacking({ payoutMilli: 3n, collateral: 1n, seats: empty, resolution: { ...consumed, phase: 4 } })).toThrow("Finalized");
+  });
+  it("cannot invent VOID dust for even payouts or more claimed seats than exist", async () => {
+    const base = await (await fixture(3, null, 2)).read();
+    const resolution = { ...base, outstandingYes: 0n, outstandingNo: 0n, claimsProcessed: 2n };
+    const seats = [seat(0n, 0n), seat(0n, 0n)];
+    expect(() => verifyPositionBacking({ payoutMilli: 4n, collateral: 1n, seats, resolution })).toThrow("VOID");
+    expect(() => verifyPositionBacking({ payoutMilli: 4n, collateral: 0n, seats, resolution: { ...resolution, claimsProcessed: 3n } })).toThrow("outstanding");
   });
 });

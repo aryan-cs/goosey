@@ -6,6 +6,7 @@ import { verifyGooseyConfiguration } from "./configuration";
 import { probeSolanaRuntime, type SolanaRuntime } from "./runtime";
 import { deriveGooseyBookAddress } from "./exchange-client";
 import { readCanonicalOrderBook, GOOSEY_ORDER_BOOK_BYTES } from "./order-book-read";
+import { readResolutionState, RESOLUTION_STATE_BYTES, verifyPositionBacking, type ResolutionSeatBalance } from "./resolution-state";
 
 export type EscrowReadRpc = Pick<ReturnType<typeof createSolanaRpc>, "getGenesisHash" | "getAccountInfo" | "getMultipleAccounts">;
 export type EscrowReadInput = { marketId: bigint; wallet: Address };
@@ -14,6 +15,7 @@ export type EscrowSnapshotAccounts = {
   config: EscrowChainAccount | null; mint: EscrowChainAccount | null; market: EscrowChainAccount | null;
   seats: EscrowChainAccount | null; locator: EscrowChainAccount | null; vault: EscrowChainAccount | null;
   walletTokens: EscrowChainAccount | null;
+  resolution?: EscrowChainAccount | null;
 };
 const ZERO = "11111111111111111111111111111111";
 const key = (bytes: Uint8Array, offset: number) => getAddressDecoder().decode(bytes.subarray(offset, offset + 32));
@@ -66,6 +68,13 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
   raw(accounts.config, runtime.programAddress, 172); raw(accounts.mint, TOKEN_PROGRAM_ADDRESS, 82);
   const configuration = await verifyGooseyConfiguration(runtime, accounts.config, accounts.mint);
   const market = await marketData(accounts.market, runtime.programAddress);
+  const [resolutionAddress] = await getProgramDerivedAddress({ programAddress: runtime.programAddress,
+    seeds: ["resolution", getAddressEncoder().encode(addresses.market)] });
+  const resolution = accounts.resolution === undefined ? null : await readResolutionState(runtime.programAddress,
+    { market: addresses.market, config: addresses.config, creator: market.creator, payoutMilli: market.payoutMilli,
+      closesAt: market.closesAt, resolvesAt: market.resolvesAt },
+    { address: resolutionAddress, owner: runtime.programAddress, executable: false,
+      data: raw(accounts.resolution, runtime.programAddress, RESOLUTION_STATE_BYTES) });
   if (market.config !== addresses.config || market.creator !== configuration.admin || market.marketId !== input.marketId
     || market.bump !== addresses.marketBump || market.vault !== addresses.vault || market.seats !== seatsAddress || market.seats === ZERO
     || market.payoutMilli < 2n || market.payoutMilli > 1_000_000n || market.feeBps > 10_000
@@ -74,7 +83,8 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
   const count = seatData.getUint32(40, true);
   if (key(seats, 8) !== addresses.market || count > 256 || seats.subarray(44, 48).some(Boolean)) throw new Error("Invalid Seats header");
   const wallets = new Set<Address>();
-  let totalCash = 0n, totalYes = 0n, totalNo = 0n;
+  let totalCash = 0n;
+  const positionRows: ResolutionSeatBalance[] = [];
   let selected: { index: number; availableCash: bigint; reservedCash: bigint; yes: bigint; no: bigint;
     reservedYes: bigint; reservedNo: bigint; nextNonce: bigint; everTraded: boolean } | null = null;
   for (let index = 0; index < 256; index++) {
@@ -99,16 +109,14 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
     if (everTraded > 1 || seats.subarray(offset + 121, offset + 128).some(Boolean)) throw new Error("Invalid seat flag/padding");
     if (reservedYes > yes || reservedNo > no) throw new Error("Reserved positions exceed total holdings");
     totalCash += availableCash + reservedCash;
-    totalYes += yes; totalNo += no;
+    positionRows.push({ yes, no, reservedCash, reservedYes, reservedNo });
     if (seatWallet === wallet) selected = { index, availableCash, reservedCash, yes, no,
       reservedYes, reservedNo, nextNonce, everTraded: everTraded === 1 };
   }
   if (totalCash + market.collateral + market.feeRevenue !== market.accountedVault) {
     throw new Error("Seat cash, collateral and fees do not reconcile to accounted vault");
   }
-  if (totalYes !== totalNo || totalYes * market.payoutMilli !== market.collateral) {
-    throw new Error("Total YES/NO positions do not reconcile to collateral");
-  }
+  verifyPositionBacking({ payoutMilli: market.payoutMilli, collateral: market.collateral, seats: positionRows, resolution });
   if (accounts.locator === null) {
     if (selected !== null) throw new Error("Missing locator for registered wallet");
   } else {
@@ -121,7 +129,7 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
   if (vault.amount < market.accountedVault || vault.amount + (walletToken?.amount ?? 0n) > configuration.supply) {
     throw new Error("Vault backing/supply invariant violated");
   }
-  return { ...addresses, seats: seatsAddress, wallet, marketState: market, seat: selected,
+  return { ...addresses, seats: seatsAddress, wallet, marketState: market, seat: selected, resolution,
     vaultAmount: vault.amount, vaultSurplus: vault.amount - market.accountedVault,
     walletTokenAmount: walletToken?.amount ?? null, registered: selected !== null,
     exchangeVerified: false as const };
@@ -132,11 +140,12 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
  * RPC trust remains necessary; this does not attest the deployed program binary.
  */
 export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowReadInput, options: {
-  rpc?: EscrowReadRpc; signal?: AbortSignal; includeOrderBook?: boolean;
+  rpc?: EscrowReadRpc; signal?: AbortSignal; includeOrderBook?: boolean; includeResolution?: boolean;
 } = {}) {
   input = { ...input };
   runtime = { ...runtime };
-  const includeOrderBook = options.includeOrderBook === true;
+  const includeResolution = options.includeResolution === true;
+  const includeOrderBook = options.includeOrderBook === true || includeResolution;
   const signal = options.signal ?? AbortSignal.timeout(8_000);
   signal.throwIfAborted();
   const rpc = options.rpc ?? createSolanaRpc(runtime.rpcUrl);
@@ -149,19 +158,23 @@ export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowRead
   }
   const market = await marketData(discovery.value[0], runtime.programAddress);
   const bookAddress = includeOrderBook ? (await deriveGooseyBookAddress(runtime.programAddress, addresses.market)).book : null;
+  const [resolutionAddress] = await getProgramDerivedAddress({ programAddress: runtime.programAddress,
+    seeds: ["resolution", getAddressEncoder().encode(addresses.market)] });
   const response = await rpc.getMultipleAccounts([addresses.config, addresses.featherMint, addresses.market, market.seats,
-    addresses.locator, addresses.vault, addresses.walletTokens, ...(bookAddress ? [bookAddress] : [])], {
+    addresses.locator, addresses.vault, addresses.walletTokens, ...(bookAddress ? [bookAddress] : []), ...(includeResolution ? [resolutionAddress] : [])], {
     encoding: "base64", commitment: "finalized", minContextSlot: discovery.context.slot,
   }).send({ abortSignal: signal });
-  if (typeof response.context.slot !== "bigint" || response.context.slot < discovery.context.slot || response.value.length !== (includeOrderBook ? 8 : 7)) {
+  if (typeof response.context.slot !== "bigint" || response.context.slot < discovery.context.slot || response.value.length !== (includeResolution ? 9 : includeOrderBook ? 8 : 7)) {
     throw new Error("Invalid escrow final snapshot");
   }
   const [config, mint, marketAccount, seats, locator, vault, walletTokens] = response.value;
   const snapshot = await verifyGooseyEscrowSnapshot(runtime, input, market.seats,
-    { config, mint, market: marketAccount, seats, locator, vault, walletTokens });
+    { config, mint, market: marketAccount, seats, locator, vault, walletTokens, ...(includeResolution ? { resolution: response.value[8] } : {}) });
   // Use the very same finalized batch as token backing/issuance verification.
   // A later standalone book read could silently combine incompatible reserves.
   const orderBook = bookAddress ? await readCanonicalOrderBook({ programAddress: runtime.programAddress, marketId: input.marketId,
+    ...(includeResolution ? { resolution: { address: resolutionAddress, owner: runtime.programAddress, executable: false,
+      data: raw(response.value[8], runtime.programAddress, RESOLUTION_STATE_BYTES) } } : {}),
     market: { address: addresses.market, owner: runtime.programAddress, executable: false, data: raw(marketAccount, runtime.programAddress, 195) },
     seats: { address: market.seats, owner: runtime.programAddress, executable: false, data: raw(seats, runtime.programAddress, 32_816) },
     book: { address: bookAddress, owner: runtime.programAddress, executable: false,

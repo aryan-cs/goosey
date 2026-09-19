@@ -1,4 +1,4 @@
-import { address, blockhash, getSignersFromTransactionMessage, type Address } from "@solana/kit";
+import { address, blockhash, getSignersFromTransactionMessage, getProgramDerivedAddress, getAddressEncoder, type Address } from "@solana/kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deriveGooseySeatAddresses } from "./escrow-client";
 import { deriveGooseyBookAddress } from "./exchange-client";
@@ -19,7 +19,10 @@ const input = (): PrepareOrderInput => ({ runtime: { ...runtime }, sender, marke
 async function snapshot() {
   const p = await deriveGooseySeatAddresses({ programAddress: runtime.programAddress, marketId: 7n, wallet: sender.address });
   const { book } = await deriveGooseyBookAddress(runtime.programAddress, p.market);
+  const [resolution] = await getProgramDerivedAddress({ programAddress: runtime.programAddress,
+    seeds: ["resolution", getAddressEncoder().encode(p.market)] });
   return { ...p, seats, wallet: sender.address, registered: true, finalizedSlot: 500n,
+    resolution: { address: resolution, phase: 0 },
     marketState: { payoutMilli: 100n, feeBps: 100 },
     seat: { index: 0, availableCash: 81n, reservedCash: 1000n, yes: 10n, no: 5n,
       reservedYes: 8n, reservedNo: 4n, nextNonce: 9_007_199_254_740_993n, everTraded: true },
@@ -31,6 +34,13 @@ beforeEach(async () => {
 });
 
 describe("unsigned order preparation (mocked RPC/snapshot, real instruction builders; not chain proof)", () => {
+  it("requires a verified open resolution account rather than silently placing without one", async () => {
+    const state = await snapshot();
+    for (const resolution of [null, { ...state.resolution, phase: 1 }, { ...state.resolution, phase: 3 }, { ...state.resolution, address: seats }]) {
+      mocks.read.mockResolvedValue({ ...state, resolution }); await expect(prepareOrder(input())).rejects.toThrow();
+    }
+    expect(mocks.latest).not.toHaveBeenCalled(); expect(mocks.sign).not.toHaveBeenCalled();
+  });
   it("uses coherent book snapshot nonce/addresses and wallet-only fee payer with conservative compute budget", async () => {
     const prepared = await prepareOrder(input());
     const walletContract: PreparedWalletTransaction = prepared;
