@@ -1,0 +1,8 @@
+[programs.localnet]
+goosey_exchange = "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q"
+
+[provider]
+cluster = "http://127.0.0.1:18999"
+
+[workspace]
+members = ["programs/goosey-exchange"]

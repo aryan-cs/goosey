@@ -1,0 +1,27 @@
+[package]
+name = "goosey-exchange"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "goosey_exchange"
+
+[features]
+default = []
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = ["anchor-lang/anchor-debug", "anchor-spl/anchor-debug"]
+
+[dependencies]
+anchor-lang = { version = "=1.2.0", features = ["event-cpi"] }
+anchor-spl = { version = "=1.2.0", default-features = false, features = ["token", "token_2022", "token_2022_extensions", "associated_token"] }
+bytemuck = { version = "=1.25.2", features = ["derive", "min_const_generics"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))', 'cfg(feature, values("custom-heap", "custom-panic"))'] }
