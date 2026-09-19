@@ -44,3 +44,25 @@ remained healthy. No SOLANA catalog entries were created.
 registration and chain-aware UI integration remain in progress. Regenerate clients
 only after the database upgrade; nullable collateral must never reach a legacy
 financial service without explicit DATABASE validation and type narrowing.
+
+## Registration service
+
+`registerSolanaMarket` now verifies a real complete finalized market snapshot and
+sealed two-reviewer terms, then loads the exact retained manifest against that
+snapshot. It rechecks genesis, preserves u64 IDs as strings and rejects timestamps
+outside JavaScript/SQL catalog representability. Active administrator status is
+checked both before RPC work and inside the insertion transaction.
+
+Catalog title, resolution rules, source URLs, payout, fee and times come from the
+verified market/manifest. Slug, short title, description and category are explicit
+editorial metadata. The service atomically inserts a hidden DRAFT SOLANA Market,
+its canonical binding, and an audit record. `acceptingOrders` is false and SQL
+collateral is null; no financial delegates are called. Repeating identical
+registration returns the existing entry. Different metadata or unique-identity
+conflicts are rejected, never adopted or overwritten. Registration does not
+publish, deploy or sign anything and is not yet exposed through a public route.
+
+Twenty orchestration tests cover authorization, full publication prerequisites,
+network/errors, exact values, idempotency and conflicts using explicitly mocked
+chain/store boundaries. Real SQL rollback and full chain-to-catalog runtime
+verification are separate gates; unit fixtures are not deployment evidence.
