@@ -92,6 +92,19 @@ describe("leaderboard reserved cash", () => {
     });
   });
 
+  it("sorts by displayed total rather than profit when actual grants differ", async () => {
+    mocks.grants.mockResolvedValue([
+      {actorUserId:"alice_id",metadata:JSON.stringify({amountMilli:"100000"})},
+      {actorUserId:"bob_id",metadata:JSON.stringify({amountMilli:"1000000"})},
+    ]);
+    const rows=await getLeaderboardRows();
+    expect(rows.map(row=>row.userId)).toEqual(["bob_id","alice_id"]);
+    expect(rows[0]).toMatchObject({rank:1,equityMilli:900_000n,pnlMilli:-100_000n});
+    expect(rows[1]).toMatchObject({rank:2,equityMilli:400_000n,pnlMilli:300_000n});
+    const page=await getLeaderboardPage(2,1);
+    expect(page.rows[0]).toMatchObject({rank:2,userId:"alice_id"});
+  });
+
   it("keeps principal and fees held in BUY escrow in equity, PnL, and rank", async () => {
     mocks.reservations.mockResolvedValue([
       // This is the actual reservation ledger balance: 500 feathers of

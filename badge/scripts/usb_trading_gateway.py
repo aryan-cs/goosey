@@ -4,6 +4,7 @@ Approve the displayed /badge# link once in your own website session. This proces
 must keep running for quotes/trades. Pending confirmations use durable, immutable
 requests and server idempotency keys; restarting cannot duplicate a fill.
 """
+from concurrent.futures import ThreadPoolExecutor
 import argparse
 import hashlib
 import json
@@ -162,6 +163,7 @@ def main():
         print('Scan the badge QR or open this link and approve the matching code:',flush=True)
         print(origin+'/badge#'+gateway.challenge,flush=True)
         account_at=market_at=0;last_response=None;last_auth=None
+        snapshots=ThreadPoolExecutor(max_workers=1);snapshot_job=None
         while True:
             now=time.monotonic()
             if now>=account_at:
@@ -185,10 +187,13 @@ def main():
                 if response!=last_response:
                     console.put(PRIVATE+'response.txt',response);last_response=response
                     if b'\tDONE\t' in response: account_at=0
-            if now>=market_at and not (request and request['kind']=='TRADE'):
-                market_at=now+30
-                try: console.put(PRIVATE+'market_snapshot.txt',mailbox_frame(fetch_snapshot(origin)))
+            if snapshot_job is not None and snapshot_job.done():
+                try: console.put(PRIVATE+'market_snapshot.txt',mailbox_frame(snapshot_job.result()))
                 except (OSError,ValueError): print('Market update unavailable; keeping previous snapshot.',flush=True)
+                snapshot_job=None
+            if now>=market_at and snapshot_job is None and not (request and request['kind']=='TRADE'):
+                market_at=now+30
+                snapshot_job=snapshots.submit(fetch_snapshot,origin)
             time.sleep(2)
 
 if __name__=='__main__': main()

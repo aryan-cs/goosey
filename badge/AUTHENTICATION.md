@@ -110,3 +110,17 @@ The later repeated-start check was interrupted by a USB transfer left incomplete
 when its host process was stopped. Console uploads now defer Ctrl-C until the
 announced payload and final prompt complete. A badge restart is still needed to
 clear the already-interrupted old transfer before further hardware checks.
+
+### Reconnect and stale-link correction
+
+Startup now treats cached account frames as unknown until the gateway sends a fresh
+frame. Only a fresh explicit LINK state shows the pairing QR; connection loss or a
+stale frame shows Reconnecting instead. Live credentials remain required for orders.
+Public chart fetching runs in a worker so slow history requests cannot block account
+heartbeats. Serial writes remain on the gateway thread.
+
+Validated Lua account restart, OFFLINE, LINK expiry, restoration, pending-order
+preservation and quote expiry; gateway tests pass. Installed on the connected badge
+and observed Reconnecting with no Lua error. The prior saved credential returned
+HTTP 401, so a fresh link was generated after preserving its local receipt journal.
+Phone approval and authenticated trading still require end-to-end confirmation.
