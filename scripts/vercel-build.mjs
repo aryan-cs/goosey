@@ -44,6 +44,12 @@ if (env.GOOSEY_PUBLISH_SEPTEMBER_ADDITIONS) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+if (env.GOOSEY_UNPUBLISH_SPEAKER) {
+  run("db:generate");
+  const result = spawnSync("node", ["--import", "tsx", "scripts/unpublish-duplicate-speaker-market.ts"], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
 // Explicit opt-in: preview builds must not silently mutate shared databases.
 if (env.GOOSEY_DEPLOY_MIGRATIONS === "1") run("db:migrate:deploy:postgres");
 run("build");
