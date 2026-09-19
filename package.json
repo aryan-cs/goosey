@@ -10,6 +10,7 @@
     "chain:build": "cargo-build-sbf --manifest-path chain/programs/goosey-exchange/Cargo.toml --arch v3",
     "test:chain:program": "tsx scripts/solana-program-e2e.ts",
     "test:chain:isolated": "tsx scripts/solana-program-e2e-isolated.ts",
+    "test:chain:exchange": "tsx scripts/solana-program-e2e-isolated.ts --suite exchange",
     "test:chain:wallet-api": "tsx scripts/solana-wallet-api-e2e.ts",
     "data:dev": "tsx scripts/development-data.ts",
     "data:fixture": "tsx scripts/development-fixture.ts",

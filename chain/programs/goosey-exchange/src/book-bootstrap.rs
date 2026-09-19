@@ -68,8 +68,8 @@ pub fn grow_book(ctx: Context<GrowBook>, expected_size: u32) -> Result<()> {
             from: ctx.accounts.admin.to_account_info(), to: book.clone(),
         }), missing)?;
     }
-    // Runtime rejects aggregate growth >10KiB within the same transaction.
-    // Clients submit/confirm each expected-size step separately.
+    // This instruction bounds growth to 10KiB. Clients submit/confirm each
+    // expected-size step separately; aggregate runtime limits are not assumed.
     book.resize(target)?;
     Ok(())
 }

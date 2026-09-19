@@ -30,7 +30,8 @@ export async function deriveGooseyBookAddress(programAddress: Address, market: A
 }
 
 /** Build exactly one setup step. Read/confirm the actual account between growth
- * transactions: bundling growth steps exceeds Solana's per-transaction limit.
+ * transactions so each expected size comes from observed state. The program
+ * bounds each resize; this client does not infer aggregate runtime limits.
  * No rent quote, account allocation, readiness or confirmation is fabricated. */
 export async function buildBookSetupInstruction(input: {
   programAddress: Address; marketId: bigint; admin: TransactionSigner;

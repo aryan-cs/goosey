@@ -13,10 +13,11 @@ import { getAddressDecoder } from "@solana/kit";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const program = "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q";
-const help = `Usage: node --import tsx scripts/solana-program-e2e-isolated.ts
+const help = `Usage: node --import tsx scripts/solana-program-e2e-isolated.ts [--suite foundation|exchange]
 
 Runs the actual compiled Goosey program on a NEW loopback validator and ledger.
 No build, public network, existing wallet, shared validator reset, or deployment.
+Each selected suite receives its own fresh ledger. Default: foundation.
 Requires installed project dependencies and an Agave validator supporting
 --upgradeable-program (verified with 4.2.2 / SBPFv3).
 
@@ -37,7 +38,11 @@ Retained keys are disposable LOCAL TEST keys; never fund them on public networks
 
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) { console.log(help); return; }
-  assert.equal(process.argv.length, 2, "Unknown arguments; use --help");
+  const argsIn = process.argv.slice(2);
+  assert(argsIn.length === 0 || (argsIn.length === 2 && argsIn[0] === "--suite"
+    && ["foundation", "exchange"].includes(argsIn[1])), "Unknown arguments; use --help");
+  const selectedSuite = argsIn[1] ?? "foundation";
+  const suiteScript = selectedSuite === "exchange" ? "solana-exchange-e2e.ts" : "solana-program-e2e.ts";
   const validatorBin = process.env.GOOSEY_SOLANA_VALIDATOR_BIN
     ?? (process.env.GOOSEY_SOLANA_BIN_DIR ? path.join(process.env.GOOSEY_SOLANA_BIN_DIR, "solana-test-validator") : "solana-test-validator");
   const artifact = await realpath(process.env.GOOSEY_SOLANA_PROGRAM_ARTIFACT ?? path.join(root, "chain/target/deploy/goosey_exchange.so"));
@@ -138,13 +143,13 @@ async function main() {
     assert(typeof genesis === "string");
     await writeFile(path.join(directory, "manifest.json"), JSON.stringify({
       validator: version.stdout.trim(), artifact, loadedArtifact, artifactSha256: createHash("sha256").update(artifactBytes).digest("hex"),
-      program, admin, rpc: endpoint, genesis, ports: { rpc: base, websocket: base + 1, faucet: base + 2, gossip: base + 3, dynamic: [base + 4, base + 40] },
+      program, admin, suite: selectedSuite, suiteScript, rpc: endpoint, genesis, ports: { rpc: base, websocket: base + 1, faucet: base + 2, gossip: base + 3, dynamic: [base + 4, base + 40] },
       validatorArguments: args, startedAt: new Date().toISOString(),
     }, null, 2), { flag: "wx", mode: 0o600 });
     console.log(`Isolated RPC ${endpoint}; genesis ${genesis}`);
     // The suite verifies genesis AND this fresh key's actual upgrade authority
     // before signing anything, so a port-handoff race cannot adopt another chain.
-    const suite = launch(process.execPath, ["--import", "tsx", path.join(root, "scripts/solana-program-e2e.ts")], "program-e2e.log", {
+    const suite = launch(process.execPath, ["--import", "tsx", path.join(root, "scripts", suiteScript)], "program-e2e.log", {
       ...process.env, GOOSEY_SOLANA_RPC_URL: endpoint, GOOSEY_SOLANA_GENESIS_HASH: genesis,
       GOOSEY_SOLANA_TEST_ADMIN_KEYPAIR: adminPath,
     }, true);
