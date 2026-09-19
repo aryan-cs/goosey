@@ -1,12 +1,12 @@
 {
-  "lastReviewedUpstreamRevision": "bcd103ecafbd1de57af7d1fda4c4e32dc476850c",
-  "reviewedAt": "2026-09-19T20:23:02.984076+00:00",
-  "outcome": "Badge 0.10 USB account-link and trading integration implemented; production APIs deployed",
+  "lastReviewedUpstreamRevision": "b3693f3342332099385859cff89859c730c785de",
+  "reviewedAt": "2026-09-19T20:40:52.943209+00:00",
+  "outcome": "Badge 0.10.1 built and tested against the expanded 14-market production catalog; not flashed",
   "reviewedChanges": [
-    "One-time website account linking with expiring/revocable device bearer",
-    "Durable USB BUY/SELL confirmation and idempotent retry",
-    "Database market/history/account source; concurrent Solana work remains web-only",
-    "Published Toronto, separate speaker 67, and four first-dance options"
+    "Seven published contracts: four new questions and three independent dances; rules remain server-authoritative",
+    "Fetch up to 50 catalog records before enforcing the existing 16-market Lua limit; omit only the five explicitly retired PAUSED dance contracts with zero volume and zero traders",
+    "Existing active/traded/closed contracts retained; no fabricated history or wallet changes",
+    "Reviewed teammate wireless diagnostics: PING/PONG only, no authenticated trading; Solana additions remain unsupported by stock Lua"
   ],
-  "integrationStatus": "Isolated real API trading/auth tests and Lua tests pass. Modular build installed; authenticated physical trade remains unverified pending account-link confirmation. Latest gateway stopped on USB console timeout; badge needs reconnection before hardware verification. No zero-input login from mutable Socials email and no direct internet transport on stock Lua."
+  "integrationStatus": "Current 14-market snapshot builds; snapshot, Lua account/trade, mailbox bounds, legacy save/sync, gateway, SSE and wireless diagnostic tests pass. Host layouts inspected. No hardware flash or live database mutation. Physical authenticated trading remains unverified after prior USB console timeout and pending account linking. Two-badge wireless code is diagnostic only; no supported zero-input Socials email authentication."
 }

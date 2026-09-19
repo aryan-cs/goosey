@@ -34,6 +34,16 @@ class SnapshotTest(unittest.TestCase):
         with patch.object(module, 'urlopen', return_value=BytesIO(b'{"items":[],"nextCursor":"another-page"}')):
             with self.assertRaises(ValueError): module.fetch_snapshot('https://getgoosey.vercel.app')
 
+    def test_retired_dances_omit_only_when_paused_and_untouched(self):
+        base = dict(slug='htn-2026-winner-first-dance-worm', title='Old dance',
+                    probabilityYesBps=5000, closesAt='2026-09-20T18:30:00.000Z',
+                    volumeMilli='0', traderCount=0, status='PAUSED')
+        active = dict(base, slug='htn-2026-winning-team-worm', status='OPEN')
+        for change, count in (({}, 1), ({'traderCount': 1}, 2), ({'volumeMilli': '1000'}, 2), ({'status': 'CLOSED'}, 2)):
+            payloads = [{'items': [dict(base, **change), active], 'nextCursor': None}] + [{'snapshots': []}] * count
+            with patch.object(module, 'urlopen', side_effect=lambda *a, **k: BytesIO(json.dumps(payloads.pop(0)).encode())):
+                self.assertEqual(len(module.fetch_snapshot('https://getgoosey.vercel.app')['markets']), count)
+
     def test_reject_unsafe_origins(self):
         for origin in ('http://getgoosey.vercel.app', 'https://user:password@host', 'https://host/api'):
             with self.assertRaises(ValueError): module.fetch_snapshot(origin)
