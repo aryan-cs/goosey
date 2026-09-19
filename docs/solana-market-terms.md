@@ -35,6 +35,15 @@ admission cases. Each reviewer verifies retained canonical test-manifest bytes
 against the actual commitment before signing; missing, unsealed, and foreign
 market terms fail activation. This does not add a new browser-flow proof.
 
+The dedicated `npm run test:chain:terms` suite independently passed **72 actual
+transaction cases** with the same binary after loader/authority preconditions
+were strengthened (`/tmp/goosey-solana-runner-JqUQVH/`, genesis
+`3trMSeL2awhkWCaEDhsDfkQjAM4Y6zLJRL6ifoBfyp22`). It verifies exact commitment
+bytes, separate reviewer signatures, one-way sealing, rejected reinitialization,
+post-close rejection, reviewer trading exclusion and ordinary-user admission.
+A finalized ten-account read observes matching market/book/resolution/terms.
+This disposable isolated ledger is not the shared development deployment.
+
 The TypeScript implementation also includes unsigned initialize/accept/seal
 builders and a strict 240-byte account decoder. `readGooseyEscrow` can request
 `includeMarketTerms: true`, forcing a single finalized ten-account batch with
