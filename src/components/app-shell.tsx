@@ -150,7 +150,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
             {primary.map((item) => item.href === "/markets"
               ? <Suspense key={item.href} fallback={<Link href="/markets">Markets</Link>}><MarketMenu /></Suspense>
               : <Link key={item.href} href={item.href} aria-current={isCurrentPath(pathname, item.href) ? "page" : undefined}>{item.label}</Link>)}
-            {signedIn && !verificationRequired && <Link href="/watchlist" aria-current={isCurrentPath(pathname, "/watchlist") ? "page" : undefined}>Watchlist</Link>}
+            {signedIn && !verificationRequired && <Link href="/portfolio" aria-current={isCurrentPath(pathname, "/portfolio") ? "page" : undefined}>Portfolio</Link>}
           </nav>
           <div className="header-actions">
             <SearchLauncher className="search-trigger">
@@ -159,7 +159,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
             </SearchLauncher>
             {signedIn ? (
               verificationRequired ? <Link className="button button-primary header-verify" href="/verify-email">Verify email</Link> : <>
-                <Link className="balance-chip" href="/portfolio" aria-label={`${balance ?? 0} feathers available`}>
+                <Link className="balance-chip" href="/portfolio" aria-label={`Portfolio, ${balance ?? 0} feathers available`}>
                   <FeatherIcon /> <span>{balance ?? 0}</span>
                 </Link>
                 <Link className="icon-button notification-trigger" href="/notifications" aria-label={`${notificationCount} unread notification${notificationCount === 1 ? "" : "s"}`}><Bell size={19} />{notificationCount > 0 && <span>{notificationCount > 9 ? "9+" : notificationCount}</span>}</Link>
@@ -194,7 +194,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
           {signedIn ? verificationRequired ? <>
             <Link className="mobile-more-primary" href="/verify-email" onClick={() => setMoreOpen(false)}>Verify email</Link>
           </> : <>
-            <Link href="/portfolio" onClick={() => setMoreOpen(false)}>Portfolio</Link>
+            <Link href="/portfolio" aria-current={isCurrentPath(pathname, "/portfolio") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Portfolio</Link>
             <Link href="/watchlist" onClick={() => setMoreOpen(false)}>Watchlist</Link>
             <Link href="/notifications" onClick={() => setMoreOpen(false)}>Notifications{notificationCount > 0 ? ` (${notificationCount})` : ""}</Link>
             <Link href="/settings/profile" onClick={() => setMoreOpen(false)}>Account</Link>

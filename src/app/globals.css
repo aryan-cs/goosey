@@ -419,6 +419,10 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .probability-block small, .movement-up, .movement-down, .movement-flat { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; font-variant-numeric: tabular-nums; font-weight: 700; }
 .movement-up, .movement-down { column-gap: 3px; }
 .position-row .movement-up .feather-icon, .position-row .movement-down .feather-icon { margin-inline-start: 2px; }
+.position-title { display: grid; gap: 5px; min-width: 0; }
+.position-title small, .position-row dd small { color: var(--ink-muted); font-size: 12px; font-weight: 400; line-height: 1.4; }
+.position-row dd small { display: block; margin-top: 4px; }
+.position-row dd.movement-up, .position-row dd.movement-down { justify-content: flex-start; }
 .movement-up { color: var(--yes); }
 .movement-flat { color: var(--ink-muted); }
 .movement-period { flex-basis: 100%; color: var(--ink-muted); font-size: 10px; font-weight: 400; text-align: right; }

@@ -1,0 +1,8 @@
+.tabs { display: flex; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; margin-bottom: 28px; border-radius: var(--radius-control); background: var(--surface-sunken); }
+.tabs a { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 24px; border-radius: inherit; font-weight: 600; color: var(--ink-muted); }
+.tabs a[aria-current="page"] { background: var(--surface); color: var(--ink); }
+.tabs a:hover { color: var(--ink); }
+.valuation { color: var(--ink-muted); font-size: 13px; margin: 24px 0; max-width: 720px; }
+.valuation summary { cursor: pointer; width: fit-content; }
+.valuation p { margin-top: 12px; line-height: 1.6; }
+@media (max-width: 600px) { .tabs { width: 100%; } .tabs a { flex: 1; padding-inline: 12px; } }
