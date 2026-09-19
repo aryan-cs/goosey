@@ -46,7 +46,7 @@ export default async function HomePage() {
         </div>
         <aside className="field-note">
           <Sparkles />
-          <div><strong>Start with 1,000 feathers</strong><p>Create an account, make some predictions, and move up the leaderboard.</p></div>
+          <div><strong>Join now and get 1,000 free feathers on us</strong><p>Create an account, make some predictions, and move up the leaderboard.</p></div>
         </aside>
       </section>
 
