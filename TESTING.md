@@ -2,7 +2,7 @@
 
 ## Current test status
 
-Thirteen Vitest files are checked in. At the time of this documentation update, `npm test` runs 113 tests (112 pass, one intentionally skipped) covering core LMSR pricing/rounding/collateral properties, deterministic and seeded-randomized CLOB matching, exact CLOB reservation/fill accounting, CLOB depth and display pricing, transactional placement/cancellation, CLOB read services, chronological price-history integrity, selected security utilities, transactional one-time account-token consumption and reset session revocation, audit redaction and CSV hardening, valuation, redemption accounting, and journal/market invariant helpers. `package.json` declares:
+The local verification run on 2026-09-19 passed 520 tests with one intentional skip across 72 Vitest files. Coverage includes LMSR pricing, CLOB matching/accounting and lifecycle operations, private activity pagination, valuation, market marks, notifications, settings, account recovery, and database-backed rate-limit thresholds/resets. These counts describe that run, not a permanent release guarantee. `package.json` declares:
 
 ```bash
 npm test
@@ -13,7 +13,7 @@ npm run test:watch
 npm run check
 ```
 
-`npm run check` covers lint, typecheck, the unit suite, and a production build. `npm run test:e2e` uses a temporary copy of the seeded SQLite database and a local production server. It covers grouped event reads, two-account registration with separate one-time invitations, invitation reuse rejection, authorization, quote, atomic buy, idempotent trade replay, portfolio, persisted trade/reply notifications and read state, threaded comments, comment reporting, private-by-default profile/leaderboard controls, watchlist, suggestions, origin rejection, and malformed JSON.
+`npm run check` covers lint, typecheck, the unit suite, and a production build; supply the intended `DATABASE_PROVIDER` explicitly for the build. `npm run test:e2e` creates a fresh temporary SQLite database from the current schema, seeds the catalog and a dedicated test administrator, and starts a separate local production server. It does not copy development participants or sessions. It covers grouped event reads, registration and verification, invitation administration, authorization, quotes, atomic buys, idempotent trade replay, portfolio, persisted notifications, threaded comments, reporting, privacy controls, watchlist, suggestions, origin rejection, and malformed JSON.
 
 `npm run test:settlement` creates isolated SQLite databases and verifies mixed-side cost basis, partial/full sells, authorization/idempotency, distinct proposal/approval, exact payout, terminal replay, rejection, bounded 100/100/5 batches, expired-lease recovery, stale-token fencing, zero-share exclusion, settlement notifications, and balanced journals.
 
@@ -37,6 +37,8 @@ This is a meaningful local and CI smoke baseline, not a production release signa
 
 ### PostgreSQL integration
 
+- `npm run test:postgres` now runs `scripts/postgres-exchange-concurrency.ts` inside its generated schema. The actual exchange service is exercised with simultaneous orders in different markets sharing one last wallet balance, duplicate placement requests, and duplicate cancellation requests. Assertions check one reservation/command, exact cash/refund, no failed-operation residue, balanced journals, and cached accounts against independently summed postings. The fixture grant itself is journaled; checks are scoped to fixture accounts, not unrelated pre-funded integration records. Two fresh-schema local runs passed on 2026-09-19 and their schema cleanup was verified. These two-request races do not establish the 100-request staging targets below.
+- After migration deployment, a read-only Prisma drift check compares the full applied migration chain with the current datamodel. Historical baseline files are not regenerated to represent subsequent migrations.
 - Same PostgreSQL major version and relevant extensions/configuration as production.
 - Fresh database per test worker or isolated schema with reliable cleanup.
 - Real migrations applied with `prisma migrate deploy`.
@@ -69,7 +71,7 @@ npm run test:orderbook
 npm run test:worker
 ```
 
-`npm run db:validate` validates both provider-specific schemas, runs the logical parity checker, and checks the PostgreSQL migration contract. Provider-contract tests require explicit production selection, reject mismatched URLs, verify TLS policy, and test the PostgreSQL startup probe without credentials. CI regenerates the offline baseline and requires the deployable migration to match it exactly. `npm run test:postgres` is the live opt-in layer: when `POSTGRES_TEST_DATABASE_URL` is supplied, it creates a random isolated schema, applies real migrations, probes the generated PostgreSQL runtime client, and races two serializable spends to prove one succeeds without overspending. It drops only that generated schema. Hosted CI currently has no PostgreSQL service or credentials, so it runs contract tests but truthfully does not claim the live result.
+`npm run db:validate` validates both provider-specific schemas, runs the logical parity checker, and checks the PostgreSQL migration contract. Provider-contract tests require explicit production selection, reject mismatched URLs, verify TLS policy, and test the PostgreSQL startup probe without credentials. `npm run test:postgres` creates a random isolated schema when `POSTGRES_TEST_DATABASE_URL` is supplied, applies real migrations, probes the generated runtime client, races two serializable spends, and runs the shared exchange integration suite. It drops only its generated schema. This passed locally against PostgreSQL 16 on 2026-09-19, including a serialization retry and the expected notification-failure rollback. The workflow now defines a disposable PostgreSQL service job; a hosted run has not yet been verified. This is bounded integration evidence, not high-load or production approval.
 
 `npm run test:worker` covers fresh/missing/stale/failing readiness, backlog-age and expired-lease rejection, per-market failure isolation, continued processing of already-approved runs, and bounded sanitized persisted errors. Operational staging must additionally exercise real concurrent workers and send `SIGTERM` during a database transaction to verify graceful drain under the deployment supervisor.
 
@@ -151,7 +153,7 @@ The acceptable outcome is a legal serializable business state, not a particular 
 
 ## Reconciliation
 
-`npm run reconcile` now queries persisted state and checks journal sums, account caches/non-negativity, user-wallet equality, market-position quantities, and open-market collateral. It currently passes the seeded database (`10` journals, `12` accounts, `0` participant users, `10` markets). It is not run by `check` or the API E2E flow, is not scheduled, omits several business-reference/settlement/leaderboard checks below, and reuses the production collateral helper. Production reconciliation must be broader and independently implemented so the same defect cannot validate itself; it should run in CI fixtures, after test suites, on a production schedule, before/after settlement, and after restore.
+`npm run reconcile` queries persisted state and checks journal sums, account caches/non-negativity, user-wallet equality, market-position quantities, collateral, order quantities, position reservations, terminal orders and fill/journal linkage. It independently compares cash reservations with their escrow account balances and ownership. Both API and order-book E2E now run it on restored snapshots after exact logical-record comparison; CI also checks a fresh seeded fixture. It is not a supervised production schedule, still omits some business-reference/settlement/leaderboard checks below, and reuses production helpers for several invariants. Production reconciliation must be broader and independently implemented so the same defect cannot validate itself.
 
 ### Required checks
 
@@ -242,6 +244,15 @@ Visual regression baselines must use deterministic real test fixtures, not fille
 - Confirm database pool exhaustion, lock timeout, deadlock retry, process restart, and rolling deployment do not duplicate business operations.
 
 ## Migration, backup, and restore tests
+
+Local SQLite evidence (2026-09-19): 12 real-sqlite snapshot tests cover WAL
+commits, exact large values, private permissions, corruption/refusal cases,
+quoted paths and concurrent no-overwrite publication. The API E2E now backs up
+its running isolated application, restores a separate working copy and runs
+reconciliation. It passed with 7 journals, 9 accounts, 2 participants and 5
+markets; this fixture uses market-maker trading, not order-book fills. See
+[the recovery runbook](docs/sqlite-recovery.md). This is not PostgreSQL recovery
+or a production disaster-recovery claim.
 
 - Run `npm run db:validate` and `npm run db:preflight:postgres` before any migration rehearsal. The preflight rejects missing/non-PostgreSQL URLs, pooled direct migration URLs, and insecure non-loopback production connections without printing credentials.
 - Apply all PostgreSQL migrations from an empty database and from the previous release snapshot.

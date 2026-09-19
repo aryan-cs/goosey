@@ -1,0 +1,7 @@
+.orderGuide {
+  scroll-margin-top: 100px;
+}
+
+.orderGuide p + p {
+  margin-top: 14px;
+}
