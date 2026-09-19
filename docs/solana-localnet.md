@@ -30,6 +30,27 @@ unfinished. This retained instance still has no participant funding or markets.
 Runtime bindings reside only in ignored
 local environment configuration; neither keys nor ledger files belong in Git.
 
+### Observed transaction-history gap
+
+The first attempted application indexer run against this retained instance on
+2026-09-19 stopped with `SignatureHistoryGapError`. Its explicit inclusive
+boundary was the actual initialization signature
+`1aG4f9mk7atNs6vvtG4SMcq6kZvm4pbRxsTRcysbF558Df1uwCGme8ydnC7u7JLuK1tCoMAotcko4NwnVjNcAYt`.
+By then `getSignaturesForAddress` returned an empty list and historical signature
+status was null; `getFirstAvailableBlock` was 4162. The installed validator's
+default retention is only 10,000 shreds. Retaining the ledger directory does not
+mean all historical transactions remain queryable.
+
+The stopped run left one initialized cursor at revision 0, with no committed
+head and backfill incomplete; zero receipts/events were imported. The ordered
+User balance/PnL and LedgerAccount balance projection had identical SHA-256
+`18f3ba061a0c3e2233226c69c602b994976fc627ddb5979ad9a50681d954b764`
+before and after. No chain was reset, no synthetic transaction was sent, and no
+missing history was silently skipped. There is currently **no running indexer**
+for this retained deployment. Increasing future retention cannot reconstruct
+already-pruned blocks. Resuming from a different actual transaction would need
+an explicit new coverage policy and must not be represented as genesis coverage.
+
 The isolated operator rehearsal at
 `/private/tmp/goosey-localnet-proof-Qmx0Xp/instance` proved create/start/stop/restart
 with the same genesis and initialization receipt, unchanged zero issuance, and
