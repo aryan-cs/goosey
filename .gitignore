@@ -30,3 +30,5 @@ output/playwright/**/*.zip
 output/playwright/report/
 output/playwright/test-results/
 !.gitkeep
+.vercel
+.env*

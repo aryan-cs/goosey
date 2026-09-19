@@ -1,0 +1,9 @@
+.next-dev/
+.next-sandbox/
+output/
+backups/
+coverage/
+.env*
+prisma/*.db*
+badge/
+.playwright-cli/
