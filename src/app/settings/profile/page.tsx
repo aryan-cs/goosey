@@ -1,17 +1,11 @@
 import Link from "next/link";
-import { LogoutButton } from "@/components/logout-button";
-import { redirect } from "next/navigation";
-import { getServerUser } from "@/lib/server-session";
-import { EmptyState } from "@/components/states";
 import { ProfileForm } from "@/components/profile-form";
 import { db } from "@/lib/db";
-import { SessionManager } from "@/components/session-manager";
-import { requiresEmailVerification } from "@/lib/auth";
+import { getSettingsUser } from "@/lib/settings-session";
+import styles from "@/components/settings.module.css";
 
 export default async function ProfileSettingsPage() {
-  const user = await getServerUser();
-  if (!user) return <div className="page-shell centered-state"><EmptyState title="Sign in to manage your account" description="Profile and session settings are private." action={<Link className="button button-primary" href="/login">Sign in</Link>} /></div>;
-  if (requiresEmailVerification(user)) redirect("/verify-email?next=%2Fsettings%2Fprofile");
-  const profile = await db.user.findUniqueOrThrow({ where: { id: user.id }, select: { displayName: true, bio: true, profilePublic: true, leaderboardVisible: true } });
-  return <div className="page-shell reading-page"><header className="page-header"><span className="eyebrow">Account</span><h1>{user.displayName}</h1><p>@{user.username} · {user.email}</p></header><section><h2>Profile and visibility</h2><ProfileForm profile={profile} /></section><section><h2>Saved markets</h2><p>Your watchlist is private.</p><Link href="/watchlist">View watchlist</Link></section><section><h2>Signed-in devices</h2><p>Review the browsers signed in to your account and remove any you do not recognize.</p><SessionManager /><LogoutButton /></section><section><h2>Privacy</h2><p>Your email, balance, and full trade history stay private. You choose whether your profile is public.</p><Link href="/settings/privacy">Privacy settings</Link></section></div>;
+  const user = await getSettingsUser("profile");
+  const profile = await db.user.findUniqueOrThrow({ where: { id: user.id }, select: { username: true, bio: true, profilePublic: true, leaderboardVisible: true } });
+  return <><section className={styles.panel}><h2>Profile</h2><p>Your username appears with your comments and any activity you make public.</p><ProfileForm profile={profile} /></section><section className={styles.panel}><h3>Your activity</h3><p>Keep track of your predictions and saved markets.</p><div className={styles.links}><Link href="/portfolio">Portfolio</Link><Link href="/watchlist">Watchlist</Link>{profile.profilePublic && <Link href={`/users/${profile.username}`}>View public profile</Link>}</div></section></>;
 }

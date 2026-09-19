@@ -136,7 +136,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
                   <FeatherIcon /> <span>{balance ?? 0}</span>
                 </Link>
                 <Link className="icon-button notification-trigger" href="/notifications" aria-label={`${notificationCount} unread notification${notificationCount === 1 ? "" : "s"}`}><Bell size={19} />{notificationCount > 0 && <span>{notificationCount > 9 ? "9+" : notificationCount}</span>}</Link>
-                <Link className="avatar-button" href="/settings/profile" aria-label="Account"><UserRound size={18} /></Link>
+                <Link className="avatar-button" href="/settings/profile" aria-label="Settings"><UserRound size={18} /></Link>
               </>
             ) : (
               <>
@@ -175,6 +175,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
             <Link href="/login" onClick={() => setMoreOpen(false)}>Sign in</Link>
             <Link className="mobile-more-primary" href="/signup" onClick={() => setMoreOpen(false)}>Create account</Link>
           </>}
+          <Link href="/settings/appearance" onClick={() => setMoreOpen(false)}>Appearance</Link>
           <Link href="/rules" onClick={() => setMoreOpen(false)}>How markets work</Link>
         </nav>
       </aside>
@@ -194,6 +195,7 @@ export function Footer() {
           <Link href="/markets"><ChartNoAxesColumnIncreasing size={16} /> Markets</Link>
           <Link href="/rules">How markets work</Link>
           <Link href="/community">Community</Link>
+          <Link href="/settings">Settings</Link>
           <Link href="/settings/privacy">Privacy</Link>
         </div>
         <p className="legal">Play-money only. Goosey is an independent community project and is not an official University of Waterloo or Hack the North service.</p>

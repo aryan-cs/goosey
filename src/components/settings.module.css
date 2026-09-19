@@ -1,0 +1,38 @@
+.shell { max-width: 1120px; }
+.layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 48px; align-items: start; }
+.nav { position: sticky; top: 116px; display: grid; gap: 4px; }
+.nav a { padding: 12px 16px; border-radius: var(--radius-sm); color: var(--ink-muted); font-size: 15px; font-weight: 600; }
+.nav a:hover { color: var(--ink); background: var(--surface-raised); }
+.nav a[aria-current="page"] { color: var(--ink); background: var(--surface-sunken); }
+.mobileSelect { display: none; }
+.mobileSelect select { width: 100%; min-height: 44px; padding: 10px 14px; color: var(--ink); background: var(--surface-sunken); border: 0; border-radius: var(--radius-sm); font: 600 15px var(--font-ui); }
+.content { min-width: 0; display: grid; gap: 24px; }
+.content h2 { margin: 0 0 8px; font: 600 24px/1.25 var(--font-display); letter-spacing: -.025em; }
+.content h3 { margin: 0 0 8px; font: 600 17px/1.3 var(--font-ui); }
+.content p { margin: 0 0 20px; color: var(--ink-muted); font-size: 14px; line-height: 1.6; }
+.panel { padding: 24px; border-radius: var(--radius-lg); background: var(--surface-raised); }
+.panel > :last-child { margin-bottom: 0; }
+.content :global(.stacked-form) { padding: 0; background: transparent; }
+.content :global(.stacked-form) label { font-size: 14px; }
+.content :global(.stacked-form .checkbox-field) { display: flex; align-items: flex-start; gap: 12px; font-weight: 400; line-height: 1.5; }
+.content :global(.checkbox-field) input { margin-top: 3px; }
+.content :global(.checkbox-field) strong { display: block; color: var(--ink); font-weight: 600; }
+.content :global(.checkbox-field) small { display: block; margin-top: 4px; font-size: 13px; color: var(--ink-muted); }
+.content :global(.field-hint) { color: var(--ink-muted); font-size: 12px; font-weight: 400; }
+.content :global(.form-error) { color: var(--no); }
+.content :global(.success-message) { color: var(--yes); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.account { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 10px 16px; margin: 0 0 20px; font-size: 14px; }
+.account dt { color: var(--ink-muted); }
+.account dd { margin: 0; overflow-wrap: anywhere; }
+.links { display: flex; flex-wrap: wrap; gap: 12px 24px; font-size: 14px; }
+.links a { text-decoration: underline; text-underline-offset: 4px; }
+@media (max-width: 700px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .nav { position: static; display: block; }
+  .nav a { display: none; }
+  .mobileSelect { display: block; }
+  .panel { padding: 20px; }
+  .account { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .account dd { margin-bottom: 10px; }
+}
