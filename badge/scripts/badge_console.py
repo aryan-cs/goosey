@@ -1,5 +1,5 @@
 """Paced macOS USB console access; no firmware or private account operations."""
-import os, select, time, sys
+import os, select, time, sys, signal
 class Console:
  def __init__(self,port="/dev/cu.usbmodem1101"):
   self.port=port
@@ -25,6 +25,15 @@ class Console:
  def cmd(self,cmd):
   self.buffer=b'';self.write((cmd+'\r').encode());return self.wait()
  def put(self,path,content):
+  # Finish an announced binary payload before honoring Ctrl-C. Otherwise the
+  # badge consumes future console commands as missing file bytes.
+  interrupted=[]
+  previous=signal.signal(signal.SIGINT,lambda *_: interrupted.append(True))
+  try:return self._put(path,content)
+  finally:
+   signal.signal(signal.SIGINT,previous)
+   if interrupted:raise KeyboardInterrupt
+ def _put(self,path,content):
   self.buffer=b'';self.write(('put '+path+' '+str(len(content))+'\r').encode());self.wait(b'READY')
   self.write(content);reply=self.wait(('OK '+str(len(content))).encode(),20);self.wait();return reply
 if __name__=='__main__':
