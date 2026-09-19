@@ -1,0 +1,78 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({ findMany: vi.fn() }));
+
+vi.mock("@/lib/market-service", () => ({
+  ApiError: class ApiError extends Error {
+    constructor(public readonly status: number, public readonly code: string, message: string) {
+      super(message);
+    }
+  },
+  prisma: { orderFill: { findMany: mocks.findMany } },
+}));
+
+import { listUserFills } from "./fill-service";
+import { decodeCursor } from "./serializers";
+
+function fill(id: string, createdAt: string) {
+  return {
+    id,
+    canonicalYesPriceMilli: 55_000n,
+    quantity: 2,
+    makerFeeMilli: 4n,
+    takerFeeMilli: 6n,
+    matchType: "CROSS",
+    tradeSequence: 1n,
+    createdAt: new Date(createdAt),
+    market: { slug: "fixture", title: "Fixture", payoutMilli: 100_000n },
+    makerOrder: { id: `maker_${id}`, userId: "user_12345678", clientOrderId: `maker-client-${id}`, outcome: "YES", action: "BUY" },
+    takerOrder: { id: `taker_${id}`, userId: "other_12345678", clientOrderId: `taker-client-${id}`, outcome: "YES", action: "SELL" },
+  };
+}
+
+describe("private fill history pagination", () => {
+  beforeEach(() => mocks.findMany.mockReset());
+
+  it("uses one lookahead row and returns a cursor for the last visible fill", async () => {
+    mocks.findMany.mockResolvedValue([
+      fill("fill_00000003", "2026-09-19T12:03:00.000Z"),
+      fill("fill_00000002", "2026-09-19T12:02:00.000Z"),
+      fill("fill_00000001", "2026-09-19T12:01:00.000Z"),
+    ]);
+
+    const result = await listUserFills({ userId: "user_12345678", role: "MAKER", limit: 2 });
+
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ makerOrder: { userId: "user_12345678" } }),
+      take: 3,
+    }));
+    expect(result.fills.map((entry) => entry.fillId)).toEqual(["fill_00000003", "fill_00000002"]);
+    expect(decodeCursor(result.nextCursor)).toEqual({
+      createdAt: "2026-09-19T12:02:00.000Z",
+      id: "fill_00000002",
+    });
+  });
+
+  it("applies a descending createdAt/id keyset without replacing the ownership predicate", async () => {
+    mocks.findMany.mockResolvedValue([fill("fill_00000001", "2026-09-19T12:01:00.000Z")]);
+    const cursor = { createdAt: new Date("2026-09-19T12:02:00.000Z"), id: "fill_00000002" };
+
+    const result = await listUserFills({ userId: "user_12345678", limit: 2, cursor });
+
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        OR: [
+          { makerOrder: { userId: "user_12345678" } },
+          { takerOrder: { userId: "user_12345678" } },
+        ],
+        AND: [{ OR: [
+          { createdAt: { lt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+        ] }],
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 3,
+    }));
+    expect(result.nextCursor).toBeNull();
+  });
+});

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 
 import { ApiError } from "../src/lib/market-service";
+import { listUserFills, parseListFillsQuery } from "../src/lib/fill-service";
 import { cancelOrder, expireOrders, placeOrder, replaceOrder } from "../src/lib/order-exchange";
 import { listUserOrders, parseListOrdersQuery } from "../src/lib/order-service";
 
@@ -363,6 +364,27 @@ async function main() {
     cursor = page.nextCursor;
   } while (cursor);
   assert(seenOrderIds.size === 5, "Private order history did not terminate after every Alice order");
+
+  const expectedAliceFillCount = await db.orderFill.count({
+    where: { OR: [{ makerOrder: { userId: alice.id } }, { takerOrder: { userId: alice.id } }] },
+  });
+  const seenFillIds = new Set<string>();
+  cursor = null;
+  do {
+    const query = parseListFillsQuery(new URLSearchParams({
+      marketSlug: market.slug,
+      limit: "1",
+      ...(cursor ? { cursor } : {}),
+    }));
+    const page = await listUserFills({ userId: alice.id, ...query });
+    assert(page.fills.length === 1, "Private fill history returned an unexpected page size");
+    const fill = page.fills[0]!;
+    assert(!seenFillIds.has(fill.fillId), "Private fill history repeated a fill across pages");
+    assert(fill.market.slug === market.slug && fill.executionPriceMilli > 0n, "Private fill serialization is incomplete");
+    seenFillIds.add(fill.fillId);
+    cursor = page.nextCursor;
+  } while (cursor);
+  assert(seenFillIds.size === expectedAliceFillCount, "Private fill history did not terminate after every Alice fill");
 
   const journals = await db.journalEntry.findMany({ include: { postings: true } });
   assert(journals.every((journal) => journal.postings.length >= 2 && journal.postings.reduce((sum, posting) => sum + posting.amountMilli, 0n) === 0n), "A journal failed reconciliation");

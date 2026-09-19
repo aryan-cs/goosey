@@ -2,6 +2,7 @@ node_modules/
 src/generated/
 .next/
 .next-dev/
+output/
 coverage/
 .env
 .env.local
