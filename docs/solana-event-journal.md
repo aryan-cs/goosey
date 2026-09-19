@@ -69,6 +69,19 @@ nothing new; the failed FOK remained VERIFIED_FAILED with no events. Evidence:
 `4f43GrZKe91u7SYh2d8NY4FrYgV9hPMWTDQoKcYz64si`, compiled artifact SHA-256
 `d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
 SQLite integrity and foreign-key checks passed after the run. This is a
-single-transaction ingestion/reopen proof, not the scanner's whole-window
-runtime proof or an operating-system crash durability proof. Scanner runtime,
-browser integration and web financial backend cutover remain unfinished.
+single-transaction ingestion/reopen proof, not an operating-system crash
+durability proof.
+
+A subsequent whole-window run retained all 153 exchange cases and scanned 151
+actual finalized program transactions across 16 pages (page size 10). It reopened
+Prisma after the first page and retained the frozen head, then committed coverage
+only after reaching the explicit initialization-signature boundary. The private
+journal contained 151 receipts, 151 visits and 108 events: 44 failed receipts and
+32 successful zero-event receipts were included. Seven preexisting receipts
+retained their identities. The final idle scan inserted nothing and left cursor
+revision 16 unchanged. Independent read-only SQLite integrity/FK checks passed.
+Evidence: `/tmp/goosey-solana-runner-Ia1LUy`, genesis
+`2DkCQ6wV2bjoLtUheLTqE57csNFog83HCAGJt9ywMMXL`, same artifact hash above.
+This proves coverage of that explicit local test window, not arbitrary historical
+RPC retention, process-crash durability, or live PostgreSQL operation. Browser
+integration and web financial backend cutover remain unfinished.
