@@ -23,6 +23,21 @@ press('START','DOWN','A');has('getgoosey.vercel.app')
 g.on_exit();g.fresh();has('Saved snapshot')
 assert dict(g.saved.items()) == before and g.writes == 0
 
+# USB responses are applied atomically; partial writes never replace data.
+import sys
+sys.path.insert(0, str(root / 'badge/scripts'))
+from cloud_snapshot import mailbox_frame
+newer = dict(source, generation=str(int(source.get('generation','1'))+1000))
+frame = mailbox_frame(newer).decode()
+g.clock=2000;g.mailbox=frame[:-10];g.on_tick();has('Saved snapshot')
+g.clock=4000;g.mailbox=frame;g.on_tick();has('USB updated')
+g.clock=6000;g.mailbox=frame.replace('END\t','BROKEN\t');g.on_tick();has('USB updated')
+g.clock=8000;g.mailbox=mailbox_frame(dict(newer,generation='1')).decode();g.on_tick();has('USB updated')
+g.clock=50000;g.on_tick();has('Saved snapshot')
+g.mailbox=frame;g.on_exit();g.fresh();has('Saved snapshot')
+assert dict(g.saved.items()) == before and g.writes == 0
+g.mailbox=None
+
 # Empty and one-point histories must not be replaced with invented prices.
 import re
 for points in ('{}', '{{50,1234567890000}}'):

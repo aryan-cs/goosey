@@ -1,11 +1,11 @@
 {
-  "lastReviewedUpstreamRevision": "9d8a5bb079ed418150d45ec295353e31679b88db",
-  "reviewedAt": "2026-09-19T19:12:52.482031+00:00",
-  "outcome": "Badge 0.9.0 public database snapshot build with real market history; host-tested only",
+  "lastReviewedUpstreamRevision": "b5a08590e49e4e7ed74eaefb888d2270c14ce79e",
+  "reviewedAt": "2026-09-19T19:32:15.628992+00:00",
+  "outcome": "Badge 0.9.1 installed and public USB sync verified on physical badge",
   "reviewedChanges": [
-    "Deployed origin getgoosey.vercel.app",
-    "Live public market metadata and bounded historical snapshots",
-    "Account sessions remain website-only; no badge device authorization or supported live USB receive transport"
+    "Current getgoosey.vercel.app public catalog/history",
+    "Separate smaller cloud client; only documented font sizes",
+    "Validated private-file USB response mailbox and saved snapshot recovery"
   ],
-  "integrationStatus": "No badge USB port is enumerated; native browser picker is empty. Installation, live sync, linking and trading remain blocked; no hardware upload performed."
+  "integrationStatus": "Physical public USB sync and restart recovery verified. Zero-input account login requires organizer-supported verification of badge identity and registered email. Stock Lua hides Socials email; observed badge-token sync also requires portal or organizer authentication. Account balances and trading remain unwired."
 }

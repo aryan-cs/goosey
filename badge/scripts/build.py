@@ -24,14 +24,16 @@ if [m['slug'] for m in markets] != expected:
     raise SystemExit('Market order changed: migrate paper_v2 before rebuilding')
 initial = json.loads((root / 'badge/market-order-v2-initial.json').read_text())
 assert len(initial) == 3 and expected[:3] == initial, 'Legacy paper_v2 prefix must stay unchanged'
-code = (root / 'badge/src/main.lua').read_text().replace('__MARKETS__', '\n'.join(rows))
+source = 'cloud_main.lua' if args.cloud_url else 'main.lua'
+code = (root / 'badge/src' / source).read_text().replace('__MARKETS__', '\n'.join(rows))
 snapshot = fetch_snapshot(args.cloud_url) if args.cloud_url else None
 code = code.replace('__CLOUD__', lua_literal(snapshot) if snapshot else 'nil')
+code = code.replace('__CLOUD_READER__', (root / 'badge/src/cloud_reader.lua').read_text() if snapshot else 'local readCloudFrame=nil')
 # Only remove full-line comments, blank lines and leading indentation. Keep
 # literals and statement boundaries intact; smaller source reduces load buffers.
 code = '\n'.join(line.lstrip() for line in code.splitlines()
                  if line.strip() and not line.lstrip().startswith('--')) + '\n'
-manifest = 'slug=goosey_base\nname=Goosey\nicon=GSY\napi=2\nheap_kb=96\nversion=0.9.0\nauthor=Goosey\n'
+manifest = 'slug=goosey_base\nname=Goosey\nicon=GSY\napi=2\nheap_kb=96\nversion=0.9.1\nauthor=Goosey\n'
 out = args.output
 out.mkdir(parents=True, exist_ok=True)
 (out / 'goosey.lua').write_text('--[==[badge-app\n' + manifest + ']==]\n\n' + code)
