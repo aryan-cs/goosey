@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, UserRound } from "lucide-react";
 import { GooseMark } from "./brand";
+import { authDestination, authPageHref } from "@/lib/auth-destination";
 
 export interface AuthFormProps {
   mode: "login" | "register";
@@ -38,16 +39,16 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
         if (register) {
           let requested = false;
           try {
-            const verificationResponse = await fetch("/api/auth/email-verification/request", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: payload.email }) });
+            const verificationResponse = await fetch("/api/auth/email-verification/request", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: payload.email, next: authDestination(redirectTo) }) });
             requested = verificationResponse.ok;
           } catch { /* The verification screen offers a retry without discarding the new session. */ }
           sessionStorage.setItem("goosey:verification-request-status", requested ? "sent" : "failed");
         }
-        const next = data?.redirectTo ?? redirectTo;
+        const next = authDestination(data?.redirectTo ?? redirectTo);
         router.push(`/verify-email?next=${encodeURIComponent(next)}`);
         return;
       }
-      if (!onSuccess) window.location.assign(data?.redirectTo ?? redirectTo);
+      if (!onSuccess) window.location.assign(authDestination(data?.redirectTo ?? redirectTo));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "The request could not be completed."); }
     finally { setSubmitting(false); }
   }
@@ -61,13 +62,13 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
       <form onSubmit={submit}>
         {register && <label><span>Username</span><div className="input-with-icon"><UserRound /><input autoComplete="username" name="username" required minLength={3} maxLength={24} pattern="[a-zA-Z0-9][a-zA-Z0-9_]{1,22}[a-zA-Z0-9]" title="Use 3–24 letters, numbers, or underscores. Start and end with a letter or number." aria-describedby="username-hint" /></div><small id="username-hint" className="field-hint">3–24 letters, numbers, or underscores. Start and end with a letter or number.</small></label>}
         <label><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" name="email" type="email" required /></div></label>
-        <div className="auth-field"><div className="auth-field-heading"><label htmlFor="auth-password">Password</label>{!register && <Link href="/reset-password">Forgot password?</Link>}</div><div className="input-with-icon"><LockKeyhole /><input id="auth-password" autoComplete={register ? "new-password" : "current-password"} name="password" type={showPassword ? "text" : "password"} required minLength={register ? 12 : undefined} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</button></div></div>
+        <div className="auth-field"><div className="auth-field-heading"><label htmlFor="auth-password">Password</label>{!register && <Link href={authPageHref("/reset-password", redirectTo)}>Forgot password?</Link>}</div><div className="input-with-icon"><LockKeyhole /><input id="auth-password" autoComplete={register ? "new-password" : "current-password"} name="password" type={showPassword ? "text" : "password"} required minLength={register ? 12 : undefined} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</button></div></div>
 
         {register ? <label className="checkbox-field"><input type="checkbox" name="acceptedCodeOfConduct" required /><span>I agree to the <Link href="/rules">community rules and code of conduct</Link>.</span></label> : null}
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
         <button className="button button-primary auth-submit" disabled={submitting}>{register ? "Create account" : "Sign in"}{submitting ? <LoaderCircle className="spin" /> : <ArrowRight />}</button>
       </form>
-      <p className="auth-switch">{register ? "Already have an account?" : "New to Goosey?"} <Link href={register ? "/login" : "/signup"}>{register ? "Sign in" : "Create an account"}</Link></p>
+      <p className="auth-switch">{register ? "Already have an account?" : "New to Goosey?"} <Link href={authPageHref(register ? "/login" : "/signup", redirectTo)}>{register ? "Sign in" : "Create an account"}</Link></p>
     </section>
   );
 }

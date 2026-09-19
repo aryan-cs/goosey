@@ -1,4 +1,5 @@
-import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
@@ -51,6 +52,24 @@ describe("account recovery tokens", () => {
     vi.stubEnv("PASSWORD_RESET_URL", "http://goosey.example/reset-password");
     expect(() => buildAccountActionUrl("PASSWORD_RESET_URL", "/reset-password", randomToken()))
       .toThrow(EmailConfigurationError);
+  });
+
+  it.each([
+    ["EMAIL_VERIFICATION_URL", "/verify-email"],
+    ["PASSWORD_RESET_URL", "/reset-password"],
+  ])("preserves a safe destination in %s email links while keeping tokens in the fragment", (setting, path) => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv(setting, `http://localhost:8080${path}?source=email`);
+    const token = randomToken();
+    const next = "/portfolio/activity?tab=fills";
+    const url = new URL(buildAccountActionUrl(setting, path, token, next));
+    expect(url.searchParams.get("next")).toBe(next);
+    expect(url.searchParams.get("source")).toBe("email");
+    expect(url.search).not.toContain(token);
+    expect(new URLSearchParams(url.hash.slice(1)).get("token")).toBe(token);
+    const external = new URL(buildAccountActionUrl(setting, path, token, "//example.org"));
+    expect(external.origin).toBe("http://localhost:8080");
+    expect(external.searchParams.get("next")).toBe("/");
   });
 
   it("bounds token lifetimes", () => {
@@ -139,7 +158,12 @@ describe("transactional token consumption", () => {
   }
 
   beforeAll(async () => {
-    copyFileSync(join(process.cwd(), "prisma/dev.db"), databasePath);
+    await database.$connect();
+    execFileSync(join(process.cwd(), "node_modules/.bin/prisma"), ["db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"], {
+      env: { ...process.env, DATABASE_URL: `file:${databasePath}` },
+      stdio: "pipe",
+      timeout: 20_000,
+    });
     const user = await database.user.create({
       data: {
         email: "recovery-test@example.com",

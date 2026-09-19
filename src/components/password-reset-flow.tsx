@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import { AlertCircle, CheckCircle2, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
+import { authDestination, authPageHref } from "@/lib/auth-destination";
 
 function fragmentToken(): string | null {
   const token = new URLSearchParams(window.location.hash.slice(1)).get("token")?.trim();
@@ -14,30 +16,41 @@ function subscribeToHash(callback: () => void) {
   return () => window.removeEventListener("hashchange", callback);
 }
 
-export function PasswordResetFlow() {
+export function PasswordResetFlow({ redirectTo = "/" }: { redirectTo?: string }) {
+  const router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
   const token = useSyncExternalStore(subscribeToHash, fragmentToken, () => null);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (success && !refreshing && window.location.hash) {
+      // Clear the consumed secret after the refreshed server layout commits.
+      // Concurrent history restoration and router refresh can restore the old hash.
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
+  }, [success, refreshing]);
+
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
     setMessage(null);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       const response = await fetch("/api/auth/password-reset/request", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: String(form.get("email") ?? "").trim() }),
+        body: JSON.stringify({ email: String(form.get("email") ?? "").trim(), next: authDestination(redirectTo) }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error?.message ?? "Password recovery is temporarily unavailable.");
       setMessage("If that account is eligible, a reset link is on its way. Check your inbox and spam folder.");
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Password recovery is temporarily unavailable.");
     } finally {
@@ -66,8 +79,8 @@ export function PasswordResetFlow() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error?.message ?? "That reset link could not be used.");
-      window.history.replaceState(null, "", window.location.pathname);
       setSuccess(true);
+      startRefresh(() => router.refresh());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That reset link could not be used.");
     } finally {
@@ -76,7 +89,7 @@ export function PasswordResetFlow() {
   }
 
   if (success) {
-    return <section className="auth-card verification-card"><div className="verification-state" role="status"><CheckCircle2 className="verification-success-icon" /><span className="eyebrow">Password updated</span><h1>Your account is secure</h1><p>All existing sessions were signed out. Use your new password to continue.</p><Link className="button button-primary" href="/login">Sign in</Link></div></section>;
+    return <section className="auth-card verification-card"><div className="verification-state" role="status"><CheckCircle2 className="verification-success-icon" /><span className="eyebrow">Password updated</span><h1>Your account is secure</h1><p>All existing sessions were signed out. Use your new password to continue.</p><Link className="button button-primary" href={authPageHref("/login", redirectTo)}>Sign in</Link></div></section>;
   }
 
   const confirming = token !== null;
@@ -94,7 +107,7 @@ export function PasswordResetFlow() {
         {message ? <p className="success-message" role="status"><CheckCircle2 /> {message}</p> : null}
         <button className="button button-primary auth-submit" disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : null}{confirming ? "Update password" : "Send reset link"}</button>
       </form>
-      <p className="auth-switch"><Link href="/login">Back to sign in</Link></p>
+      <p className="auth-switch"><Link href={authPageHref("/login", redirectTo)}>Back to sign in</Link></p>
     </section>
   );
 }

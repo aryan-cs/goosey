@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { EmailConfigurationError, sendEmail, smtpConfigFromEnvironment } from "@/lib/email";
 import { randomToken, sha256 } from "@/lib/security";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
+import { authDestination } from "@/lib/auth-destination";
 
 export const EMAIL_VERIFICATION_PURPOSE = "EMAIL_VERIFICATION";
 export const PASSWORD_RESET_PURPOSE = "PASSWORD_RESET";
@@ -25,7 +26,7 @@ export function tokenDurationMinutes(name: string, fallback: number, maximum: nu
   return value;
 }
 
-export function buildAccountActionUrl(environmentName: string, defaultPath: string, token: string): string {
+export function buildAccountActionUrl(environmentName: string, defaultPath: string, token: string, next?: string): string {
   const configured = process.env[environmentName]?.trim();
   const appUrl = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
   const base = configured || (appUrl ? new URL(defaultPath, appUrl).toString() : null);
@@ -52,6 +53,7 @@ export function buildAccountActionUrl(environmentName: string, defaultPath: stri
       throw new EmailConfigurationError();
     }
   }
+  if (next !== undefined) url.searchParams.set("next", authDestination(next));
   url.hash = new URLSearchParams({ token }).toString();
   return url.toString();
 }
@@ -100,7 +102,7 @@ async function removeUndeliveredToken(id: string, tokenHash: string): Promise<vo
   await db.accountToken.deleteMany({ where: { id, tokenHash, consumedAt: null } });
 }
 
-export async function requestEmailVerification(email: string): Promise<void> {
+export async function requestEmailVerification(email: string, next?: string): Promise<void> {
   smtpConfigFromEnvironment();
   buildAccountActionUrl("EMAIL_VERIFICATION_URL", "/verify-email", "A".repeat(43));
   const user = await db.user.findUnique({
@@ -116,7 +118,7 @@ export async function requestEmailVerification(email: string): Promise<void> {
     expiresAt: new Date(Date.now() + minutes * 60_000),
   });
   try {
-    const url = buildAccountActionUrl("EMAIL_VERIFICATION_URL", "/verify-email", issued.token);
+    const url = buildAccountActionUrl("EMAIL_VERIFICATION_URL", "/verify-email", issued.token, next);
     await sendEmail({
       to: user.email,
       subject: "Verify your Goosey email",
@@ -131,7 +133,7 @@ export async function requestEmailVerification(email: string): Promise<void> {
 export async function confirmEmailVerificationWithDatabase(
   database: typeof db,
   token: string,
-): Promise<{ welcomeGrantIssued: boolean }> {
+): Promise<{ userId: string; welcomeGrantIssued: boolean }> {
   if (!isValidAccountToken(token)) throw new InvalidAccountTokenError();
   const tokenHash = sha256(token);
   const operationAt = new Date();
@@ -173,15 +175,15 @@ export async function confirmEmailVerificationWithDatabase(
         entityId: record.userId,
       },
     });
-    return { welcomeGrantIssued };
+    return { userId: record.userId, welcomeGrantIssued };
   });
 }
 
-export async function confirmEmailVerification(token: string): Promise<{ welcomeGrantIssued: boolean }> {
+export async function confirmEmailVerification(token: string): Promise<{ userId: string; welcomeGrantIssued: boolean }> {
   return confirmEmailVerificationWithDatabase(db, token);
 }
 
-export async function requestPasswordReset(email: string): Promise<void> {
+export async function requestPasswordReset(email: string, next?: string): Promise<void> {
   smtpConfigFromEnvironment();
   buildAccountActionUrl("PASSWORD_RESET_URL", "/reset-password", "A".repeat(43));
   const user = await db.user.findUnique({
@@ -197,7 +199,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
     expiresAt: new Date(Date.now() + minutes * 60_000),
   });
   try {
-    const url = buildAccountActionUrl("PASSWORD_RESET_URL", "/reset-password", issued.token);
+    const url = buildAccountActionUrl("PASSWORD_RESET_URL", "/reset-password", issued.token, next);
     await sendEmail({
       to: user.email,
       subject: "Reset your Goosey password",

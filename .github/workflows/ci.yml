@@ -153,6 +153,9 @@ jobs:
       - name: Run isolated API E2E
         run: npm run test:e2e
 
+      - name: Verify real TLS email onboarding and recovery
+        run: npm run test:email:onboarding
+
   settlement-e2e:
     name: Settlement E2E
     needs: checks

@@ -1,4 +1,5 @@
 "use client";
+import { authPageHref } from "@/lib/auth-destination";
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -24,7 +25,7 @@ export function WatchlistButton({ marketId, signedIn, icon }: { marketId: string
     return () => controller.abort();
   }, [marketId, signedIn]);
   async function toggle() {
-    if (!authenticated) { router.push("/login"); return; }
+    if (!authenticated) { router.push(authPageHref("/login", `${window.location.pathname}${window.location.search}`)); return; }
     setBusy(true); setFailed(false);
     try {
       const response = await apiFetch("/api/watchlist", { method: saved ? "DELETE" : "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marketId }) });

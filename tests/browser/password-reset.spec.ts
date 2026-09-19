@@ -6,6 +6,22 @@ import { hash } from "bcryptjs";
 
 import { sha256 } from "../../src/lib/security";
 
+test("accepted recovery request clears the form and shows only success", async ({ page }) => {
+  // Exercise the UI's asynchronous success branch independently of SMTP delivery.
+  await page.route("**/api/auth/password-reset/request", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postDataJSON()).toEqual({ email: "recovery@example.test", next: "/portfolio" });
+    await route.fulfill({ status: 202, json: { accepted: true } });
+  });
+  await page.goto("/reset-password?next=%2Fportfolio");
+  await page.getByLabel("Email").fill("recovery@example.test");
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  await expect(page.locator(".success-message")).toContainText("a reset link is on its way");
+  await expect(page.getByLabel("Email")).toHaveValue("");
+  await expect(page.locator(".form-error")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Send reset link" })).toBeEnabled();
+});
+
 test("password recovery request and one-use confirmation work on the real UI", async ({ page }, testInfo) => {
   const db = new PrismaClient();
   const suffix = `${testInfo.project.name}-${Date.now()}`.replace(/\W+/g, "-").toLowerCase();
@@ -36,6 +52,12 @@ test("password recovery request and one-use confirmation work on the real UI", a
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.locator(".form-error")).toContainText("temporarily unavailable");
 
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(oldPassword);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).toHaveURL("/");
+
     await page.goto(`/reset-password#token=${token}`);
     await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
     await page.getByLabel("New password", { exact: true }).fill(newPassword);
@@ -43,6 +65,10 @@ test("password recovery request and one-use confirmation work on the real UI", a
     await page.getByRole("button", { name: "Update password" }).click();
     await expect(page.getByRole("heading", { name: "Your account is secure" })).toBeVisible();
     await expect(page).toHaveURL(/\/reset-password$/);
+    await expect(page.locator("header.site-header")).toHaveAttribute("data-auth", "guest");
+    await expect(page.locator("header").getByRole("link", { name: /feathers available/ })).toHaveCount(0);
+    await expect(page.locator("header").getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
+    expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
 
     await page.locator("#main-content").getByRole("link", { name: "Sign in" }).click();
     await page.getByLabel("Email").fill(email);

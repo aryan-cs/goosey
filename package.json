@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "zsh scripts/api-e2e.sh",
+    "test:email:onboarding": "node --import tsx scripts/email-onboarding-e2e.ts",
     "test:settlement": "zsh scripts/settlement-e2e.sh",
     "test:orderbook": "zsh scripts/orderbook-e2e.sh",
     "test:browser": "DATABASE_URL='file:./browser-e2e.db' APP_URL='http://127.0.0.1:8081' NEXT_PUBLIC_APP_URL='http://127.0.0.1:8081' EMAIL_VERIFICATION_URL='http://127.0.0.1:8081/verify-email' npx playwright test",
