@@ -1,0 +1,44 @@
+/* Phone layouts keep the same surfaces and type hierarchy as desktop, with
+   room for readable labels, wrapped names, and finger-sized controls. */
+@media (max-width: 809.98px) {
+  .leaderboard-podium { gap: 10px; min-height: 0; align-items: stretch; padding-top: 24px; }
+  .podium-place { min-width: 0; min-height: 216px; padding: 18px 12px; gap: 8px; border-radius: var(--radius-md); justify-content: flex-start; }
+  .podium-place.podium-1 { min-height: 240px; margin-top: -24px; padding-top: 26px; }
+  .podium-place .leader-avatar { width: 44px; height: 44px; margin: 0; flex-shrink: 0; }
+  .podium-place strong { width: 100%; font-size: 13px; line-height: 18px; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .podium-place > span:last-child { margin-top: auto; font-size: 12px; line-height: 18px; flex-wrap: wrap; justify-content: center; }
+  .leaderboard-table { margin-top: 24px; }
+  .leaderboard-row { grid-template-columns: 20px 36px minmax(0, 1fr); gap: 6px 12px; padding: 18px 16px; }
+  .leaderboard-row > .rank { grid-column: 1; grid-row: 1 / span 2; }
+  .leaderboard-row > .leader-avatar { grid-column: 2; grid-row: 1 / span 2; width: 36px; height: 36px; }
+  .leaderboard-row > .leader-name { grid-column: 3; grid-row: 1; gap: 4px; }
+  .leaderboard-row .leader-name strong { white-space: normal; overflow-wrap: anywhere; font-size: 15px; line-height: 20px; }
+  .leaderboard-row .leader-name small { font-size: 12px; line-height: 18px; }
+  .leaderboard-row > .leader-score { grid-column: 3; grid-row: 2; justify-content: flex-start; font-size: 14px; line-height: 20px; }
+  .trade-feed li { grid-template-columns: 8px minmax(0, 1fr); gap: 6px 10px; padding: 16px 0; font-size: 14px; line-height: 22px; }
+  .trade-feed li > .activity-dot { align-self: start; margin-top: 8px; }
+  .trade-feed li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+  .trade-feed time { grid-column: 2; font-size: 12px; line-height: 18px; }
+  .activity-list p { font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
+  .community-post { padding: 20px; }
+  .community-post header { align-items: flex-start; gap: 12px; }
+  .community-post header small { margin-top: 4px; line-height: 18px; }
+  .community-post footer { line-height: 20px; }
+  .community-post footer a { white-space: normal; overflow-wrap: anywhere; }
+  .market-list-row { padding: 16px; }
+  .quick-values button, .range-tabs button { min-height: 44px; }
+  .quick-values { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Sixteen-pixel form text avoids automatic input zoom on iOS. */
+  :root main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  :root main select, :root main textarea,
+  :root dialog input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  :root dialog select, :root dialog textarea { font-size: 16px; }
+}
+
+@media (max-width: 359.98px) {
+  .leaderboard-podium { gap: 8px; }
+  .podium-place { padding-inline: 10px; }
+  .podium-place > span:last-child { font-size: 11px; }
+  .leaderboard-row { gap: 6px 10px; }
+  .market-filters { grid-template-columns: minmax(0, 1fr); }
+}

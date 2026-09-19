@@ -4,7 +4,7 @@
 .choices { display: flex; width: fit-content; max-width: 100%; gap: 4px; padding: 4px; border-radius: var(--radius-control); background: var(--surface-sunken); }
 .choice { position: relative; display: block; cursor: pointer; }
 .choice input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
-.choice span { display: flex; align-items: center; justify-content: center; min-width: 70px; min-height: 40px; padding: 8px 16px; border-radius: var(--radius-control); color: var(--ink-secondary); font-size: 13px; font-weight: 500; }
+.choice span { display: flex; align-items: center; justify-content: center; min-width: 70px; min-height: 44px; padding: 8px 16px; border-radius: var(--radius-control); color: var(--ink-secondary); font-size: 13px; font-weight: 500; }
 .choice:hover span { color: var(--ink); background: var(--surface-raised); }
 .choice input:checked + span { color: var(--ink); background: var(--surface); font-weight: 600; }
 .choice input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
