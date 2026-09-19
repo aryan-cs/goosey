@@ -32,6 +32,18 @@ if (env.GOOSEY_REMOVE_TEST_ACCOUNTS) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+if (env.GOOSEY_VERIFY_LEADERBOARD === "1") {
+  run("db:generate");
+  const result = spawnSync("node", ["--import", "tsx", "scripts/verify-production-leaderboard.ts"], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+if (env.GOOSEY_PUBLISH_SEPTEMBER_ADDITIONS) {
+  run("db:generate");
+  const result = spawnSync("node", ["--import", "tsx", "scripts/publish-september-additions.ts"], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
 // Explicit opt-in: preview builds must not silently mutate shared databases.
 if (env.GOOSEY_DEPLOY_MIGRATIONS === "1") run("db:migrate:deploy:postgres");
 run("build");

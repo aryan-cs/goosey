@@ -36,6 +36,7 @@ function user(id: string, username: string) {
     displayName: username,
     balanceMilli: 0n,
     realizedPnlMilli: 0n,
+    profilePublic: false,
     positions: [],
     _count: { trades: 0 },
   };
@@ -61,6 +62,16 @@ describe("leaderboard reserved cash", () => {
       ["alice_id", { trades: 0, marketsTraded: 0 }],
       ["bob_id", { trades: 0, marketsTraded: 0 }],
     ]));
+  });
+
+  it("preserves profile visibility so only public profiles become links", async () => {
+    mocks.users.mockResolvedValue([
+      { ...user("alice_id", "alice"), profilePublic: false },
+      { ...user("bob_id", "bob"), profilePublic: true },
+    ]);
+    const rows = await getLeaderboardRows();
+    expect(rows.find(row => row.username === "alice")?.profilePublic).toBe(false);
+    expect(rows.find(row => row.username === "bob")?.profilePublic).toBe(true);
   });
 
   it("ranks active players even when their legacy leaderboard preference and public profile are disabled", async () => {
