@@ -95,7 +95,7 @@
   --contrast-surface: #f5f5f5;
   --contrast-hover: #e5e5e5;
   --on-contrast: #141414;
-  --glass: rgb(36 36 36 / 84%);
+  --glass: rgb(36 36 36 / 64%);
   --glass-solid: rgb(36 36 36 / 94%);
   --panel-glass: rgb(29 29 29 / 84%);
   --panel-glass-solid: rgb(29 29 29 / 96%);
@@ -141,7 +141,7 @@
     --contrast-surface: #f5f5f5;
     --contrast-hover: #e5e5e5;
     --on-contrast: #141414;
-    --glass: rgb(36 36 36 / 84%);
+    --glass: rgb(36 36 36 / 64%);
     --glass-solid: rgb(36 36 36 / 94%);
     --panel-glass: rgb(29 29 29 / 84%);
     --panel-glass-solid: rgb(29 29 29 / 96%);
@@ -174,8 +174,8 @@ svg { flex: none; }
 
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
 #main-content { flex: 1; width: 100%; }
-.site-header { --nav-font-size: 17px; position: fixed; top: 0; left: 50%; z-index: 50; width: max-content; max-width: calc(100vw - 48px); height: var(--header-height); transform: translateX(-50%); background: transparent; animation: header-enter var(--motion-slow) var(--ease-emphasized) both; }
-.header-inner { height: 60px; width: 100%; margin: 24px auto 0; padding: 0 8px 0 24px; display: flex; align-items: center; gap: 28px; background: var(--glass-solid); border: 0; border-radius: var(--radius-lg); box-shadow: none; }
+.site-header { --nav-font-size: 17px; position: fixed; top: 0; left: 50%; z-index: 50; width: max-content; max-width: calc(100vw - 48px); height: var(--header-height); transform: translateX(-50%); background: transparent; animation: header-enter var(--motion-slow) var(--ease-emphasized) backwards; }
+.header-inner { height: 60px; width: 100%; margin: 24px auto 0; padding: 0 8px 0 24px; display: flex; align-items: center; gap: 28px; background: var(--glass-solid); border: 0; border-radius: 30px; box-shadow: none; }
 .brand { display: inline-flex; align-items: center; flex: none; gap: 8px; font: 600 var(--nav-font-size)/1 var(--font-display); letter-spacing: -.02em; white-space: nowrap; transition: opacity var(--motion-fast) var(--ease-standard), transform var(--motion-base) var(--ease-emphasized); }
 .brand:hover { transform: translateY(-1px); }.brand:active { transform: translateY(0) scale(.98); }
 .goose-mark { display: inline-block; flex: none; width: 44px; height: 44px; color: var(--ink); background-color: currentColor; -webkit-mask: url("/brand/goosey-mark.png") center / contain no-repeat; mask: url("/brand/goosey-mark.png") center / contain no-repeat; }
@@ -232,7 +232,7 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .button-primary:hover:not(:disabled) { background: var(--contrast-hover); border-color: var(--contrast-hover); }
 .button-secondary { background: var(--surface); border-color: var(--border); }
 .button-ghost { background: transparent; border-color: transparent; }
-.header-login, .header-join, .header-verify { flex: none; white-space: nowrap; font-size: var(--nav-font-size); line-height: 24px; letter-spacing: 0; }
+.header-login, .header-join, .header-verify { border-radius: 22px; flex: none; white-space: nowrap; font-size: var(--nav-font-size); line-height: 24px; letter-spacing: 0; }
 .header-login { padding-inline: 10px; }
 .header-join { width: 124px; min-width: 124px; padding-inline: 0; overflow: hidden; contain: layout paint; transition: color 220ms var(--ease-standard), background-color 220ms var(--ease-standard), border-color 220ms var(--ease-standard), box-shadow 220ms var(--ease-standard); }
 .header-join-label { position: relative; width: 100%; height: 24px; display: grid; place-items: center; pointer-events: none; }
@@ -524,7 +524,8 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .market-grid .market-card:nth-child(n+6) { animation-delay: 260ms; }
 .sidebar-panel, .success-panel, .error-state, .form-error, .success-message { animation: notice-enter 320ms var(--ease-emphasized) backwards; }
 
-@keyframes header-enter { from { opacity: 0; transform: translate(-50%, -14px); } }
+/* Opacity on this ancestor creates a backdrop root and blocks the navbar blur. */
+@keyframes header-enter { from { transform: translate(-50%, -14px); } }
 @keyframes hero-mark-enter { from { opacity: 0; transform: translateY(16px) scale(.88) rotate(-4deg); } }
 @keyframes content-enter { from { opacity: 0; transform: translateY(18px); } }
 @keyframes canvas-enter { from { opacity: 0; transform: translateY(24px); border-radius: var(--radius-lg); } }
@@ -565,9 +566,9 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 @media (max-width: 1059.98px) {
   :root { --header-height: 60px; }
   .site-header, .site-header[data-auth="signed-in"] { width: 100%; max-width: none; height: 60px; }
-  .header-inner, .site-header[data-auth="signed-in"] .header-inner { width: min(calc(100% - 48px), 724px); height: 52px; margin-top: 8px; padding: 0 8px 0 20px; gap: 12px; background: var(--glass-solid); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent), var(--shadow-card); }
+  .header-inner, .site-header[data-auth="signed-in"] .header-inner { width: min(calc(100% - 48px), 724px); height: 52px; margin-top: 8px; padding: 0 8px 0 20px; gap: 12px; background: var(--glass-solid); border: 1px solid var(--border-subtle); border-radius: 26px; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent), var(--shadow-card); }
   @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    .header-inner, .site-header[data-auth="signed-in"] .header-inner { background: var(--glass); -webkit-backdrop-filter: blur(32px) saturate(140%); backdrop-filter: blur(32px) saturate(140%); }
+    .header-inner, .site-header[data-auth="signed-in"] .header-inner { background: var(--glass); -webkit-backdrop-filter: blur(48px); backdrop-filter: blur(48px); }
   }
   .desktop-nav { display: none; }
   .brand span { font-size: var(--nav-font-size); }.brand-mark { width: 28px; height: 28px; }
