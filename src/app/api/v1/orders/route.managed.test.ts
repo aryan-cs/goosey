@@ -3,8 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(), parseIdempotencyKey: vi.fn(), findMarket: vi.fn(),
-  acceptManagedOrder: vi.fn(), placeOrder: vi.fn(),
+  acceptManagedOrder: vi.fn(), dispatchManagedOrderCommand: vi.fn(), placeOrder: vi.fn(), after: vi.fn(),
 }));
+
+vi.mock("next/server", async () => {
+  const actual = await vi.importActual<typeof import("next/server")>("next/server");
+  return { ...actual, after: mocks.after };
+});
 
 vi.mock("@/lib/market-service", async () => {
   const actual = await vi.importActual<typeof import("@/lib/market-service")>("@/lib/market-service");
@@ -14,6 +19,7 @@ vi.mock("@/lib/market-service", async () => {
 vi.mock("@/lib/order-exchange", () => ({ placeOrder: mocks.placeOrder, cancelAllOrders: vi.fn() }));
 vi.mock("@/lib/order-service", () => ({ listUserOrders: vi.fn(), parseListOrdersQuery: vi.fn() }));
 vi.mock("@/lib/solana/managed-order-service", () => ({ acceptManagedOrder: mocks.acceptManagedOrder }));
+vi.mock("@/lib/solana/managed-order-dispatcher", () => ({ dispatchManagedOrderCommand: mocks.dispatchManagedOrderCommand }));
 
 import { POST } from "./route";
 
@@ -31,6 +37,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireUser.mockResolvedValue({ id: "user_12345678" });
   mocks.parseIdempotencyKey.mockReturnValue("request-key-123456");
+  mocks.after.mockImplementation((callback: () => unknown) => callback());
+  mocks.dispatchManagedOrderCommand.mockResolvedValue({ status: "SUBMITTED" });
 });
 
 describe("POST /api/v1/orders managed settlement", () => {
@@ -46,6 +54,7 @@ describe("POST /api/v1/orders managed settlement", () => {
       marketSlug: "chain-market", idempotencyKey: "request-key-123456",
       request: expect.objectContaining({ limitPriceMilli: "450", quantity: 2 }) });
     expect(mocks.placeOrder).not.toHaveBeenCalled();
+    expect(mocks.dispatchManagedOrderCommand).toHaveBeenCalledWith("cmd_123");
   });
 
   it("preserves the database exchange path for legacy markets during migration", async () => {

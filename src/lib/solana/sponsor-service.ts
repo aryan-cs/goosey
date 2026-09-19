@@ -1,4 +1,4 @@
-import { address, createKeyPairSignerFromBytes, type TransactionSigner } from "@solana/kit";
+import { address, createKeyPairSignerFromBytes, type TransactionPartialSigner } from "@solana/kit";
 
 export class SolanaSponsorConfigurationError extends Error {
   constructor(message = "The Solana transaction sponsor is not configured.") {
@@ -23,7 +23,7 @@ function canonicalSecret(value: string | undefined): Uint8Array {
  * Never return this signer from a route or serialize it into a command. */
 export async function loadSolanaSponsorSigner(
   env: Record<string, string | undefined> = process.env,
-): Promise<TransactionSigner> {
+): Promise<TransactionPartialSigner> {
   const expected = env.GOOSEY_SOLANA_SPONSOR_ADDRESS;
   if (!expected) throw new SolanaSponsorConfigurationError();
   const expectedAddress = address(expected);

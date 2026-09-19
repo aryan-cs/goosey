@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { createKeyPairSignerFromBytes, type TransactionSigner } from "@solana/kit";
+import { createKeyPairSignerFromBytes, type TransactionPartialSigner } from "@solana/kit";
 
 import { INTERACTIVE_ROLES, requiresEmailVerification } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -119,7 +119,7 @@ export async function loadAppManagedSolanaSigner(
   userId: string,
   env: Record<string, string | undefined> = process.env,
   database: CustodyDatabase = db,
-): Promise<TransactionSigner> {
+): Promise<TransactionPartialSigner> {
   const network = domain(env);
   const encryption = resolveCustodyEncryptionConfiguration(env);
   try {
@@ -151,4 +151,3 @@ export async function loadAppManagedSolanaSigner(
     encryption.key.fill(0);
   }
 }
-

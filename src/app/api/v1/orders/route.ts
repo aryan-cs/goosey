@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readJsonObject } from "@/lib/http";
@@ -6,6 +6,7 @@ import { cancelAllOrders, placeOrder } from "@/lib/order-exchange";
 import { ApiError, apiErrorResponse, jsonResponse, parseIdempotencyKey, prisma, requireUser } from "@/lib/market-service";
 import { listUserOrders, parseListOrdersQuery } from "@/lib/order-service";
 import { acceptManagedOrder } from "@/lib/solana/managed-order-service";
+import { dispatchManagedOrderCommand } from "@/lib/solana/managed-order-dispatcher";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         marketSlug: body.marketSlug,
         idempotencyKey,
         request: order,
+      });
+      after(async () => {
+        await dispatchManagedOrderCommand(result.command.id).catch(() => {
+          console.error("Managed order dispatch failed; the durable command remains retryable.", result.command.id);
+        });
       });
       return privateNoStore(jsonResponse(result, { status: 202 }));
     }
