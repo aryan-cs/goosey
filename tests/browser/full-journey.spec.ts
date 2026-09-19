@@ -19,7 +19,15 @@ test("complete participant and administrator journey", async ({ page, request },
   const inviteCode = `HTN-${randomBytes(12).toString("hex")}`;
   const comment = `Wi-Fi reliability matters for live demos (${suffix}).`;
   const consoleErrors: string[] = [];
-  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    const url = message.location().url;
+    const expectedUnavailableEmail = url.endsWith("/api/auth/email-verification/request")
+      && message.text().includes("503");
+    const expectedForbiddenBoundary = url.endsWith("/api/admin/audit-logs")
+      && message.text().includes("403");
+    if (!expectedUnavailableEmail && !expectedForbiddenBoundary) consoleErrors.push(message.text());
+  });
 
   try {
     const admin = await db.user.create({
