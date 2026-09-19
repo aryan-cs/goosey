@@ -1,4 +1,5 @@
 "use client";
+import rangeStyles from "./chart-range.module.css";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { chartDomain, nearestChartIndex, normalizeChartPoints, selectChartRange, type ChartPoint } from "@/lib/chart-series";
@@ -107,6 +108,6 @@ export function ProbabilityChart({ points, label = "YES probability", height = 3
       {change !== null && <span className={`chart-change ${change < 0 ? "movement-down" : change > 0 ? "movement-up" : ""}`}>{change > 0 ? "+" : ""}{Number(change.toFixed(2))} pts <small>in this period</small></span>}
     </figcaption>
     <ProbabilityPlot key={`${range}-${revision}`} points={series} label={label} emptyLabel={executionPrices ? "No executions yet" : "No probability history yet"} startAt={duration === null ? undefined : now - duration} endAt={now} onInspect={setInspected} />
-    <div className="probability-chart-footer"><span>Hover or drag to inspect. Arrow keys work too.</span><div className="range-tabs" aria-label="Chart range">{(["1D", "1W", "1M", "ALL"] as const).map(value => <button key={value} type="button" aria-pressed={value === range} className={value === range ? "active" : ""} onClick={() => { setInspected(null); setRange(value); }}>{value}</button>)}</div></div>
+    <div className="probability-chart-footer"><span>Hover or drag to inspect. Arrow keys work too.</span><div className={`range-tabs ${rangeStyles.ranges}`} aria-label="Chart range">{(["1D", "1W", "1M", "ALL"] as const).map(value => <button key={value} type="button" aria-pressed={value === range} className={value === range ? "active" : ""} onClick={() => { setInspected(null); setRange(value); }}>{value}</button>)}</div></div>
   </figure>;
 }

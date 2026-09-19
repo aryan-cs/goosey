@@ -1,0 +1,32 @@
+.ranges {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(42px, 1fr));
+  gap: 4px;
+  padding: 4px;
+}
+
+.ranges::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset-block: 4px;
+  left: 4px;
+  width: calc((100% - 20px) / 4);
+  border-radius: 999px;
+  background: var(--surface);
+  transform: translateX(calc(var(--range-index, 3) * (100% + 4px)));
+  transition: transform 380ms cubic-bezier(.34, 1.45, .64, 1);
+  pointer-events: none;
+}
+
+.ranges:has(> button:nth-child(1)[aria-pressed="true"]) { --range-index: 0; }
+.ranges:has(> button:nth-child(2)[aria-pressed="true"]) { --range-index: 1; }
+.ranges:has(> button:nth-child(3)[aria-pressed="true"]) { --range-index: 2; }
+.ranges:has(> button:nth-child(4)[aria-pressed="true"]) { --range-index: 3; }
+.ranges > button[aria-pressed] { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ranges::before { transition: none; }
+}
