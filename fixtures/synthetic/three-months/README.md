@@ -74,7 +74,10 @@ invitation credentials, SMTP settings or application secrets** in this folder.
 The exporter never selects password hashes. Authentication tables, request caches,
 worker state and audit logs are excluded. Journal metadata is replaced with `{}`;
 completed settlement lease/claim/error fields are cleared. All exported identities
-must match the generated `simulation-*` accounts at `example.test`.
+must match the known fictional roster and its expected roles at `example.test`.
+Display names and handles include Maple Byte (`maplebyte`), Orbit Otter
+(`orbitotter`), and Ctrl Alt Duck (`ctrlaltduck`); stable numbered login emails
+are retained for compatibility.
 Fresh passwords and secrets are generated locally on import and remain gitignored.
 
 ## Continue testing and share an updated snapshot

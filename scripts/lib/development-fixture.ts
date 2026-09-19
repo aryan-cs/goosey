@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { isDevelopmentIdentity } from "./development-profiles";
 
 export type JSONValue = string | number | boolean | null | JSONValue[] | { [key: string]: JSONValue };
 export const FIXTURE_FORMAT = "goosey-public-synthetic-v1";
@@ -92,8 +93,8 @@ export function decodeFixtureRow(model: string, row: Record<string, unknown>, sh
 export function assertSyntheticIdentities(users: Record<string, unknown>[], markets: Record<string, unknown>[]) {
   if (!users.length || !markets.length) throw new Error("Fixture requires synthetic users and markets.");
   for (const user of users) {
-    if (typeof user.username !== "string" || !/^simulation-(trader-\d{2}|admin-\d+|system)$/.test(user.username) || user.email !== `${user.username}@example.test`) {
-      throw new Error("Only generated simulation-* @example.test accounts may be published or imported.");
+    if (!isDevelopmentIdentity(user)) {
+      throw new Error("Only the known fictional fixture accounts with their expected roles and @example.test login emails may be published or imported.");
     }
   }
   for (const market of markets) {

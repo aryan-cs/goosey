@@ -85,6 +85,66 @@ zsh scripts/visual-qa.sh
 
 The visual script starts the built app and refreshes desktop/mobile screenshots under `output/playwright/`. Its Playwright wrapper path is currently machine-specific, so it is local tooling rather than a portable CI test. The checked-in screenshots have been visually inspected, but they are evidence snapshots, not automated accessibility or cross-browser proof.
 
+## Synthetic data for development and agent testing
+
+Start with the checked-in [three-month dataset](fixtures/synthetic/three-months/README.md). It contains 24 fictional traders with handles such as `orbitotter`, `maplebyte`, and `ctrlaltduck`, three administrators, 12 campus/project/weather markets, and over 2,600 executed trades with probability history, portfolios, comments, watchlists, and completed settlements.
+
+```sh
+npm ci
+npm run db:generate
+npm run data:fixture -- import --name shared
+npm run data:dev -- serve --name shared
+```
+
+Open **http://localhost:8082**. Read `output/development-sandbox/shared/credentials.json` locally for the generated password and account list. For example, Maple Byte signs in with `simulation-trader-01@example.test`. Administrator emails are `simulation-admin-1@example.test` through `simulation-admin-3@example.test`; use separate administrators for market creation, resolution proposal, and approval. Passwords and secrets are generated per import and never published in GitHub.
+
+`serve` starts the app and settlement worker together; Ctrl-C stops both. The isolated database, credentials, and build files live under `output/development-sandbox/` and are gitignored. The normal development database is untouched. Use one sandbox server per checkout. These are local copies; teammates' changes do not automatically sync.
+
+Import shifts every timestamp by the same duration so the saved capture time becomes today. This preserves the three-month history and correct market/trade/settlement order while keeping open markets available for testing. Add `--preserve-dates` on import for exact historical UTC timestamps. Import refuses an existing destination; choose another name to try a fresh copy.
+
+### Create, contribute, verify, and refresh
+
+To generate a new dataset instead of importing the saved one:
+
+```sh
+npm run data:dev -- create --name team
+npm run data:dev -- serve --name team
+# Optional reproducible scenario: add --seed 42 --as-of 2026-09-19T12:00:00Z to create.
+```
+
+The generator executes real LMSR buys/sells and settlement services. Probability snapshots, fees, balances, volumes, and payouts come from those executions. Markets cover open, paused, awaiting-resolution, resolved YES/NO, void, and draft states, with quiet periods, reversals, and denser recent activity. Synthetic status is disclosed in market descriptions and rules. This fixture covers SQLite/Prisma LMSR behavior; it does not simulate the order-book engine, MongoDB, or Solana transactions.
+
+Agents and teammates can sign in and trade, comment, or manage markets through the normal UI/APIs; their activity persists. Stop the sandbox server before using these CLI commands:
+
+```sh
+npm run data:dev -- contribute --name shared --count 20
+npm run data:dev -- verify --name shared
+npm run data:dev -- refresh-profiles --name shared
+npm run data:dev -- serve --name shared
+```
+
+`contribute` adds actual trades without rebuilding history. `verify` checks market windows, probability/trade linkage, volumes, positions, settlement timing, balanced journals, and wallet reconciliation. `refresh-profiles` updates the known fictional account names and scenario wording while preserving login emails, passwords, IDs, trading history, financial values, and dates. It also works on older imports with numbered trader names.
+
+### Share data and reset before launch
+
+Export a sanitized snapshot for the team, then review and commit its folder:
+
+```sh
+npm run data:fixture -- export --name shared
+git diff -- fixtures/synthetic/three-months
+```
+
+The export uses a consistent database transaction and can run while the source server is active. The folder contains one JSONL file per supported model plus a manifest with counts, schema fingerprint, and SHA-256 checksums. Monetary big integers are decimal strings, timestamps are UTC ISO strings, and probabilities use basis points (`10000` = 100%). Import validates checksums, relationships, chronology, and accounting. Authentication secrets, sessions, tokens, audit logs, and operational caches are excluded. Keep real identities and secrets out of fictional comments and other free-text fields; review those before publishing.
+
+To discard local testing changes and generate a fresh baseline, stop `serve`, then run:
+
+```sh
+npm run data:dev -- reset --name shared
+npm run data:dev -- serve --name shared
+```
+
+Reset archives the previous sandbox under `output/development-sandbox/shared-archive-*` and generates new local credentials. To restore the exact published baseline instead, import it with a new `--name`. For launch, use a separate empty production database and real onboarding; never deploy these fixtures, local credentials, or archives. See the [sandbox guide](docs/development-sandbox.md) and [fixture format and coverage](fixtures/synthetic/three-months/README.md) for details.
+
 ## Environment variables
 
 Copy `.env.example` to `.env`. Never commit `.env` or production secrets.

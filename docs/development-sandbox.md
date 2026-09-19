@@ -36,6 +36,10 @@ Use `simulation-trader-01@example.test` through
 `simulation-trader-24@example.test` for participants. Three distinct
 `simulation-admin-N@example.test` accounts exercise creation, proposal and
 approval. A separate non-interactive SYSTEM account supports the worker.
+Participants have distinct fictional handles such as `maplebyte`, `orbitotter`,
+and `ctrlaltduck`; their numbered login emails stay stable. With the server
+stopped, run `npm run data:dev -- refresh-profiles --name team` to refresh names
+and scenario wording in an existing dataset without resetting history or dates.
 Participant accounts are already verified and have a real ledger-backed
 100,000-feather development grant. Outbound SMTP is disabled in this sandbox.
 Do not use its credentials outside the development environment.

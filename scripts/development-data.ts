@@ -8,7 +8,7 @@ import { SANDBOX_KIND, acquireSandboxLock, assertDevelopmentOnly, ensureSandboxP
 import { buildDevelopmentScenarios } from "./lib/development-scenarios";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const help = `Usage: npm run data:dev -- <create|reset|verify|contribute|serve> [options]
+const help = `Usage: npm run data:dev -- <create|reset|verify|contribute|refresh-profiles|serve> [options]
   --name team             Isolated dataset under output/development-sandbox/
   --seed 20260919          Repeatable scenario seed (create/reset)
   --as-of <ISO timestamp>  End of the 90-day simulation (defaults to now)
@@ -19,6 +19,7 @@ create refuses to overwrite an existing dataset. reset archives the old dataset
 before rebuilding. serve starts the app and settlement worker together; stop it
 before reset/contribute. Agents can trade/comment normally through the running
 app. Credentials are written to a private, ignored credentials.json file.
+refresh-profiles updates fictional names and scenario wording without resetting data.
 No command accepts a remote database URL or operates on prisma/dev.db.`;
 
 function runNode(args: string[], env: NodeJS.ProcessEnv) {
@@ -64,7 +65,7 @@ async function main() {
   }, allowPositionals: true, strict: true });
   if (values.help) { console.log(help); return; }
   const command = positionals[0];
-  if (positionals.length !== 1 || !["create", "reset", "verify", "contribute", "serve"].includes(command)) throw new Error(help);
+  if (positionals.length !== 1 || !["create", "reset", "verify", "contribute", "refresh-profiles", "serve"].includes(command)) throw new Error(help);
   assertDevelopmentOnly();
   const asOf = values["as-of"] ? new Date(values["as-of"]) : new Date();
   if (!Number.isFinite(asOf.getTime()) || asOf > new Date()) throw new Error("--as-of must be a valid timestamp at or before now.");
@@ -117,6 +118,18 @@ async function main() {
     const credentials = JSON.parse(await readFile(paths.credentials, "utf8")) as { secret: string };
     const env = sandboxEnvironment(paths.database, credentials.secret, port);
     Object.assign(process.env, env);
+    if (command === "refresh-profiles") {
+      const engine = await import("./lib/development-replay");
+      disconnect = engine.disconnectDevelopmentDatabase;
+      const accounts = await engine.refreshDevelopmentProfiles();
+      const privateCredentials = JSON.parse(await readFile(paths.credentials, "utf8")) as Record<string, unknown>;
+      await writeFile(paths.credentials, JSON.stringify({ ...privateCredentials, accounts }, null, 2), { mode: 0o600 });
+      const result = manifest.result as Record<string, unknown> | undefined;
+      if (result && Array.isArray(result.accounts)) {
+        await writeFile(paths.manifest, JSON.stringify({ ...manifest, result: { ...result, accounts } }, null, 2), { mode: 0o600 });
+      }
+      console.log(`Updated ${accounts.length} fictional account profiles; passwords and trading history retained.`);
+    }
     if (command === "serve") {
       console.log(`SYNTHETIC DEVELOPMENT DATA — http://localhost:${port}\nAll writes stay in ${paths.database}`);
       await serve(env, port);

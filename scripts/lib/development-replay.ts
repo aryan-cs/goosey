@@ -7,9 +7,10 @@ import { db, databaseRuntime, requireDatabaseStartup } from "../../src/lib/db";
 import { grantWelcomeFeathers } from "../../src/lib/auth";
 import { createAdminMarket, transitionAdminMarket, createResolutionProposal, approveResolutionProposal } from "../../src/lib/admin-service";
 import { createTradeQuote, executeTrade } from "../../src/lib/trading";
-import type { DevelopmentScenarioPlan } from "./development-scenarios";
+import { buildDevelopmentScenarios, developmentMarketPresentation, type DevelopmentScenarioPlan } from "./development-scenarios";
 import { processSettlementRun } from "../../src/lib/settlement-service";
 import { readSandboxManifest, assertDevelopmentOnly } from "./development-sandbox";
+import { DEVELOPMENT_ADMINS, DEVELOPMENT_PARTICIPANTS, DEVELOPMENT_SYSTEM, developmentProfileFor, isDevelopmentIdentity } from "./development-profiles";
 
 // This module is intentionally a development CLI dependency, never a route dependency.
 async function assertSandbox() {
@@ -61,17 +62,16 @@ export async function replayDevelopmentData(input: { scenarios: DevelopmentScena
   const passwordHash = await hash(input.password, 12);
   const systemHash = await hash(`${randomUUID()}${randomUUID()}`, 12);
   await atHistoricalTime(beginning, () => db.user.create({ data: {
-    email: "simulation-system@example.test", username: "simulation-system", displayName: "Simulation Worker",
+    email: DEVELOPMENT_SYSTEM.email, username: DEVELOPMENT_SYSTEM.username, displayName: DEVELOPMENT_SYSTEM.displayName,
     passwordHash: systemHash, emailVerifiedAt: beginning, role: "SYSTEM",
     bio: "Non-interactive development settlement worker principal.",
   } }));
   const admins: string[] = [];
   const accounts: { id: string; email: string; username: string; role: string }[] = [];
-  for (let index = 0; index < 27; index++) {
-    const admin = index < 3;
-    const username = admin ? `simulation-admin-${index + 1}` : `simulation-trader-${String(index - 2).padStart(2, "0")}`;
+  for (const profile of [...DEVELOPMENT_ADMINS, ...DEVELOPMENT_PARTICIPANTS]) {
+    const admin = profile.role === "ADMIN";
     const user = await atHistoricalTime(beginning, async () => {
-      const created = await db.user.create({ data: { email: `${username}@example.test`, username, displayName: admin ? `Simulation Admin ${index + 1}` : `Simulation Trader ${index - 2}`, passwordHash, emailVerifiedAt: beginning, role: admin ? "ADMIN" : "USER", bio: "Synthetic development participant. No real person or trading history.", profilePublic: !admin, leaderboardVisible: !admin } });
+      const created = await db.user.create({ data: { email: profile.email, username: profile.username, displayName: profile.displayName, passwordHash, emailVerifiedAt: beginning, role: profile.role, bio: "Synthetic development participant. No real person or trading history.", profilePublic: !admin, leaderboardVisible: !admin } });
       if (!admin) await db.$transaction(tx => grantWelcomeFeathers(tx, created.id));
       return created;
     });
@@ -91,7 +91,7 @@ export async function replayDevelopmentData(input: { scenarios: DevelopmentScena
     input.onProgress?.(`Replaying ${scenario.slug} (${marketIndex + 1}/${input.scenarios.markets.length})`);
     if (!(scenario.openedAt < scenario.closesAt && scenario.closesAt <= scenario.resolvesAt)) throw new Error(`Invalid timeline: ${scenario.slug}`);
     const future = new Date(Date.now() + 365 * 86_400_000);
-    const created = await atHistoricalTime(scenario.openedAt, () => createAdminMarket({ actorUserId: admins[0], idempotencyKey: `simulation-create-${scenario.slug}`, market: { slug: scenario.slug, title: scenario.title, shortTitle: scenario.shortTitle, description: scenario.description, category: scenario.category, rules: "Synthetic development scenario. Resolve according to the deterministic scenario manifest; no real-world outcome is asserted.", resolutionSource: "Development scenario manifest", eventId: eventIds.get(scenario.eventSlug), status: scenario.finalStatus === "DRAFT" ? "DRAFT" : "OPEN", featured: marketIndex < 4, color: ["gold", "green", "blue", "violet"][marketIndex % 4] as "gold", icon: "sparkles", closesAt: future, resolvesAt: future, pricingModel: "LMSR", liquidityParameter: 80, payoutMilli: 100_000n, feeBps: 50 } }));
+    const created = await atHistoricalTime(scenario.openedAt, () => createAdminMarket({ actorUserId: admins[0], idempotencyKey: `simulation-create-${scenario.slug}`, market: { slug: scenario.slug, title: scenario.title, shortTitle: scenario.shortTitle, description: scenario.description, category: scenario.category, rules: scenario.rules, resolutionSource: scenario.resolutionSource, eventId: eventIds.get(scenario.eventSlug), status: scenario.finalStatus === "DRAFT" ? "DRAFT" : "OPEN", featured: marketIndex < 4, color: ["gold", "green", "blue", "violet"][marketIndex % 4] as "gold", icon: "sparkles", closesAt: future, resolvesAt: future, pricingModel: "LMSR", liquidityParameter: 80, payoutMilli: 100_000n, feeBps: 50 } }));
     const marketId = created.market.id;
     marketIds.push(marketId);
     let previousAt = scenario.openedAt;
@@ -142,7 +142,7 @@ export async function replayDevelopmentData(input: { scenarios: DevelopmentScena
 export async function appendDevelopmentTrades(input: { count: number; onProgress?: (message: string) => void }) {
   await assertSandbox();
   if (!Number.isInteger(input.count) || input.count < 1 || input.count > 1000) throw new Error("Append count must be between 1 and 1000.");
-  const users = await db.user.findMany({ where: { role: "USER", username: { startsWith: "simulation-trader-" } }, orderBy: { username: "asc" } });
+  const users = await db.user.findMany({ where: { role: "USER", email: { in: DEVELOPMENT_PARTICIPANTS.map(profile => profile.email) } }, orderBy: { email: "asc" } });
   const markets = await db.market.findMany({ where: { status: "OPEN", acceptingOrders: true, closesAt: { gt: new Date() }, slug: { startsWith: "dev-" } }, orderBy: { slug: "asc" } });
   if (!users.length || !markets.length) throw new Error("No active synthetic participants or open simulation markets; regenerate the sandbox with a current asOf.");
   const run = randomUUID();
@@ -155,3 +155,33 @@ export async function appendDevelopmentTrades(input: { count: number; onProgress
 }
 
 export async function disconnectDevelopmentDatabase() { await db.$disconnect(); }
+
+/** Rename fixture identities without resetting any history, funds or credentials. */
+export async function refreshDevelopmentProfiles() {
+  await assertSandbox();
+  return db.$transaction(async tx => {
+    const users = await tx.user.findMany();
+    for (const user of users) {
+      if (!isDevelopmentIdentity(user)) throw new Error("Refusing to rename an account outside the known synthetic fixture identities.");
+      const profile = developmentProfileFor(user.email)!;
+      await tx.user.update({ where: { id: user.id }, data: { username: profile.username, displayName: profile.displayName, updatedAt: user.updatedAt } });
+    }
+    // Only editorial fields are refreshed; existing lifecycle dates and economics stay intact.
+    const plan = buildDevelopmentScenarios({ asOf: new Date() });
+    for (const scenario of plan.markets) {
+      const market = await tx.market.findUnique({ where: { slug: scenario.slug } });
+      if (!market) continue;
+      await tx.market.update({ where: { id: market.id }, data: {
+        ...developmentMarketPresentation(scenario), updatedAt: market.updatedAt,
+      } });
+    }
+    for (const scenario of plan.events) {
+      const event = await tx.marketEvent.findUnique({ where: { slug: scenario.slug } });
+      if (!event) continue;
+      await tx.marketEvent.update({ where: { id: event.id }, data: {
+        title: scenario.title, shortTitle: scenario.shortTitle, description: scenario.description, updatedAt: event.updatedAt,
+      } });
+    }
+    return tx.user.findMany({ where: { role: { not: "SYSTEM" } }, select: { id: true, email: true, username: true, role: true }, orderBy: { email: "asc" } });
+  });
+}

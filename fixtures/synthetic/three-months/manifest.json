@@ -1,7 +1,7 @@
 {
   "format": "goosey-public-synthetic-v1",
   "synthetic": true,
-  "capturedAt": "2026-09-19T17:47:20.850Z",
+  "capturedAt": "2026-09-19T17:55:00.210Z",
   "sourceAsOf": "2026-09-19T17:38:55.893Z",
   "seed": 20260919,
   "schemaSha256": "2aa12fec3f0c2765f0939a7598720e523a492169cd12e4c50372a3e896fa2ce5",
@@ -10,7 +10,7 @@
       "model": "User",
       "file": "User.jsonl",
       "rows": 28,
-      "sha256": "c907eedfa16176650c755f3366da4ff7437b066f04eb140102396cdf9a17fcfc"
+      "sha256": "cd3472a47dfad25322326ee5dffa69e1cdf4df2eb76ec7d8824ee14e82364fd6"
     },
     {
       "model": "LedgerAccount",
@@ -22,13 +22,13 @@
       "model": "MarketEvent",
       "file": "MarketEvent.jsonl",
       "rows": 3,
-      "sha256": "c34b2d1cc3df59d676131a706966d8211388c5b89968417a00daf26856d21f1e"
+      "sha256": "821fe9b7a0151be205d1d804cc1e1494f828d921acda6c668bf71e184dff4f0c"
     },
     {
       "model": "Market",
       "file": "Market.jsonl",
       "rows": 12,
-      "sha256": "c3bb2aabbcbc61a9a5287e9f98959f8652334f4c499fd87694acbba4af6c4a4d"
+      "sha256": "824e80ebdcdb255e9c49b1521d656f371977e95c79c056186c2928df7bba6e3d"
     },
     {
       "model": "Position",

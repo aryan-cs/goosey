@@ -72,19 +72,90 @@ const HOUR = 60 * MINUTE;
 const DEVELOPMENT_LABEL = "Fictional development simulation; not an actual event or prediction.";
 
 const DEFINITIONS: readonly Definition[] = [
-  { slug: "solar-rover-demo", title: "Will the solar rover complete the fictional demo course?", shortTitle: "Solar rover finishes", category: "Projects", event: 0, openedDaysAgo: 90, closeDaysFromNow: 3, status: "OPEN", anchors: [[0, .28], [.3, .46], [.55, .38], [.8, .69], [1, .77]], jump: .07 },
-  { slug: "midnight-noodle-vote", title: "Will noodles win the fictional midnight snack vote?", shortTitle: "Noodles win snack vote", category: "Food", event: 0, openedDaysAgo: 60, closeDaysFromNow: 2, status: "OPEN", anchors: [[0, .58], [.3, .41], [.55, .64], [.8, .53], [1, .62]], jump: -.08 },
-  { slug: "rain-free-showcase", title: "Will the fictional outdoor showcase stay rain-free?", shortTitle: "Rain-free showcase", category: "Weather", event: 0, openedDaysAgo: 30, closeDaysFromNow: 1, status: "OPEN", anchors: [[0, .73], [.3, .66], [.55, .34], [.8, .42], [1, .29]], jump: -.11 },
-  { slug: "accessible-demo-award", title: "Will an accessibility project win the fictional demo award?", shortTitle: "Accessibility wins", category: "Hack the North", event: 0, openedDaysAgo: 84, closeDaysFromNow: 4, status: "OPEN", anchors: [[0, .19], [.3, .29], [.55, .57], [.8, .49], [1, .71]], jump: .09 },
-  { slug: "goose-relay-record", title: "Will the fictional campus relay finish under twelve minutes?", shortTitle: "Relay under 12 minutes", category: "Sports", event: 0, openedDaysAgo: 45, closeDaysFromNow: 5, status: "OPEN", anchors: [[0, .47], [.3, .53], [.55, .45], [.8, .56], [1, .48]], jump: .035 },
-  { slug: "library-robot-delivery", title: "Will the fictional library robot deliver all ten books?", shortTitle: "Robot delivers ten books", category: "Tech", event: 0, openedDaysAgo: 72, closeDaysFromNow: 2, status: "PAUSED", anchors: [[0, .62], [.3, .74], [.55, .59], [.8, .36], [1, .43]], jump: -.10 },
-  { slug: "workshop-capacity", title: "Did the fictional circuits workshop fill all forty seats?", shortTitle: "Circuits workshop fills", category: "Workshops", event: 1, openedDaysAgo: 70, closeDaysFromNow: -.5, status: "CLOSED", anchors: [[0, .35], [.3, .49], [.55, .61], [.8, .79], [1, .87]], jump: .06 },
-  { slug: "campus-night-walk", title: "Did fifty people finish the fictional campus night walk?", shortTitle: "Fifty finish night walk", category: "Campus", event: 1, openedDaysAgo: 50, closeDaysFromNow: -.25, status: "CLOSED", anchors: [[0, .68], [.3, .54], [.55, .48], [.8, .29], [1, .17]], jump: -.075 },
-  { slug: "waterloo-puzzle-sprint", title: "Was the fictional Waterloo puzzle sprint solved in an hour?", shortTitle: "Puzzle solved in an hour", category: "Waterloo", event: 2, openedDaysAgo: 90, closeDaysFromNow: -14, status: "RESOLVED", outcome: "YES", anchors: [[0, .32], [.3, .39], [.55, .64], [.8, .78], [1, .95]], jump: .08 },
-  { slug: "mascot-caption-contest", title: "Did the fictional goose caption receive two hundred votes?", shortTitle: "Goose caption gets 200 votes", category: "Memes", event: 2, openedDaysAgo: 80, closeDaysFromNow: -7, status: "RESOLVED", outcome: "NO", anchors: [[0, .72], [.3, .64], [.55, .44], [.8, .21], [1, .07]], jump: -.09 },
-  { slug: "courtyard-light-show", title: "Did the fictional courtyard light show begin before sunset?", shortTitle: "Light show before sunset", category: "Trending", event: 2, openedDaysAgo: 65, closeDaysFromNow: -3, status: "VOID", outcome: "VOID", anchors: [[0, .44], [.3, .58], [.55, .49], [.8, .61], [1, .52]], jump: .05 },
-  { slug: "repair-cafe-launch", title: "Will the fictional repair cafe fix twenty devices?", shortTitle: "Repair cafe fixes 20", category: "Projects", event: 0, openedDaysAgo: 1, closeDaysFromNow: 8, status: "DRAFT", anchors: [[0, .5], [1, .5]], jump: 0 },
+  { slug: "solar-rover-demo", title: "Will the solar rover complete the demo course?", shortTitle: "Solar rover finishes", category: "Projects", event: 0, openedDaysAgo: 90, closeDaysFromNow: 3, status: "OPEN", anchors: [[0, .28], [.3, .46], [.55, .38], [.8, .69], [1, .77]], jump: .07 },
+  { slug: "midnight-noodle-vote", title: "Will noodles win the midnight snack vote?", shortTitle: "Noodles win snack vote", category: "Food", event: 0, openedDaysAgo: 60, closeDaysFromNow: 2, status: "OPEN", anchors: [[0, .58], [.3, .41], [.55, .64], [.8, .53], [1, .62]], jump: -.08 },
+  { slug: "rain-free-showcase", title: "Will the outdoor showcase stay rain-free?", shortTitle: "Rain-free showcase", category: "Weather", event: 0, openedDaysAgo: 30, closeDaysFromNow: 1, status: "OPEN", anchors: [[0, .73], [.3, .66], [.55, .34], [.8, .42], [1, .29]], jump: -.11 },
+  { slug: "accessible-demo-award", title: "Will an accessibility project win the demo award?", shortTitle: "Accessibility wins", category: "Hack the North", event: 0, openedDaysAgo: 84, closeDaysFromNow: 4, status: "OPEN", anchors: [[0, .19], [.3, .29], [.55, .57], [.8, .49], [1, .71]], jump: .09 },
+  { slug: "goose-relay-record", title: "Will the campus relay finish under twelve minutes?", shortTitle: "Relay under 12 minutes", category: "Sports", event: 0, openedDaysAgo: 45, closeDaysFromNow: 5, status: "OPEN", anchors: [[0, .47], [.3, .53], [.55, .45], [.8, .56], [1, .48]], jump: .035 },
+  { slug: "library-robot-delivery", title: "Will the library robot deliver all ten books?", shortTitle: "Robot delivers ten books", category: "Tech", event: 0, openedDaysAgo: 72, closeDaysFromNow: 2, status: "PAUSED", anchors: [[0, .62], [.3, .74], [.55, .59], [.8, .36], [1, .43]], jump: -.10 },
+  { slug: "workshop-capacity", title: "Did the circuits workshop fill all forty seats?", shortTitle: "Circuits workshop fills", category: "Workshops", event: 1, openedDaysAgo: 70, closeDaysFromNow: -.5, status: "CLOSED", anchors: [[0, .35], [.3, .49], [.55, .61], [.8, .79], [1, .87]], jump: .06 },
+  { slug: "campus-night-walk", title: "Did at least 50 people finish the campus night walk?", shortTitle: "Fifty finish night walk", category: "Campus", event: 1, openedDaysAgo: 50, closeDaysFromNow: -.25, status: "CLOSED", anchors: [[0, .68], [.3, .54], [.55, .48], [.8, .29], [1, .17]], jump: -.075 },
+  { slug: "waterloo-puzzle-sprint", title: "Was the Waterloo puzzle sprint solved within an hour?", shortTitle: "Puzzle solved in an hour", category: "Waterloo", event: 2, openedDaysAgo: 90, closeDaysFromNow: -14, status: "RESOLVED", outcome: "YES", anchors: [[0, .32], [.3, .39], [.55, .64], [.8, .78], [1, .95]], jump: .08 },
+  { slug: "mascot-caption-contest", title: "Did the goose caption receive at least 200 votes?", shortTitle: "Goose caption gets 200 votes", category: "Memes", event: 2, openedDaysAgo: 80, closeDaysFromNow: -7, status: "RESOLVED", outcome: "NO", anchors: [[0, .72], [.3, .64], [.55, .44], [.8, .21], [1, .07]], jump: -.09 },
+  { slug: "courtyard-light-show", title: "Did the courtyard light show begin before sunset?", shortTitle: "Light show before sunset", category: "Trending", event: 2, openedDaysAgo: 65, closeDaysFromNow: -3, status: "VOID", outcome: "VOID", anchors: [[0, .44], [.3, .58], [.55, .49], [.8, .61], [1, .52]], jump: .05 },
+  { slug: "repair-cafe-launch", title: "Will the repair cafe fix at least 20 devices?", shortTitle: "Repair cafe fixes 20", category: "Projects", event: 0, openedDaysAgo: 1, closeDaysFromNow: 8, status: "DRAFT", anchors: [[0, .5], [1, .5]], jump: 0 },
 ];
+
+const SCENARIO_COPY: Record<string, { description: string; yesCondition: string; source: string }> = {
+  "solar-rover-demo": {
+    description: "A student-built solar rover faces a 20-meter course with a ramp, a turn, and one final parking box. Can it finish without a helping hand?",
+    yesCondition: "The rover crosses the finish line on its first official attempt, after visiting every course checkpoint, without being pushed, lifted, or remotely driven.",
+    source: "Future Makers course marshal's first-attempt checkpoint sheet",
+  },
+  "midnight-noodle-vote": {
+    description: "Noodles, pizza, and dumplings are competing for the midnight menu. One attendee ballot decides which snack takes the crown.",
+    yesCondition: "Noodles receive strictly more valid ballots than either pizza or dumplings in the final attendee vote. A tie for first place resolves NO.",
+    source: "Future Makers midnight-menu ballot tally",
+  },
+  "rain-free-showcase": {
+    description: "The outdoor demo tables are booked for a two-hour afternoon showcase. Everyone is watching the sky as the teams prepare their projects.",
+    yesCondition: "The courtyard rain gauge records less than 0.2 mm of precipitation during the entire scheduled two-hour showcase window. Exactly 0.2 mm resolves NO.",
+    source: "Future Makers courtyard rain-gauge readings at the showcase's scheduled start and end",
+  },
+  "accessible-demo-award": {
+    description: "Screen-reader tools, adaptive controllers, and captioning projects join the demo lineup. Will an accessibility-focused team take the overall award?",
+    yesCondition: "At least one project tagged Accessibility in the locked submission roster is named an overall demo-award winner, including a shared overall award. Category awards alone do not count.",
+    source: "Future Makers locked submission roster and overall-award results sheet",
+  },
+  "goose-relay-record": {
+    description: "Four teammates carry a plush goose around the campus relay route. The target is a clean finish in under twelve minutes.",
+    yesCondition: "The designated Goose Squad completes all four legs without disqualification in an official elapsed time strictly below 12:00.000. A time of exactly twelve minutes resolves NO.",
+    source: "Future Makers Goose Squad relay timing and penalties sheet",
+  },
+  "library-robot-delivery": {
+    description: "A delivery robot has ten books and ten marked shelf locations. Its first library route will test whether the navigation demo is ready for prime time.",
+    yesCondition: "All ten labeled books reach their matching shelf locations during the first official run without a person moving the robot or any book after the run starts.",
+    source: "Future Makers library robot first-run delivery checklist",
+  },
+  "workshop-capacity": {
+    description: "Forty soldering stations are ready for a hands-on circuits workshop. The final check-in count will show whether every seat found a builder.",
+    yesCondition: "At least forty distinct attendees have checked in by the scheduled workshop start. Reservations and waitlist entries without check-in do not count.",
+    source: "Campus After Dark circuits workshop deduplicated check-in register",
+  },
+  "campus-night-walk": {
+    description: "The evening walk visits five campus landmarks before returning to the courtyard. The question is how many walkers complete the whole route.",
+    yesCondition: "At least fifty distinct registered walkers have all five checkpoint stamps and a finish check-in by the route's scheduled cutoff.",
+    source: "Campus After Dark night-walk checkpoint and finish register",
+  },
+  "waterloo-puzzle-sprint": {
+    description: "Teams have a sealed puzzle packet and a shared countdown. Can anyone submit every correct answer within the first hour?",
+    yesCondition: "At least one team submits a complete answer set accepted as correct within 60:00.000 of the official start, including a submission at exactly sixty minutes.",
+    source: "Summer Community puzzle sprint accepted-answer timestamps and official start record",
+  },
+  "mascot-caption-contest": {
+    description: "The caption 'I came for the breadcrumbs' is chasing two hundred votes in the goose mascot contest. Only validated ballots count toward its total.",
+    yesCondition: "The caption 'I came for the breadcrumbs' receives at least two hundred valid votes by the final ballot cutoff after duplicate ballots are removed.",
+    source: "Summer Community mascot-caption contest final validated ballot tally",
+  },
+  "courtyard-light-show": {
+    description: "A courtyard team plans to switch on its coordinated light display before sunset. A canceled show or missing timing record leaves the question unresolved.",
+    yesCondition: "The first complete programmed lighting sequence begins strictly before the sunset time listed in the published event schedule. A start exactly at sunset resolves NO.",
+    source: "Summer Community published sunset schedule and light-show controller start log",
+  },
+  "repair-cafe-launch": {
+    description: "The repair cafe has a queue of keyboards, headphones, and small gadgets. Volunteers are aiming to return twenty working devices to their owners.",
+    yesCondition: "At least twenty distinct devices pass the cafe's documented function check and are marked repaired by the session's scheduled end. Assessments, advice, and duplicate tickets do not count.",
+    source: "Future Makers repair cafe completed-ticket and function-check register",
+  },
+};
+
+/** Presentation-only fields for refreshing existing fixtures without changing their trading state. */
+export function developmentMarketPresentation(market: DevelopmentMarketScenario) {
+  return {
+    title: market.title, shortTitle: market.shortTitle, description: market.description,
+    rules: market.rules, resolutionSource: market.resolutionSource,
+  };
+}
 
 function randomGenerator(seed: number): () => number {
   let state = seed >>> 0;
@@ -157,25 +228,26 @@ export function buildDevelopmentScenarios(input: { asOf: Date; seed?: number }):
   const asOf = new Date(input.asOf);
   const date = (days: number) => new Date(asOf.getTime() + days * DAY);
   const eventDefinitions = [
-    { slug: "dev-future-makers-festival", title: "Fictional Future Makers Festival", shortTitle: "Future Makers", category: "Hack the North", color: "green", icon: "sparkles", start: -90, end: 9 },
-    { slug: "dev-campus-after-dark", title: "Fictional Campus After Dark", shortTitle: "Campus After Dark", category: "Campus", color: "blue", icon: "moon", start: -70, end: 1 },
-    { slug: "dev-summer-community-series", title: "Fictional Summer Community Series", shortTitle: "Summer Community", category: "Waterloo", color: "gold", icon: "sun", start: -90, end: -1 },
+    { slug: "dev-future-makers-festival", title: "Future Makers Festival", shortTitle: "Future Makers", description: "Student demos, a robot delivery challenge, late-night snacks, and a plush-goose relay share the festival schedule.", category: "Hack the North", color: "green", icon: "sparkles", start: -90, end: 9 },
+    { slug: "dev-campus-after-dark", title: "Campus After Dark", shortTitle: "Campus After Dark", description: "An evening of hands-on circuits and a five-landmark campus walk, with attendance and finish counts still to confirm.", category: "Campus", color: "blue", icon: "moon", start: -70, end: 1 },
+    { slug: "dev-summer-community-series", title: "Summer Community Series", shortTitle: "Summer Community", description: "A completed community series featuring a puzzle sprint, a goose-caption contest, and a courtyard light show.", category: "Waterloo", color: "gold", icon: "sun", start: -90, end: -1 },
   ];
   const events: DevelopmentEventScenario[] = eventDefinitions.map((event) => ({
     slug: event.slug, title: event.title, shortTitle: event.shortTitle,
-    description: DEVELOPMENT_LABEL, category: event.category, color: event.color, icon: event.icon,
+    description: `${event.description} ${DEVELOPMENT_LABEL}`, category: event.category, color: event.color, icon: event.icon,
     featured: event.start === -90, startsAt: date(event.start), endsAt: date(event.end),
   }));
   const markets = DEFINITIONS.map((definition, index): DevelopmentMarketScenario => {
+    const copy = SCENARIO_COPY[definition.slug];
     const openedAt = date(-definition.openedDaysAgo);
     const closesAt = date(definition.closeDaysFromNow);
     const resolvesAt = date(definition.closeDaysFromNow + 1);
     const terminal = definition.status === "RESOLVED" || definition.status === "VOID";
     return {
       slug: `dev-${definition.slug}`, title: definition.title, shortTitle: definition.shortTitle,
-      description: `${DEVELOPMENT_LABEL} Price movement represents simulated participant trades and fictional updates.`,
-      rules: `${DEVELOPMENT_LABEL} Resolve YES only if the stated fictional threshold is met by close; otherwise NO. Void if the simulated event is canceled or evidence is unavailable.`,
-      resolutionSource: "Local development scenario record; no real-world result is asserted.",
+      description: `${copy.description} ${DEVELOPMENT_LABEL}`,
+      rules: `${DEVELOPMENT_LABEL} Resolve YES if: ${copy.yesCondition} Otherwise resolve NO. Only observations recorded by the market's close count. Void if the event is canceled or the named record is unavailable.`,
+      resolutionSource: `Fictional scenario record: ${copy.source}. The named record is fictional; outcomes are configured in the development scenario.`,
       category: definition.category, icon: events[definition.event].icon, color: events[definition.event].color,
       featured: index < 4, eventSlug: events[definition.event].slug,
       openedAt, closesAt, resolvesAt, resolvedAt: terminal ? new Date(resolvesAt) : null,
