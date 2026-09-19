@@ -105,6 +105,20 @@ The current feature types expose optional offchain message formats, but the insp
 
 Keep link identity separate from chain authority. A valid cookie or linked address cannot sign a program instruction. Unlinking affects the application association; it does not transfer positions, cancel orders, or revoke previously signed transactions. Account switches invalidate unsigned drafts and pending link challenges; previously broadcast transactions remain tracked under their original wallet.
 
+Current challenge requests require `{ walletAddress, password }`. The server
+reverifies the current password, checks its hash again transactionally, and marks
+the short-lived challenge `LINK_WALLET_REAUTH_V1`. Verification atomically consumes
+that original-session challenge, inserts the wallet link and rotates/revokes the
+session. The new token is cookie-only; the consumed nonce tombstone remains.
+Legacy challenges cannot satisfy this purpose. A lost success response requires
+sign-in and reading the existing link, not replaying the old challenge.
+
+The explicit-env `test:chain:wallet-api` runner passed with real Ed25519 signatures,
+cookie authentication, password reauthentication, replacement-cookie checks and
+temporary SQLite against the retained validator at finalized slot 484. It verified
+conflict rollback, stale-session rejection and unchanged database economics. This
+is direct route-handler integration, not a browser signing or HTTP end-to-end proof.
+
 ### Existing SQLite database upgrade
 
 Fresh databases receive the wallet-link tables from the Prisma schema. An existing SQLite database must receive the additive `prisma/sqlite-upgrades/20260919210000_solana_wallet_links.sql` upgrade before wallet-link routes are enabled. Do not run `prisma db push` against a participant database as a substitute for this reviewed upgrade.

@@ -27,9 +27,11 @@ signed BIGINT. Later configuration snapshots do not rewrite the first record.
 The three models exist in both Prisma schemas. Their only foreign key is
 event-to-receipt; no user or application-market record is required. SQLite uses
 the additive `20260919220000_solana_event_journal.sql` manual upgrade; PostgreSQL
-has the matching Prisma migration. **Neither has been applied to shared or
-participant databases by this development change.** Follow the existing backup
-and maintenance procedure before enabling an ingestion worker.
+has the matching Prisma migration. The local development SQLite database received
+the journal, visits and wallet-link upgrades on 2026-09-19 using the reviewed
+backed-up runner (see `solana-wallet-integration.md`). No PostgreSQL or external
+participant deployment was migrated. Follow the backup and maintenance procedure
+before enabling an ingestion worker.
 
 `ingestFinalizedProgramPage` now implements bounded signature discovery, verified
 receipt reads and atomic journal/cursor commit. It freezes a window head, walks
