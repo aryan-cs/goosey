@@ -111,8 +111,8 @@ export function MarketTradingPanel(props: TradeTicketProps) {
           .ticket-shell {
             position: fixed; z-index: 80; left: max(0px, calc((100vw - 520px) / 2)); right: max(0px, calc((100vw - 520px) / 2)); bottom: 0; display: block;
             max-height: min(90dvh, 760px); overflow: auto; overscroll-behavior: contain;
-            background: var(--surface); border-radius: 22px 22px 0 0;
-            box-shadow: 0 -16px 50px rgb(20 22 16 / 24%);
+            background: var(--panel-glass-solid); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            box-shadow: none;
             opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(24px);
             transition: opacity var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-emphasized), visibility 0s linear var(--motion-base);
           }
@@ -126,9 +126,8 @@ export function MarketTradingPanel(props: TradeTicketProps) {
             bottom: calc(env(safe-area-inset-bottom) + 8px);
             min-height: 66px; display: grid; grid-template-columns: minmax(96px, 1fr) 1fr 1fr;
             align-items: center; gap: 7px; padding: 8px;
-            background: color-mix(in srgb, var(--surface) 96%, transparent);
-            border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 10px 34px rgb(20 22 16 / 22%);
-            backdrop-filter: blur(14px);
+            background: var(--panel-glass-solid);
+            border: 0; border-radius: var(--radius-md); box-shadow: none;
             opacity: 1; visibility: visible; transform: translateY(0);
             transition: opacity var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-emphasized), visibility 0s linear 0s;
           }
@@ -159,7 +158,10 @@ export function MarketTradingPanel(props: TradeTicketProps) {
           .sheet-close:hover { color: var(--ink); background: var(--border); transform: rotate(4deg) scale(1.04); }.sheet-close:active { transform: rotate(0) scale(.96); }
           .sheet-close svg { width: 18px; }
           .sheet-handle { width: 38px; height: 4px; display: block; margin: 7px auto -5px; background: var(--border); border-radius: 999px; }
-          .ticket-shell .trade-ticket { border: 0; box-shadow: none; }
+          .ticket-shell .trade-ticket { background: transparent; border: 0; box-shadow: none; }
+          @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+            .ticket-shell, .mobile-trade-dock { background: var(--panel-glass); -webkit-backdrop-filter: blur(48px); backdrop-filter: blur(48px); }
+          }
         }
         @media (max-width: 390px) {
           .mobile-trade-dock { grid-template-columns: 82px 1fr 1fr; left: 6px; right: 6px; gap: 5px; }
