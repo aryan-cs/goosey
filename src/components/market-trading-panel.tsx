@@ -156,9 +156,11 @@ export function MarketTradingPanel(props: TradeTicketProps) {
             transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), transform var(--motion-base) var(--ease-emphasized);
           }
           .sheet-close:hover { color: var(--ink); background: var(--border); transform: rotate(4deg) scale(1.04); }.sheet-close:active { transform: rotate(0) scale(.96); }
-          .sheet-close svg { width: 18px; }
+          .sheet-close svg { width: 18px; height: 18px; }
           .sheet-handle { width: 38px; height: 4px; display: block; margin: 7px auto -5px; background: var(--border); border-radius: 999px; }
           .ticket-shell .trade-ticket { background: transparent; border: 0; box-shadow: none; }
+          .ticket-shell .trade-ticket-header { padding-right: 40px; }
+          .ticket-shell .trade-ticket-header > svg { display: none; }
           @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
             .ticket-shell, .mobile-trade-dock { background: var(--panel-glass); -webkit-backdrop-filter: blur(48px); backdrop-filter: blur(48px); }
           }

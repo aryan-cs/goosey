@@ -65,7 +65,7 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
 
         {register ? <label className="checkbox-field"><input type="checkbox" name="acceptedCodeOfConduct" required /><span>I agree to the <Link href="/rules">community rules and code of conduct</Link>.</span></label> : null}
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
-        <button className="button button-primary auth-submit" disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : null}{register ? "Create account" : "Sign in"}<ArrowRight /></button>
+        <button className="button button-primary auth-submit" disabled={submitting}>{register ? "Create account" : "Sign in"}{submitting ? <LoaderCircle className="spin" /> : <ArrowRight />}</button>
       </form>
       <p className="auth-switch">{register ? "Already have an account?" : "New to Goosey?"} <Link href={register ? "/login" : "/signup"}>{register ? "Sign in" : "Create an account"}</Link></p>
     </section>
