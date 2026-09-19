@@ -4,7 +4,7 @@ import { useCallback, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 /** Refresh server-rendered activity without discarding the current page or cursor. */
-export function LivePageRefresh() {
+export function LivePageRefresh({ showButton = true }: { showButton?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const refresh = useCallback(() => {
@@ -24,6 +24,8 @@ export function LivePageRefresh() {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [refresh]);
+
+  if (!showButton) return null;
 
   return <button className="button button-secondary" type="button" onClick={refresh} disabled={pending} aria-label="Refresh latest activity">{pending ? "Refreshing…" : "Refresh"}</button>;
 }
