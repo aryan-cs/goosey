@@ -27,7 +27,7 @@ vi.mock("@/lib/serializable-transaction", () => ({
   ),
 }));
 
-import { getLeaderboardRows } from "./leaderboard";
+import { getLeaderboardRows, getLeaderboardPage } from "./leaderboard";
 
 function user(id: string, username: string) {
   return {
@@ -167,4 +167,20 @@ describe("leaderboard reserved cash", () => {
       pnlMilli: -100_000n,
     });
   });
+  it("includes players beyond 100 with global ranks and stable ties", async () => {
+    const players = Array.from({length: 123}, (_, i) => user(`id_${i}`, `player_${String(i).padStart(3, "0")}`));
+    mocks.users.mockResolvedValue([...players].reverse());
+    mocks.wallets.mockResolvedValue([]); mocks.grants.mockResolvedValue([]);
+    mocks.activity.mockResolvedValue(new Map(players.map(p => [p.id, {trades: 0, marketsTraded: 0}])));
+    const first = await getLeaderboardPage(1, 50);
+    const second = await getLeaderboardPage(2, 50);
+    const last = await getLeaderboardPage(3, 50);
+    expect(first.total).toBe(123); expect(first.totalPages).toBe(3);
+    expect(first.rows[0].rank).toBe(1); expect(second.rows[0].rank).toBe(51);
+    expect(last.rows[0]).toMatchObject({rank: 101, username: "player_100", trades: 0});
+    expect(last.rows.at(-1)?.rank).toBe(123);
+    expect(new Set([...first.rows,...second.rows,...last.rows].map(p => p.userId)).size).toBe(123);
+    expect((await getLeaderboardPage(9999,50)).page).toBe(3);
+  });
+
 });

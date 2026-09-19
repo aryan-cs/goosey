@@ -3,7 +3,7 @@ import { loadPositionValuations } from "@/lib/position-valuation";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
 import { loadTradingActivity } from "@/lib/trading-activity";
 
-export async function getLeaderboardRows(limit = 50) {
+async function loadRankedPlayers() {
   return runSerializableTransaction(db, async (db) => {
   const users = await db.user.findMany({
       where: { status: "ACTIVE", role: "USER" },
@@ -40,6 +40,23 @@ export async function getLeaderboardRows(limit = 50) {
     const equityMilli = cashMilli + reservedCashMilli + positionValueMilli;
     return { userId: user.id, username: user.username, displayName: user.displayName, equityMilli, reservedCashMilli, pnlMilli: equityMilli - (grantByUser.get(user.id) ?? 0n), realizedPnlMilli: user.realizedPnlMilli, ...activity.get(user.id)! };
   }).sort((left, right) => left.pnlMilli === right.pnlMilli ? left.username.localeCompare(right.username) : left.pnlMilli > right.pnlMilli ? -1 : 1)
-    .slice(0, limit).map((row, index) => ({ rank: index + 1, ...row }));
+    .map((row, index) => ({ rank: index + 1, ...row }));
   });
+}
+
+
+export async function getLeaderboardRows(limit = 50) {
+  return (await loadRankedPlayers()).slice(0, limit);
+}
+
+/** One consistent valuation snapshot, ranked before slicing across pages. */
+export async function getLeaderboardPage(requestedPage = 1, pageSize = 50) {
+  if (!Number.isSafeInteger(requestedPage) || requestedPage < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new RangeError("Invalid leaderboard page.");
+  }
+  const ranked = await loadRankedPlayers();
+  const total = ranked.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  return { page, pageSize, total, totalPages, rows: ranked.slice((page - 1) * pageSize, page * pageSize) };
 }
