@@ -58,7 +58,7 @@ export type PublicUser = Pick<User, "id" | "email" | "username" | "displayName" 
 export function requiresEmailVerification(
   user: Pick<User, "role" | "emailVerifiedAt">,
 ): boolean {
-  return user.role === "USER" && user.emailVerifiedAt === null;
+  return process.env.REQUIRE_EMAIL_VERIFICATION === "true" && user.role === "USER" && user.emailVerifiedAt === null;
 }
 
 export function emailVerificationState(user: Pick<User, "role" | "emailVerifiedAt">) {
@@ -189,7 +189,7 @@ export async function grantWelcomeFeathers(
     where: { id: userId },
     select: { role: true, status: true, emailVerifiedAt: true },
   });
-  if (!user || user.role !== "USER" || user.status !== "ACTIVE" || !user.emailVerifiedAt) return false;
+  if (!user || user.role !== "USER" || user.status !== "ACTIVE" || requiresEmailVerification(user)) return false;
 
   const issuance = await tx.ledgerAccount.upsert({
     where: {
@@ -259,10 +259,10 @@ export async function registerUser(input: {
   inviteCodeHash?: string | null;
   userAgent?: string | null;
   ipHash?: string | null;
-}): Promise<{ user: PublicUser; session: SessionRecord }> {
+}, database: typeof db = db): Promise<{ user: PublicUser; session: SessionRecord }> {
   const passwordHash = await hashPassword(input.password);
 
-  return db.$transaction(async (tx) => {
+  return database.$transaction(async (tx) => {
     const invite = input.inviteCodeHash ? await tx.registrationInvite.findUnique({ where: { codeHash: input.inviteCodeHash } }) : null;
     if (input.inviteCodeHash) {
       if (!invite || invite.status !== "ACTIVE" || (invite.expiresAt && invite.expiresAt <= new Date())) throw new RegistrationInviteError();
@@ -293,6 +293,7 @@ export async function registerUser(input: {
         balanceMilli: 0n,
       },
     });
+    if (!requiresEmailVerification(user)) await grantWelcomeFeathers(tx, user.id);
     const session = await createSession(tx, user.id, {
       userAgent: input.userAgent,
       ipHash: input.ipHash,
@@ -343,6 +344,7 @@ export async function createSessionForVerifiedLoginSnapshot(
         select: publicUserSelect,
       });
       if (!current) return null;
+      if (current.emailVerifiedAt === null && !requiresEmailVerification(current)) await grantWelcomeFeathers(tx, current.id);
       const session = await createSession(tx, current.id, metadata);
       return { user: current, session };
     },

@@ -46,12 +46,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       userAgent: request.headers.get("user-agent"),
     });
 
+    const verification = emailVerificationState(result.user);
     const response = NextResponse.json(
       {
         user: result.user,
-        balanceMilli: "0",
-        pendingWelcomeGrantMilli: WELCOME_GRANT_MILLI.toString(),
-        emailVerification: emailVerificationState(result.user),
+        balanceMilli: verification.required ? "0" : WELCOME_GRANT_MILLI.toString(),
+        pendingWelcomeGrantMilli: verification.required ? WELCOME_GRANT_MILLI.toString() : "0",
+        emailVerification: verification,
       },
       { status: 201 },
     );

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { emailVerificationState, requiresEmailVerification } from "@/lib/auth";
 
@@ -23,7 +23,15 @@ const participant = {
 };
 
 describe("email verification access policy", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("REQUIRE_EMAIL_VERIFICATION", "true"); });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("allows accounts without email verification by default", async () => {
+    vi.stubEnv("REQUIRE_EMAIL_VERIFICATION", "");
+    authMocks.getAuthenticatedUser.mockResolvedValue(participant);
+    expect(emailVerificationState(participant)).toEqual({ required: false, allowedActions: [] });
+    await expect(requireUser(new NextRequest("http://localhost:8080/api/portfolio"))).resolves.toMatchObject({ id: participant.id });
+  });
 
   it("requires verification only for unverified participant accounts", () => {
     expect(requiresEmailVerification(participant)).toBe(true);

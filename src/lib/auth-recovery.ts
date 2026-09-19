@@ -164,7 +164,7 @@ export async function confirmEmailVerificationWithDatabase(
     });
     if (verified.count !== 1) throw new InvalidAccountTokenError();
     const welcomeGrantIssued = await grantWelcomeFeathers(tx, record.userId);
-    if (!welcomeGrantIssued) {
+    if (!welcomeGrantIssued && !await tx.journalEntry.findUnique({ where: { idempotencyScope_idempotencyKey: { idempotencyScope: "WELCOME_GRANT", idempotencyKey: record.userId } } })) {
       throw new Error("Email verification welcome grant integrity check failed.");
     }
     await tx.auditLog.create({
