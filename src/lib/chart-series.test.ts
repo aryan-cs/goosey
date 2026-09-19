@@ -91,18 +91,18 @@ describe("nearestChartIndex", () => {
 });
 
 describe("selectChartRange", () => {
-  it.each([["1D", 1], ["1W", 7], ["1M", 30]] as const)("includes the %s cutoff and exactly one real earlier baseline", (range, days) => {
+  it.each([["1H", 1 / 24], ["4H", 4 / 24], ["8H", 8 / 24], ["24H", 1]] as const)("includes the %s cutoff and exactly one real earlier baseline", (range, days) => {
     const input = [point(days + 2, 0.2), point(days + 1, 0.3), point(days, 0.4), point(0, 0.6)];
     expect(selectChartRange(input, range, now)).toEqual(input.slice(1));
   });
   it("anchors stale histories to the supplied clock and retains only their last observation", () => {
-    expect(selectChartRange([point(40, 0.3), point(39, 0.4)], "1D", now)).toEqual([point(39, 0.4)]);
+    expect(selectChartRange([point(40, 0.3), point(39, 0.4)], "24H", now)).toEqual([point(39, 0.4)]);
   });
   it("does not fabricate a baseline, duplicate a singleton, or include future observations in a recent range", () => {
-    expect(selectChartRange([], "1D", now)).toEqual([]);
-    expect(selectChartRange([point(0.5)], "1D", now)).toEqual([point(0.5)]);
-    expect(selectChartRange([point(-1)], "1D", now)).toEqual([]);
-    expect(selectChartRange([point(0), point(-1)], "1D", now)).toEqual([point(0)]);
+    expect(selectChartRange([], "24H", now)).toEqual([]);
+    expect(selectChartRange([point(0.5)], "24H", now)).toEqual([point(0.5)]);
+    expect(selectChartRange([point(-1)], "24H", now)).toEqual([]);
+    expect(selectChartRange([point(0), point(-1)], "24H", now)).toEqual([point(0)]);
   });
   it("keeps ALL history without a 500-observation cap", () => {
     const input = Array.from({ length: 750 }, (_, index) => point(750 - index));
@@ -110,8 +110,8 @@ describe("selectChartRange", () => {
   });
   it("normalizes without mutating source data and rejects an invalid range clock", () => {
     const input = Object.freeze([Object.freeze(point(0, 0.6)), Object.freeze(point(2, 0.4))]);
-    expect(selectChartRange(input, "1D", now)).toEqual([point(2, 0.4), point(0, 0.6)]);
+    expect(selectChartRange(input, "24H", now)).toEqual([point(2, 0.4), point(0, 0.6)]);
     expect(input).toEqual([point(0, 0.6), point(2, 0.4)]);
-    expect(selectChartRange(input, "1D", NaN)).toEqual([]);
+    expect(selectChartRange(input, "24H", NaN)).toEqual([]);
   });
 });

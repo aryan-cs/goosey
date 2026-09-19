@@ -1,3 +1,4 @@
+import { CHART_RANGE_DURATION } from "@/lib/chart-series";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, apiErrorResponse, prisma } from "@/lib/market-service";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 const paramsSchema = z.object({ slug: z.string().min(1).max(160) }).strict();
 const querySchema = z
   .object({
-    range: z.enum(["1D", "1W", "1M", "ALL"]).default("1W"),
+    range: z.enum(["1H", "4H", "8H", "24H", "ALL", "1D", "1W", "1M"]).default("24H"),
     limit: z.coerce.number().int().min(1).max(2_000).default(500),
   })
   .strict();
@@ -32,7 +33,7 @@ export async function GET(
   try {
     const { slug } = paramsSchema.parse(await context.params);
     const query = parseQuery(request.nextUrl.searchParams);
-    const duration = { "1D": 86_400_000, "1W": 604_800_000, "1M": 2_592_000_000 } as const;
+    const duration = { ...CHART_RANGE_DURATION, "1D": 86_400_000, "1W": 604_800_000, "1M": 2_592_000_000 } as const;
     const since = query.range === "ALL" ? undefined : new Date(Date.now() - duration[query.range]);
     const payload = await runSerializableTransaction(prisma, async (tx) => {
       const market = await tx.market.findUnique({ where: { slug }, select: { id: true, status: true, pricingModel: true, payoutMilli: true } });

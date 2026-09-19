@@ -10,7 +10,9 @@ export interface NormalizedChartPoint {
   opening?: boolean;
 }
 
-export type ChartRange = "1D" | "1W" | "1M" | "ALL";
+export const CHART_RANGES = ["1H", "4H", "8H", "24H", "ALL"] as const;
+export type ChartRange = typeof CHART_RANGES[number];
+export const CHART_RANGE_DURATION = { "1H": 3_600_000, "4H": 14_400_000, "8H": 28_800_000, "24H": 86_400_000 } as const;
 
 /** Retain only real, valid observations; the last input wins timestamp ties. */
 export function normalizeChartPoints(points: readonly ChartPoint[]): NormalizedChartPoint[] {
@@ -59,8 +61,7 @@ export function selectChartRange(points: readonly ChartPoint[], range: ChartRang
   const normalized = normalizeChartPoints(points);
   if (range === "ALL") return normalized;
   if (!Number.isFinite(now)) return [];
-  const days = range === "1D" ? 1 : range === "1W" ? 7 : 30;
-  const cutoff = now - days * 86_400_000;
+  const cutoff = now - CHART_RANGE_DURATION[range];
   const selected: NormalizedChartPoint[] = [];
   let baseline: NormalizedChartPoint | undefined;
   for (const point of normalized) {
