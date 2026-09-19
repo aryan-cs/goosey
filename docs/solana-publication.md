@@ -116,3 +116,21 @@ explicit operational decision—not fictional fallback content/approvals.
 Unit fixtures/mocked orchestration tests are not real-chain publication evidence.
 No actual participant market is published by tests. Real end-to-end publication
 requires the operator-supplied canonical manifest and independent reviewer wallets.
+# Verified isolated operator rehearsal
+
+On 2026-09-19, `scripts/solana-publication-e2e.ts` completed 15 actual
+CLI/RPC checks against a fresh local ledger and the compiled artifact
+`d2f3e57d090ab54369068a450c9f2d2f9b4bf6e629a06eb826672d824c770a82`.
+Run it with `npm run test:chain:isolated -- --suite publication`.
+
+The explicit TEST manifest was prepared, initialized, independently accepted by
+both test reviewer keys, sealed and activated. Read-only commands succeeded
+without access to private-key paths. Tampered receipts and manifests were
+rejected. Restarted processes preserved all 12 receipts and finalized state,
+without duplicate transactions or further changes to the admin balance.
+Reviewer acceptance bits were 3; resolution was open; mint supply remained zero.
+
+Evidence: `/private/tmp/goosey-solana-runner-ROPwvL/publication-evidence/result.json`.
+Genesis: `5HHaN5AynNEX6eH39huGfyEjeYQBf1jVLWWJ2vdDMYWF`.
+This is an isolated runtime proof, not publication of a real shared market or
+approval by real event reviewers.
