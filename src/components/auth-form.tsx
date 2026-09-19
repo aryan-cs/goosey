@@ -55,14 +55,16 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
 
   return (
     <section className={`auth-card${register ? ` ${styles.registration}` : ""}`} aria-labelledby="auth-heading">
-      <div className="auth-brand"><GooseMark /><span>Goosey</span></div>
-      <span className="eyebrow">{register ? "Join Goosey" : "Welcome back"}</span>
-      <h1 id="auth-heading">{register ? "Create your account" : "Sign in"}</h1>
-      {register && <p>Start with 1,000 play-money feathers.</p>}
+      <header className="auth-heading">
+        <div className="auth-brand"><GooseMark /><span>Goosey</span></div>
+        <span className="eyebrow">{register ? "Join Goosey" : "Welcome back"}</span>
+        <h1 id="auth-heading">{register ? "Create your account" : "Sign in"}</h1>
+        {register && <p>Start with 1,000 play-money feathers.</p>}
+      </header>
       <form onSubmit={submit}>
-        {register && <label><span>Username</span><div className="input-with-icon"><UserRound /><input autoComplete="username" name="username" required minLength={3} maxLength={24} pattern="[a-zA-Z0-9][a-zA-Z0-9_]{1,22}[a-zA-Z0-9]" title="Use 3–24 letters, numbers, or underscores. Start and end with a letter or number." aria-describedby="username-hint" /></div><small id="username-hint" className="field-hint">3–24 letters, numbers, or underscores. Start and end with a letter or number.</small></label>}
-        <label><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" name="email" type="email" required /></div></label>
-        <div className="auth-field"><div className="auth-field-heading"><label htmlFor="auth-password">Password</label>{!register && <Link href={authPageHref("/reset-password", redirectTo)}>Forgot password?</Link>}</div><div className="input-with-icon"><LockKeyhole /><input id="auth-password" autoComplete={register ? "new-password" : "current-password"} name="password" type={showPassword ? "text" : "password"} required minLength={register ? 12 : undefined} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</button></div></div>
+        {register && <label><span>Username</span><div className="input-with-icon"><UserRound /><input autoComplete="username" name="username" placeholder="Choose a username" required minLength={3} maxLength={24} pattern="[a-zA-Z0-9][a-zA-Z0-9_]{1,22}[a-zA-Z0-9]" title="Use 3–24 letters, numbers, or underscores. Start and end with a letter or number." aria-describedby="username-hint" /></div><small id="username-hint" className="field-hint">3–24 letters, numbers, or underscores. Start and end with a letter or number.</small></label>}
+        <label><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" name="email" type="email" placeholder="you@example.com" required /></div></label>
+        <div className="auth-field"><div className="auth-field-heading"><label htmlFor="auth-password">Password</label>{!register && <Link href={authPageHref("/reset-password", redirectTo)}>Forgot password?</Link>}</div><div className="input-with-icon"><LockKeyhole /><input id="auth-password" autoComplete={register ? "new-password" : "current-password"} name="password" placeholder={register ? "At least 12 characters" : "Enter your password"} type={showPassword ? "text" : "password"} required minLength={register ? 12 : undefined} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</button></div></div>
 
         {register ? <label className="checkbox-field"><input type="checkbox" name="acceptedCodeOfConduct" required /><span>I agree to the <Link href="/rules">community rules and code of conduct</Link>.</span></label> : null}
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}

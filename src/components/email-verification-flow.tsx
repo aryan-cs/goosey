@@ -172,7 +172,7 @@ export function EmailVerificationFlow() {
         {message && <p className="success-message" role="status"><CheckCircle2 /> {message}</p>}
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
         {verifiedSession ? <Link className="button button-primary auth-submit" href={destination}>Continue</Link> : <form onSubmit={resend}>
-          {!signedInEmail && <label><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" type="email" value={email} required onChange={(event) => setEmail(event.currentTarget.value)} /></div></label>}
+          {!signedInEmail && <label><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" type="email" placeholder="you@example.com" value={email} required onChange={(event) => setEmail(event.currentTarget.value)} /></div></label>}
           <button className="button button-primary auth-submit" disabled={sending || cooldown > 0}>{sending ? <LoaderCircle className="spin" /> : <RotateCcw />}{cooldown > 0 ? `Send again in ${cooldown}s` : phase === "invalid" ? "Send a new link" : "Resend email"}</button>
         </form>}
         <p className="auth-switch"><Link href={authPageHref("/login", destination)}>{phase === "invalid" && !verifiedSession ? "Sign in to continue" : "Use a different account"}</Link></p>

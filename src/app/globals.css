@@ -531,7 +531,9 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .moderation-panel { margin-top: 28px; padding: var(--space-panel); background: var(--surface-raised); border: 0; border-radius: var(--radius-lg); }.report-item { padding: 16px 0; border-top: 1px solid var(--border-subtle); }.report-item header, .report-item footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }.report-item header span, .report-item small { color: var(--ink-muted); }.report-item p { margin: 10px 0; }.report-item footer { margin-top: 12px; }.report-item footer a { color: var(--yes); font-weight: 700; }.report-item footer button:first-of-type { margin-left: auto; }
 
 .auth-card { width: min(100%, 460px); margin: 0 auto; padding: clamp(24px, 5vw, 32px); background: var(--surface-raised); border: 0; border-radius: var(--radius-xl); box-shadow: none; }
-.auth-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 20px; font: 750 19px var(--font-display); }.auth-brand .goose-mark { width: 34px; height: 34px; color: var(--ink); }
+.auth-heading { text-align: center; margin-bottom: 24px; }
+.auth-heading > p { color: var(--ink-muted); margin: 12px 0 0; }
+.auth-brand { display: flex; justify-content: center; align-items: center; gap: 9px; margin-bottom: 20px; font: 750 19px var(--font-display); }.auth-brand .goose-mark { width: 34px; height: 34px; color: var(--ink); }
 .auth-card h1 { margin: 5px 0 8px; font: 750 29px/1.18 var(--font-display); letter-spacing: -.04em; }.auth-card > p { color: var(--ink-muted); margin: 0 0 22px; }
 .auth-card form { display: grid; gap: 18px; }.auth-card form > label > span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
 .field-hint { display: block; margin-top: 5px; color: var(--ink-muted); font-size: 11px; }
@@ -750,8 +752,10 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 .stacked-form input:not([type="checkbox"]):not([type="radio"]),
 .stacked-form select, .order-entry-form > input,
 .market-filters select { border-radius: var(--radius-control); }
-.input-with-icon > svg { margin-left: 16px; }
-.input-with-icon button { flex: none; width: 44px; margin-right: 2px; border-radius: 50%; }
+.input-with-icon > svg { flex: none; margin-left: 20px; }
+.input-with-icon input { padding-inline: 12px 20px; font: inherit; }
+.input-with-icon:has(button) input { padding-right: 8px; }
+.input-with-icon button { flex: none; width: 44px; margin-right: 6px; border-radius: 50%; }
 .search-hero-form { padding: 8px; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 4px; }
 .search-hero-form > svg { justify-self: center; }
 .search-hero-form { min-height: 62px; }
