@@ -25,6 +25,13 @@ if (env.GOOSEY_PREPARE_DEV_BRANCH) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+// Explicit one-time account removal; guarded by exact reviewed identities and activity checks.
+if (env.GOOSEY_REMOVE_TEST_ACCOUNTS) {
+  run("db:generate");
+  const result = spawnSync("node", ["--import", "tsx", "scripts/remove-test-accounts.ts"], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
 // Explicit opt-in: preview builds must not silently mutate shared databases.
 if (env.GOOSEY_DEPLOY_MIGRATIONS === "1") run("db:migrate:deploy:postgres");
 run("build");
