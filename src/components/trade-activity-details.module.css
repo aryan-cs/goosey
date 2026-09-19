@@ -1,0 +1,10 @@
+.amount {
+  display: inline-flex;
+  align-items: center;
+  gap: .25em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  vertical-align: baseline;
+}
+
+.amount > svg { width: 1em; height: 1em; align-self: center; }

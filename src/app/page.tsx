@@ -1,3 +1,4 @@
+import { TradeActivityDetails } from "@/components/trade-activity-details";
 import Link from "next/link";
 import styles from "./home-layout.module.css";
 import { MarketCanvasToolbar } from "@/components/market-canvas-toolbar";
@@ -65,7 +66,7 @@ export default async function HomePage() {
               </section>
               <section className="sidebar-panel" aria-labelledby="activity-preview">
                 <div className="section-heading compact"><h2 id="activity-preview"><Users /> Live activity</h2></div>
-                {recentTrades.length ? <ul className="activity-list">{recentTrades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><p><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> {trade.action.toLowerCase()} {trade.quantity} {trade.side} on <Link href={`/markets/${trade.market.slug}`}>{trade.market.shortTitle}</Link></p></li>)}</ul> : <p className="muted-copy">New trades will show up here.</p>}
+                {recentTrades.length ? <ul className="activity-list">{recentTrades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><p><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> <TradeActivityDetails trade={trade} /> on <Link href={`/markets/${trade.market.slug}`}>{trade.market.shortTitle}</Link></p></li>)}</ul> : <p className="muted-copy">New trades will show up here.</p>}
               </section>
             </aside>
 

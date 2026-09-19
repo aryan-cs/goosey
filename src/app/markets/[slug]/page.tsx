@@ -1,3 +1,4 @@
+import { TradeActivityDetails } from "@/components/trade-activity-details";
 import Link from "next/link";
 import { z } from "zod";
 import { FeatherIcon } from "@/components/brand";
@@ -51,7 +52,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
         <section className="market-copy"><span className="eyebrow">About this market</span><h2>What to know</h2><p>{market.description}</p></section>
         <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow">How it is decided</span><h2 id="rules-heading">Market rules</h2></div></div><p>{market.rules}</p><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>100 feathers</dd></div></dl></section>
 
-        <section className="activity-panel" aria-labelledby="activity-heading"><div className="section-heading"><h2 id="activity-heading">Recent activity</h2></div>{market.trades.length ? <ul className="trade-feed">{market.trades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><span><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> {trade.action.toLowerCase()} {trade.quantity} {trade.side}</span><time>{trade.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No trades yet. Be the first.</p>}</section>
+        <section className="activity-panel" aria-labelledby="activity-heading"><div className="section-heading"><h2 id="activity-heading">Recent activity</h2></div>{market.trades.length ? <ul className="trade-feed">{market.trades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><span><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> <TradeActivityDetails trade={trade} /></span><time>{trade.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No trades yet. Be the first.</p>}</section>
         <CommentSection marketSlug={market.slug} focusedCommentId={focusedCommentId} marketId={market.id} currentUserId={user?.id} endpoint={`/api/markets/${market.slug}/comments`} />
       </article>
       {orderBookMarket
