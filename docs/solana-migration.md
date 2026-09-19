@@ -25,6 +25,7 @@ Transferability does not make a promise about third-party behavior: Goosey does 
 - `src/lib/solana/feather-transfer.ts`: exact u64 base-unit parsing and actual SPL idempotent recipient-account creation plus `TransferChecked` instruction construction. This does not sign or submit transactions by itself.
 - Solana Kit 8.3.0 and compatible generated Token/System clients pinned in npm; Node minimum 20.18.0 matches Kit.
 - Unit tests distinguish instruction/configuration checks from real chain execution. A successful unit test is not a deployed program or completed wallet journey.
+- `npm run test:chain:tokens` now executes real transfers using the application helper on a pinned loopback validator. Two independent runs passed recipient ATA creation/reuse, exact-wire replay, invalid decimals/mint/authority/signature, insufficient balance, atomic rollback, and supply conservation. This proves SPL transfer integration, not the custom exchange program or website wallet flow.
 
 The public website has not switched financial authorities. Do not turn on an on-chain badge, publish fabricated transaction signatures, migrate balances by directly editing program accounts, or declare completion from these foundation checks.
 

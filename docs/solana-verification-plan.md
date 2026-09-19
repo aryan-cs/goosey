@@ -129,7 +129,7 @@ Restarting a single validator tests persistence, not forks. Test provisional-obs
 
 ## Executed token integration evidence
 
-The user subsequently authorized and supplied an already running isolated validator. `scripts/solana-token-e2e.ts` was implemented and run successfully on 2026-09-19 using the **actual** `buildFeatherTransfer` helper for both successful sends. It modifies no existing wallet, writes no private key, starts/stops no validator, and prints sanitized JSON receipts. Each run generates fresh in-memory signers and creates its own mint/token accounts through real System, Token, and Associated Token instructions. The local SOL faucet funds only its ephemeral payer. Test accounts remain in the disposable ledger; their keys are discarded on process exit.
+The main integration task provisioned an isolated validator for the user-authorized localnet work. `scripts/solana-token-e2e.ts` was implemented and run successfully on 2026-09-19 using the **actual** `buildFeatherTransfer` helper for both successful sends. It modifies no existing wallet, writes no private key, starts/stops no validator, and prints sanitized JSON receipts. Each run generates fresh in-memory signers and creates its own mint/token accounts through real System, Token, and Associated Token instructions. The local SOL faucet funds only its ephemeral payer. Test accounts remain in the disposable ledger; their keys are discarded on process exit.
 
 ```sh
 GOOSEY_SOLANA_RPC_URL=http://127.0.0.1:18999 \
