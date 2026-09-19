@@ -1,0 +1,17 @@
+.label {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-secondary);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.label[data-market-status="open"] { color: var(--yes); }
+.label[data-market-status="live"],
+.label[data-market-status="closed"] { color: var(--no); }
+.label[data-market-status="resolved"] { color: var(--info); }
+.label[data-market-status="paused"],
+.label[data-market-status="resolving"] { color: var(--warning); }
