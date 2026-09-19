@@ -38,7 +38,7 @@ function T.init()
 end
 function T.header()
   if fresh() then return "@"..T.name,money(T.balance) end
-  return "Account offline", "USB required"
+  return "", ""
 end
 function T.open(slug,side,title)
   if request and request[4]=="TRADE" then T.phase="pending";return end
