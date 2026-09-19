@@ -98,7 +98,7 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
 }
 
 export function ProbabilityChart({ points, label = "YES probability", height = 300, asOf, marketSlug, executionPrices = false, openingBaseline }: { points: ChartPoint[]; label?: string; height?: number; asOf?: number; marketSlug?: string; executionPrices?: boolean; openingBaseline?: OpeningBaseline }) {
-  const [range, setRange] = useState<ChartRange>("ALL");
+  const [range, setRange] = useState<ChartRange>("1H");
   const [inspected, setInspected] = useState<ChartInspection | null>(null);
   // The first client render must use the same domain as the server render.
   // After hydration, advance the domain even when there are no new observations.
