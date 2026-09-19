@@ -1,6 +1,6 @@
 # Goosey
 
-Goosey is a proposed play-money prediction market for a University of Waterloo and Hack the North-inspired hackathon experience. Its in-app unit is the feather (`🪶`). Feathers have no cash value, cannot be purchased, withdrawn, transferred for consideration, or redeemed for money or prizes unless a future event's separately published rules explicitly say otherwise.
+Goosey is a working play-money prediction market for a University of Waterloo and Hack the North-inspired hackathon experience. Its in-app unit is the feather (`🪶`). Feathers have no cash value, cannot be purchased, withdrawn, transferred for consideration, or redeemed for money or prizes unless a future event's separately published rules explicitly say otherwise.
 
 > **Independent project.** Goosey is not affiliated with, endorsed by, sponsored by, or operated by the University of Waterloo, Hack the North, Kalshi, or Timbermarket. “University of Waterloo,” “Hack the North,” “Kalshi,” and “Timbermarket” are used only to describe inspiration or context. Do not use third-party logos, protected brand assets, proprietary copy, or language implying official status without written permission.
 
@@ -11,14 +11,14 @@ This repository is a **working local, single-process implementation** with real 
 | Area | Current repository state |
 | --- | --- |
 | Framework | Next.js, React, TypeScript, Prisma, Zod, Recharts, and Vitest are configured. |
-| Application UI | Home, browse/search, market detail/trading, portfolio, community, opt-in leaderboard, rules, auth, suggestions, private-by-default editable profiles, dedicated watchlist, persisted notifications, comment reporting, and an admin market/moderation desk are implemented. |
-| API routes | Auth/session management/me, profile, health, discovery rails, grouped events, unified search, calendar, markets/history, slug-based quote/trade/complete-set redemption, versioned public order-book depth and private order-list reads, comments/replies/reports, portfolio, leaderboard, watchlist, suggestions, notifications, invitations, and admin market, resolution-approval, settlement-run, suggestion-review, and moderation endpoints are implemented. |
+| Application UI | Home, browse/search, multi-range probability charts, market detail/trading, portfolio, community, opt-in leaderboard, rules, complete signup/verification/login/password-recovery flows, suggestions, private-by-default editable profiles, dedicated watchlist, persisted notifications, comment reporting, and an admin market/moderation desk are implemented. |
+| API routes | Auth/session management/me, profile, health/readiness, discovery rails, grouped events, unified search, calendar, markets/history, slug-based quote/trade/complete-set redemption, versioned public order-book depth/trade tape and private order/fill-history reads, atomic order placement/cancel/replace/bulk-cancel, comments/replies/reports, portfolio, leaderboard, watchlist, suggestions, notifications, invitations, and admin market, resolution-approval, settlement-run, suggestion-review, and moderation endpoints are implemented. |
 | Authentication | Registration/login/logout, opaque hashed sessions, other-session revocation, consumable participant invitations, enforced participant email verification, and password reset are implemented. Unverified participants may hold a session only to inspect verification state, resend/confirm verification, recover the account, or log out; protected APIs return `EMAIL_VERIFICATION_REQUIRED`. The welcome-feather grant is issued atomically and exactly once only after verification. Seeded/system/admin operators remain compatible and are not participant-gated. Verification/reset use expiring one-time hashed tokens, persistent limits, environment-only SMTP, generic request responses, and transactional consumption; reset revokes every session without implicitly verifying the email. Session-bound CSRF tokens and phishing-resistant admin MFA remain absent. |
-| Trading | Existing markets use LMSR quote/trade execution. A staged `ORDER_BOOK` engine now has deterministic price-time matching, exact YES/NO normalization, bigint pricing/accounting, durable transactional placement/cancellation, sequenced GTC expiration, reservations, fills, commands/events, and versioned read APIs. Existing LMSR markets are never converted in place. Atomic complete-set redemption and two-person, lease-fenced settlement remain implemented. The continuous worker exposes durable readiness, while production supervision and PostgreSQL concurrency proof remain absent. |
+| Trading | Existing markets use LMSR quote/trade execution. The `ORDER_BOOK` engine has deterministic price-time matching, exact YES/NO normalization, bigint pricing/accounting, durable transactional placement/cancel/replace/bulk-cancel, sequenced GTC expiration, reservations, fills, commands/events, public trade tape, and cursor-paginated private history APIs. Existing LMSR markets are never converted in place. Atomic complete-set redemption and two-person, lease-fenced settlement remain implemented. The continuous worker exposes durable readiness, while production supervision and PostgreSQL concurrency proof remain absent. |
 | Ledger | Registration, trades, market funding, settlement, and collateral return use journal postings in application transactions. `npm run reconcile` checks persisted journal/account/user/market aggregates and currently passes the seeded database. Database-enforced balancing/immutability, complete foreign keys, scheduling, and exhaustive independent reconciliation remain gaps. |
 | Database | Runtime selection is explicit through `DATABASE_PROVIDER=sqlite|postgresql`. SQLite remains the local default outside production; production fails closed without an explicit provider. PostgreSQL uses its own generated Prisma client, schema twin, and checked-in baseline migration. Live PostgreSQL smoke/concurrency coverage is opt-in because CI has no database service or credentials. |
 | Seed data | `prisma/seed.ts` and a local `prisma/dev.db` provide deterministic event markets and local administrator setup. Seed credentials are local-only. |
-| Tests | Unit coverage includes LMSR, ledger/recovery/security, deterministic and randomized CLOB matching, CLOB pricing, CLOB accounting, CLOB read services, transactional placement/cancellation, and price-history integrity. `npm run test:orderbook` runs a real isolated database flow covering reservations, idempotency, complementary minting, fills, journals, snapshots, and cancellation. API, settlement, and reconciliation suites remain available. PostgreSQL concurrency, comprehensive security, and accessibility automation remain absent. |
+| Tests | Unit coverage includes LMSR, ledger/recovery/security, deterministic and randomized CLOB matching, CLOB pricing, CLOB accounting, strict cursor-paginated read services, transactional placement/cancel/replace/bulk-cancel, and price-history integrity. Real isolated database suites cover reservations, replay, complementary minting, fills, public/private histories, journals, snapshots, expiration, and settlement. Desktop/mobile browser journeys cover participant/admin flows, probability-chart interactions, and password recovery. Live PostgreSQL concurrency remains opt-in. |
 | Deployment | CI runs static checks, provider-contract tests, production build, isolated SQLite API/order-book/settlement/reconciliation jobs, and the offline PostgreSQL schema/migration contract. PostgreSQL runtime wiring and an ephemeral-schema smoke/concurrency runner are implemented, but CI does not run that live suite. No container, hosting definition, cache, telemetry backend, or supervised production worker configuration exists. |
 
 Do not expose the SQLite configuration to untrusted public traffic or use Goosey to account for real value.
@@ -198,7 +198,7 @@ Implemented product pages:
 - `/leaderboard` opt-in rankings
 - `/watchlist` account-private saved markets
 - `/community` social activity
-- `/login`, `/signup`
+- `/login`, `/signup`, `/verify-email`, `/reset-password`
 - `/search`, `/rules`
 - `/markets/suggest` authenticated market suggestions
 - `/users/[username]` public forecaster profiles
@@ -206,7 +206,7 @@ Implemented product pages:
 - `/settings/profile`, `/settings/privacy` editable profile/visibility, active-session revocation, and privacy information
 - `/admin` administrator market desk, participant invitations, two-person resolution queue, suggestion review, and comment-report moderation
 
-Frontend pages for the implemented verification/recovery APIs remain to be added. The minimal frontend contract is: after registration or login, inspect `emailVerification.required`; when true, show only resend, token-confirmation, and logout controls. `POST /api/auth/email-verification/request` accepts `{ email }`, `POST /api/auth/email-verification/confirm` accepts `{ token }`, and protected APIs return HTTP 403 with `error.code = "EMAIL_VERIFICATION_REQUIRED"` plus `error.details.allowedActions`. Registration returns `balanceMilli: "0"` and `pendingWelcomeGrantMilli`; confirmation returns whether the welcome grant was newly issued. Notifications are persisted and displayed, but there is no realtime push delivery. Moderation currently covers comment reports and admin review; blocking, sanctions, appeals, and dedicated moderator roles remain unimplemented.
+After registration or login, the frontend inspects `emailVerification.required`; when true, it gates protected navigation and exposes resend, token-confirmation, and logout controls. Verification and password-reset links keep one-time tokens in URL fragments so the initial page request does not disclose them. Protected APIs return HTTP 403 with `error.code = "EMAIL_VERIFICATION_REQUIRED"` plus `error.details.allowedActions`. Registration returns `balanceMilli: "0"` and `pendingWelcomeGrantMilli`; confirmation reports whether the welcome grant was newly issued. Notifications are persisted and displayed, but there is no realtime push delivery. Moderation currently covers comment reports and admin review; blocking, sanctions, appeals, and dedicated moderator roles remain unimplemented.
 
 Implemented API routes are:
 
@@ -231,6 +231,11 @@ Implemented API routes are:
 - `GET /api/markets/[slug]/history`
 - `POST /api/markets/[slug]/quote`
 - `POST /api/markets/[slug]/trades`
+- `GET /api/v1/markets/[slug]/orderbook`
+- `GET /api/v1/markets/[slug]/trades`
+- `GET`, `POST`, `DELETE /api/v1/orders`
+- `PATCH`, `DELETE /api/v1/orders/[id]`
+- `GET /api/v1/fills`
 - `GET`, `POST /api/markets/[slug]/comments`
 - `PATCH`, `DELETE /api/comments/[id]`
 - `POST /api/comments/[id]/report`
