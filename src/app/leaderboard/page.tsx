@@ -29,7 +29,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
     {ranked.length ? <>
       {page === 1 && <LeaderboardPodium users={ranked.slice(0, 3)} />}
       <section className="leaderboard-table" aria-label="Leaderboard standings">{ranked.map((user) => <div id={`player-${user.id}`} className={styles.player} key={user.id}><LeaderboardRow user={user} /></div>)}</section>
-      <PageNavigation page={page} totalPages={totalPages} href={number => `/leaderboard?page=${number}`} label="Leaderboard pages" />
+      <PageNavigation page={page} totalPages={totalPages} totalResults={total} pageSize={50} visibleResults={ranked.length} href={number => `/leaderboard?page=${number}`} label="Leaderboard pages" />
     </> : <EmptyState title="No rankings yet" description="Active players appear here automatically." action={<Link className="button button-primary" href="/signup">Join Goosey</Link>} />}
     </div></div>
   </div>;
