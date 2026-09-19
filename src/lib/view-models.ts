@@ -4,13 +4,9 @@ import { formatDistanceToNowStrict } from "date-fns";
 import type { MarketSummary, MarketStatus } from "@/components/market";
 import { probabilityYesBps } from "@/lib/market-maker";
 import { impliedProbabilityBps } from "@/lib/order-book-pricing";
+import { formatFeathers, MILLI_PER_FEATHER } from "@/lib/feather-format";
 
-export const MILLI_PER_FEATHER = 1_000n;
-
-export function formatFeathers(milli: bigint, maximumFractionDigits = 0): string {
-  const whole = Number(milli) / Number(MILLI_PER_FEATHER);
-  return new Intl.NumberFormat("en-CA", { maximumFractionDigits }).format(whole);
-}
+export { formatFeathers, MILLI_PER_FEATHER };
 
 export function marketProbabilityBps(market: Pick<Market, "executionBackend" | "collateralAccountId" | "yesShares" | "noShares" | "liquidityParameter" | "payoutMilli" | "status" | "resolution"> & { pricingModel?: string }) {
   assertDatabaseFinancialMarket(market);

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/client-api";
 import { MAX_TRADE_QUANTITY, tradePayoutMilli, validTradeQuantity } from "@/lib/trade-quantity";
+import { formatFeathers } from "@/lib/feather-format";
 
 type Outcome = "YES" | "NO";
 type Action = "BUY" | "SELL";
@@ -85,8 +86,7 @@ export function TradeTicket({
   const estimatedPayout = useMemo(() => quantityValid ? quantity * 100 : 0, [quantity, quantityValid]);
   const milli = (value: number | string | bigint | undefined) => BigInt(value ?? 0);
   const featherText = (value: number | string | bigint | undefined) => {
-    const amount = milli(value); const negative = amount < 0n; const absolute = negative ? -amount : amount;
-    return `${negative ? "-" : ""}${absolute / 1_000n}.${(absolute % 1_000n).toString().padStart(3, "0").slice(0, 2)}`;
+    return formatFeathers(milli(value), 2);
   };
   const quotedTotal = quote ? (action === "BUY" ? milli(quote.totalDebitMilli ?? milli(quote.grossMilli) + milli(quote.feeMilli)) : milli(quote.netCreditMilli ?? milli(quote.grossMilli) - milli(quote.feeMilli))) : 0n;
   const maxPayoutMilli = tradePayoutMilli(quantity);

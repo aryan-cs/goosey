@@ -85,11 +85,6 @@ function assertAction(action: string): asserts action is TradeAction {
   }
 }
 
-/** Stable log(1 + exp(x)), including for very large magnitudes. */
-function softplus(x: number): number {
-  return Math.max(x, 0) + Math.log1p(Math.exp(-Math.abs(x)));
-}
-
 /** Stable logistic function with no overflowing exponential. */
 function logistic(x: number): number {
   if (x >= 0) {
@@ -112,13 +107,6 @@ function conservativeCeil(value: number): bigint {
     throw new RangeError("monetary result is outside the supported range");
   }
   return BigInt(Math.ceil(value + ROUNDING_RESERVE_MILLI));
-}
-
-function conservativeFloor(value: number): bigint {
-  if (!Number.isFinite(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
-    throw new RangeError("monetary result is outside the supported range");
-  }
-  return BigInt(Math.max(0, Math.floor(value - ROUNDING_RESERVE_MILLI)));
 }
 
 function ceilRatio(numerator: bigint, denominator: bigint): bigint {
@@ -179,26 +167,6 @@ export function voidPayoutMilli(quantity: number, payoutMilli: bigint = DEFAULT_
   return (settlementPayoutMilli(quantity, payoutMilli) * BigInt(VOID_PAYOUT_BPS)) / BigInt(BASIS_POINTS);
 }
 
-/**
- * Returns the unrounded LMSR cost change for changing one outcome quantity.
- * Expressing the binary log-sum-exp as softplus keeps the calculation stable.
- */
-function rawTradeValueMilli(
-  state: Required<MarketMakerState>,
-  outcome: Outcome,
-  action: TradeAction,
-  quantity: number,
-): number {
-  const selected = outcome === "YES" ? state.yesQuantity : state.noQuantity;
-  const other = outcome === "YES" ? state.noQuantity : state.yesQuantity;
-  const before = (selected - other) / state.liquidity;
-  const signedQuantity = action === "BUY" ? quantity : -quantity;
-  const after = before + signedQuantity / state.liquidity;
-  const delta = state.liquidity * (softplus(after) - softplus(before));
-  const contractsAtUnitPayout = Math.abs(delta);
-  return contractsAtUnitPayout * toSafeNumber(state.payoutMilli, "payoutMilli");
-}
-
 function calculateTradeQuote(
   input: MarketMakerState,
   outcome: Outcome,
@@ -220,18 +188,21 @@ function calculateTradeQuote(
     throw new RangeError("trade would exceed the maximum outcome quantity");
   }
 
-  const rawGross = rawTradeValueMilli(state, outcome, action, quantity);
-  const grossMilli = action === "BUY" ? conservativeCeil(rawGross) : conservativeFloor(rawGross);
-  const feeMilli = ceilRatio(grossMilli * BigInt(feeBps), BigInt(BASIS_POINTS));
-  const totalDebitMilli = action === "BUY" ? grossMilli + feeMilli : 0n;
-  const netCreditMilli = action === "SELL" ? grossMilli - feeMilli : 0n;
-
   const direction = action === "BUY" ? quantity : -quantity;
   const stateAfter: Required<MarketMakerState> = {
     ...state,
     yesQuantity: state.yesQuantity + (outcome === "YES" ? direction : 0),
     noQuantity: state.noQuantity + (outcome === "NO" ? direction : 0),
   };
+  // Price both directions from one discretized cost potential. Reversing a
+  // fee-free state transition then returns the exact same milli-feathers.
+  const costBefore = lmsrCostMilli(state);
+  const costAfter = lmsrCostMilli(stateAfter);
+  const grossMilli = action === "BUY" ? costAfter - costBefore : costBefore - costAfter;
+  if (grossMilli < 0n) throw new Error("LMSR cost moved opposite the trade direction");
+  const feeMilli = ceilRatio(grossMilli * BigInt(feeBps), BigInt(BASIS_POINTS));
+  const totalDebitMilli = action === "BUY" ? grossMilli + feeMilli : 0n;
+  const netCreditMilli = action === "SELL" ? grossMilli - feeMilli : 0n;
 
   return {
     outcome,
@@ -259,6 +230,9 @@ export function quoteTrade(
   feeBps = 0,
 ): TradeQuote {
   const quote = calculateTradeQuote(input, outcome, action, quantity, feeBps);
+  if (quote.grossMilli <= 0n) {
+    throw new RangeError("trade value rounds to zero");
+  }
   if (action === "SELL" && quote.netCreditMilli <= 0n) {
     throw new RangeError("sell proceeds do not exceed the fee");
   }
