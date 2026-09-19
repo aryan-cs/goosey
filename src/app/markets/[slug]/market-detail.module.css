@@ -1,0 +1,93 @@
+/* Keep the overview and primary action together at ordinary laptop sizes. */
+.page:global(.page-shell) {
+  width: min(calc(100% - 48px), 1320px);
+  padding-top: 104px;
+}
+
+.page > :global(.breadcrumbs) { margin-bottom: 12px; }
+.page :global(.market-detail-layout) {
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px 24px;
+}
+.page :global(.market-detail-main) { gap: 16px; }
+.page :global(.market-detail-header) { gap: 12px; }
+.page :global(.market-detail-header h1) {
+  font-size: clamp(26px, 2.4vw, 34px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.page :global(.market-meta) { gap: 8px 12px; }
+.page :global(.market-header-actions .icon-button) { width: 44px; height: 44px; }
+.page :global(.probability-chart) { padding: 14px 16px; }
+.page :global(.probability-chart figcaption strong) { font-size: 28px; }
+.page :global(.probability-plot-surface) {
+  height: clamp(120px, 16dvh, 160px);
+  margin-top: 24px;
+}
+.page :global(.probability-chart .probability-empty) {
+  min-height: clamp(120px, 16dvh, 160px);
+}
+.page :global(.probability-chart-footer) { margin-top: 10px; }
+.page :global(.range-tabs button) { min-width: 40px; min-height: 40px; }
+.page :global(.chance-panel) { padding: 16px; }
+.page :global(.chance-panel .section-heading) { margin-bottom: 4px; }
+.page :global(.chance-panel > p) { margin: 4px 0 8px; font-size: 13px; }
+.page :global(.chance-row) { min-height: 48px; }
+.page :global(.chance-row a) { min-height: 44px; }
+.page :global(.order-book-panel),
+.page :global(.market-trade-aside) {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  top: 100px;
+}
+/* A tall depth/history panel must scroll with the document, not trap the ticket. */
+.page :global(.order-book-panel) { position: static; }
+.details { grid-column: 1; display: grid; gap: 20px; min-width: 0; }
+.mobileTrade { display: none; }
+
+@media (max-width: 1000px) {
+  .page :global(.market-detail-layout) { grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; }
+  .page :global(.market-detail-header) { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 809.98px) {
+  .page:global(.page-shell) { width: calc(100% - 32px); padding-top: 88px; }
+  .page :global(.market-detail-layout) { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .page :global(.market-detail-main) { gap: 12px; }
+  .page :global(.market-detail-header) { grid-template-columns: minmax(0, 1fr) auto; }
+  .page :global(.market-detail-header h1) { font-size: 26px; }
+  .page :global(.market-header-actions) { grid-column: auto; flex-direction: column; }
+  .page > :global(.breadcrumbs), .page :global(.market-detail-header),
+  .page :global(.chance-panel), .details > section { margin-inline: 0; }
+  .page :global(.probability-chart) { border-radius: var(--radius-md); }
+  .page :global(.probability-chart figcaption) { display: flex; padding: 0; }
+  .page :global(.probability-chart figcaption strong) { font-size: 28px; }
+  .page :global(.probability-chart-footer) { flex-wrap: wrap; }
+  .page :global(.probability-chart-footer > span) { flex: 1 1 140px; }
+  .page :global(.range-tabs button) { min-width: 40px; min-height: 44px; }
+  .page :global(.chance-row) { grid-template-columns: 28px 60px 80px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+  .page :global(.order-book-panel), .page :global(.market-trade-aside), .details { grid-column: 1; grid-row: auto; }
+  .page :global(.order-book-panel) { max-width: none; scroll-margin-top: 84px; }
+  .mobileTrade {
+    position: fixed; z-index: 30; bottom: 0; left: 0; right: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: var(--panel-glass-solid);
+  }
+  .mobileTrade a { min-height: 44px; background: var(--yes-soft); color: var(--yes); }
+  .mobileTrade a:last-child { background: var(--no-soft); color: var(--no); }
+  @supports (backdrop-filter: blur(1px)) {
+    .mobileTrade { background: var(--panel-glass); backdrop-filter: blur(48px); -webkit-backdrop-filter: blur(48px); }
+  }
+}
+
+@media (max-width: 359px) {
+  .page:global(.page-shell) { width: calc(100% - 24px); }
+  .page :global(.market-detail-header h1) { font-size: 24px; }
+  .page :global(.chance-row) { grid-template-columns: 24px 48px 76px minmax(0, 1fr); gap: 6px; }
+}
+
+@media (max-width: 809.98px) {
+  /* Keep the keyboard and focused form controls clear of floating navigation. */
+  .page:has(:global(.order-book-panel:focus-within)) .mobileTrade { display: none; }
+}

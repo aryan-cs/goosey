@@ -14,7 +14,7 @@ export type MarketStatus = "scheduled" | "open" | "live" | "paused" | "closed" |
 export interface MarketOutcome {
   id: string;
   label: string;
-  probability: number;
+  probability: number | null;
   change?: number;
 }
 
@@ -33,7 +33,8 @@ export interface MarketSummary {
   sparkline?: ProbabilityPoint[];
 }
 
-function formatProbability(value: number) {
+function formatProbability(value: number | null) {
+  if (value === null) return "No price";
   return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
 }
 

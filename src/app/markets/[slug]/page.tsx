@@ -1,13 +1,18 @@
 import { ForecastChoices } from "@/components/forecast-choices";
 import { TradeActivityDetails } from "@/components/trade-activity-details";
 import Link from "next/link";
+import styles from "./market-detail.module.css";
+import { MobileOrderEntry } from "@/components/mobile-order-entry";
 import { z } from "zod";
 import { FeatherIcon } from "@/components/brand";
 import { MarketStatusLabel } from "@/components/market-status";
 import { notFound } from "next/navigation";
 import { Bookmark, CalendarClock, ChevronRight, Share2 } from "lucide-react";
 import { db } from "@/lib/db";
-import { formatFeathers, marketProbabilityBps } from "@/lib/view-models";
+import { formatFeathers } from "@/lib/view-models";
+import { loadMarketMarks } from "@/lib/market-marks";
+import { runSerializableTransaction } from "@/lib/serializable-transaction";
+import { impliedProbabilityBps } from "@/lib/order-book-pricing";
 import { ProbabilityChart } from "@/components/market";
 import { MarketTradingPanel } from "@/components/market-trading-panel";
 import { CommentSection } from "@/components/comments";
@@ -15,6 +20,7 @@ import { WatchlistButton } from "@/components/watchlist-button";
 import { ShareButton } from "@/components/share-button";
 import { getServerUser } from "@/lib/server-session";
 import { OrderBookPanel } from "@/components/order-book-panel";
+import { orderEntryHref } from "@/lib/order-entry";
 
 export const dynamic = "force-dynamic";
 
@@ -24,21 +30,31 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
   const focusedComment = query.comment === undefined ? null : z.string().max(128).cuid().safeParse(query.comment);
   const focusedCommentId = focusedComment?.success ? focusedComment.data : undefined;
   const initialOutcome = query.outcome === "NO" ? "NO" : "YES";
+  const initialAction = query.action === "SELL" ? "SELL" : "BUY";
   const user = await getServerUser();
-  const market = await db.market.findUnique({
+  const data = await runSerializableTransaction(db, async (tx) => {
+    const market = await tx.market.findUnique({
     where: { slug },
     include: {
       priceHistory: { orderBy: { createdAt: "desc" }, take: 500 },
+      orderFills: { orderBy: { tradeSequence: "desc" }, take: 500, select: { id: true, canonicalYesPriceMilli: true, quantity: true, createdAt: true } },
       trades: { orderBy: { createdAt: "desc" }, take: 15, include: { user: { select: { username: true, profilePublic: true } } } },
     },
+    });
+    if (!market || (market.status === "DRAFT" && user?.role !== "ADMIN")) return null;
+    return { market, mark: (await loadMarketMarks(tx, [market])).get(market.id)! };
   });
-  if (!market || (market.status === "DRAFT" && user?.role !== "ADMIN")) notFound();
-  const yesBps = marketProbabilityBps(market);
-  const open = market.status === "OPEN" && market.closesAt > new Date();
+  if (!data) notFound();
+  const { market, mark } = data;
+  const yesBps = mark.probabilityYesBps;
+  const open = market.status === "OPEN" && market.acceptingOrders && market.closesAt > new Date();
   const orderBookMarket = market.pricingModel === "ORDER_BOOK";
-  const points = [...market.priceHistory].reverse().map((point) => ({ timestamp: point.createdAt, probability: point.yesProbabilityBps / 10_000 }));
+  const points = orderBookMarket
+    ? [...market.orderFills].reverse().map((fill) => ({ timestamp: fill.createdAt, probability: Number(impliedProbabilityBps(fill.canonicalYesPriceMilli, market.payoutMilli)) / 10_000 }))
+    : [...market.priceHistory].reverse().map((point) => ({ timestamp: point.createdAt, probability: point.yesProbabilityBps / 10_000 }));
+  const forecastDescription = mark.source === "MID" ? "Midpoint of the current two-sided order book." : mark.source === "LAST" ? `Last traded price${mark.stale ? " (may be stale)" : ""}; not a guaranteed execution price.` : mark.source === "NONE" ? "No market price yet. A qualifying two-sided book or a completed trade is needed." : mark.source === "SETTLEMENT" ? "Final settlement outcome." : "Current market-maker price.";
 
-  return <div className="page-shell market-detail-page">
+  return <div className={`page-shell market-detail-page ${styles.page}`}>
     <nav className="breadcrumbs" aria-label="Breadcrumb"><Link href="/markets">Markets</Link><ChevronRight /><Link href={`/markets?category=${encodeURIComponent(market.category)}`}>{market.category}</Link></nav>
     <div className="market-detail-layout">
       <article className="market-detail-main">
@@ -47,18 +63,23 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
           <div className="market-header-actions"><WatchlistButton marketId={market.id} signedIn={Boolean(user)} icon={<Bookmark />} /><ShareButton title={market.title} icon={<Share2 />} /></div>
         </header>
 
-        <ProbabilityChart points={points} marketSlug={market.slug} label="YES probability" height={330} />
-        <ForecastChoices yesBps={yesBps} orderHrefs={orderBookMarket ? { YES: "#order-book", NO: "#order-book" } : undefined} />
+        <ProbabilityChart points={points} marketSlug={market.slug} label={orderBookMarket ? "YES execution price" : "YES probability"} executionPrices={orderBookMarket} height={260} />
+        <ForecastChoices yesBps={yesBps} orderHrefs={orderBookMarket ? { YES: orderEntryHref(market.slug, "YES", "BUY"), NO: orderEntryHref(market.slug, "NO", "BUY") } : undefined} description={orderBookMarket ? forecastDescription : undefined} />
 
-        <section className="market-copy"><span className="eyebrow">About this market</span><h2>What to know</h2><p>{market.description}</p></section>
-        <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow">How it is decided</span><h2 id="rules-heading">Market rules</h2></div></div><p>{market.rules}</p><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>100 feathers</dd></div></dl></section>
-
-        <section className="activity-panel" aria-labelledby="activity-heading"><div className="section-heading"><h2 id="activity-heading">Recent activity</h2></div>{market.trades.length ? <ul className="trade-feed">{market.trades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><span><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> <TradeActivityDetails trade={trade} /></span><time>{trade.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No trades yet. Be the first.</p>}</section>
-        <CommentSection marketSlug={market.slug} focusedCommentId={focusedCommentId} marketId={market.id} currentUserId={user?.id} endpoint={`/api/markets/${market.slug}/comments`} />
       </article>
       {orderBookMarket
-        ? <OrderBookPanel marketSlug={market.slug} marketTitle={market.shortTitle} payoutMilli={market.payoutMilli.toString()} signedIn={Boolean(user)} disabled={!open} />
-        : <MarketTradingPanel key={initialOutcome} marketId={market.slug} marketTitle={market.shortTitle} yesProbability={yesBps / 10_000} balanceMilli={user?.balanceMilli.toString()} signedIn={Boolean(user)} initialOutcome={initialOutcome} disabled={!open} quoteEndpoint={`/api/markets/${market.slug}/quote`} tradeEndpoint={`/api/markets/${market.slug}/trades`} />}
+        ? <OrderBookPanel key={`${market.slug}-${initialOutcome}-${initialAction}`} marketSlug={market.slug} marketTitle={market.shortTitle} payoutMilli={market.payoutMilli.toString()} feeBps={market.feeBps} signedIn={Boolean(user)} disabled={!open} initialOutcome={initialOutcome} initialAction={initialAction} />
+        : yesBps !== null && <MarketTradingPanel key={initialOutcome} marketId={market.slug} marketTitle={market.shortTitle} yesProbability={yesBps / 10_000} balanceMilli={user?.balanceMilli.toString()} signedIn={Boolean(user)} initialOutcome={initialOutcome} disabled={!open} quoteEndpoint={`/api/markets/${market.slug}/quote`} tradeEndpoint={`/api/markets/${market.slug}/trades`} />}
+      <div className={styles.details}>
+        <section className="market-copy"><span className="eyebrow">About this market</span><h2>What to know</h2><p>{market.description}</p></section>
+        <section className="rules-panel" aria-labelledby="rules-heading"><div className="section-heading"><div><span className="eyebrow">How it is decided</span><h2 id="rules-heading">Market rules</h2></div></div><p>{market.rules}</p><div className="resolution-source"><strong>Source</strong><span>{market.resolutionSource}</span></div><dl><div><dt>Trading closes</dt><dd>{market.closesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Expected result</dt><dd>{market.resolvesAt.toLocaleString("en-CA", { dateStyle: "long", timeStyle: "short" })}</dd></div><div><dt>Winner pays</dt><dd>{formatFeathers(market.payoutMilli)} feathers</dd></div></dl></section>
+
+        <section className="activity-panel" aria-labelledby="activity-heading"><div className="section-heading"><h2 id="activity-heading">Recent activity</h2></div>{orderBookMarket ? market.orderFills.length ? <ul className="trade-feed">{market.orderFills.slice(0, 15).map((fill) => <li key={fill.id}><span className="activity-dot yes" /><span>{fill.quantity} contract{fill.quantity === 1 ? "" : "s"} matched at YES {formatFeathers(fill.canonicalYesPriceMilli, 3)} feathers</span><time dateTime={fill.createdAt.toISOString()}>{fill.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No executions yet.</p> : market.trades.length ? <ul className="trade-feed">{market.trades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><span><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> <TradeActivityDetails trade={trade} /></span><time>{trade.createdAt.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></li>)}</ul> : <p className="muted-copy">No trades yet. Be the first.</p>}</section>
+        {focusedComment && !focusedComment.success
+          ? <section className="comments-section" aria-labelledby="discussion-heading"><h2 id="discussion-heading">Linked discussion unavailable</h2><p>This comment link is invalid.</p><Link href={`/markets/${encodeURIComponent(market.slug)}#discussion-heading`}>View all discussion</Link></section>
+          : <CommentSection marketId={market.id} marketSlug={market.slug} focusedCommentId={focusedCommentId} currentUserId={user?.id} endpoint={`/api/markets/${market.slug}/comments`} />}
+      </div>
     </div>
+    {orderBookMarket && open && <MobileOrderEntry key={`${market.slug}-${initialOutcome}-${initialAction}`} marketSlug={market.slug} className={styles.mobileTrade} />}
   </div>;
 }

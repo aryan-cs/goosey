@@ -1,0 +1,122 @@
+.panel {
+  container-type: inline-size;
+  gap: 10px;
+}
+
+.panel :global(.order-entry-card) {
+  padding: 16px;
+}
+
+.panel :global(.trade-ticket-header) {
+  align-items: center;
+}
+
+.panel :global(.trade-ticket-header .icon-button) {
+  width: 44px;
+  height: 44px;
+}
+
+.panel :global(.trade-market-title) {
+  margin: 6px 0 12px;
+  line-height: 1.4;
+}
+
+.panel :global(.segmented button),
+.panel :global(.side-grid button),
+.panel :global(.trade-submit) {
+  min-height: 44px;
+}
+
+.panel :global(.side-grid) {
+  margin: 8px 0 12px;
+}
+
+.panel :global(.order-entry-form) {
+  gap: 10px;
+  margin-top: 0;
+}
+
+.entryFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.entryFields > div {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.entryFields input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 16px;
+}
+
+.entryFields input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.panel :global(.order-entry-form) > details {
+  padding-block: 0;
+}
+
+.panel :global(.order-entry-form) > details > summary {
+  min-height: 44px;
+  align-content: center;
+  padding-block: 10px;
+}
+
+.panel :global(.order-entry-form) > details[open] {
+  padding-bottom: 12px;
+}
+
+.panel :global(.order-entry-form) > details select,
+.panel :global(.order-entry-form) > details input:not([type="checkbox"]) {
+  min-height: 44px;
+}
+
+.panel :global(.trade-breakdown) {
+  margin: 0;
+  padding-block: 6px;
+  border-top: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.panel :global(.trade-breakdown) > div {
+  gap: 8px;
+  margin-block: 5px;
+}
+
+.panel :global(.trade-breakdown) dd {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.panel :global(.order-entry-form) > p {
+  margin-block: 0;
+}
+
+.feedStatus {
+  margin: 0;
+  padding-inline: 4px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+@container (min-width: 300px) {
+  .entryFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

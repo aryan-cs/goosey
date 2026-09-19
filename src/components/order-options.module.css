@@ -1,0 +1,82 @@
+.panel {
+  scroll-margin-top: 100px;
+}
+
+.options {
+  min-width: 0;
+  border-block: 1px solid var(--border-subtle);
+  padding-block: 12px;
+}
+
+.options summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.options summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.fields {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  padding-top: 14px;
+}
+
+.fields > select,
+.fields > input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 13px;
+}
+
+.fields > select:focus-visible,
+.fields > input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.fields > p {
+  margin: 0 0 5px;
+  line-height: 1.5;
+}
+
+.checkbox {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.helpLink {
+  color: var(--yes);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.checkbox input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  accent-color: var(--yes);
+}
+
+.fields input:disabled,
+.fields select:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
