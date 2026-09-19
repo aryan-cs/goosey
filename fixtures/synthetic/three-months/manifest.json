@@ -4,7 +4,7 @@
   "capturedAt": "2026-09-19T17:55:00.210Z",
   "sourceAsOf": "2026-09-19T17:38:55.893Z",
   "seed": 20260919,
-  "schemaSha256": "2aa12fec3f0c2765f0939a7598720e523a492169cd12e4c50372a3e896fa2ce5",
+  "schemaSha256": "5ff721fd49d0cdead1340c987e6704341ddb3d81129c2234a747695914a35946",
   "tables": [
     {
       "model": "User",

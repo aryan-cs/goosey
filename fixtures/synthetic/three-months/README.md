@@ -104,3 +104,5 @@ Never commit the private sandbox directory or copy this dataset into production.
 
 See [the development sandbox guide](../../../docs/development-sandbox.md) for
 the generator, reset/archive workflow and agent testing conventions.
+
+Schema compatibility rechecked on September 19, 2026 after adding the empty Solana wallet-link tables. No exported fixture fields, accounts, trades or history changed; the current-schema import must still pass full ledger and foreign-key reconciliation.
