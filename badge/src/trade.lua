@@ -123,8 +123,7 @@ function T.draw(text,wrap,hasQR)
       text(1,"Scan to sign in",10,47,300,18,"center")
       text(2,"Use your phone to link Goosey",10,195,300,14,"center")
     else
-      text(1,"Reconnecting...",10,65,300,20,"center")
-      text(2,"Waiting for connection",10,115,300,16,"center")
+      text(1,"Reconnecting...",10,110,300,20,"center")
     end
   elseif T.phase=="edit" or T.phase=="review" then
     text(1,wrap(T.title or "Market",39),10,42,300,14)

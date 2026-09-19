@@ -13,7 +13,10 @@ def tick(at):
 def response(state,qid='c123456789012345678901234',amount='50001',ttl=20,message='Trade complete'):
     rid=g.files['appdata/request.txt'].split('\t')[1]
     g.files['appdata/response.txt']=f'GR1\t{rid}\t{challenge}\t{state}\t{qid}\t{amount}\t0\t{ttl}\t{message}\tEND\n'
-account(1);g.fresh();has('Reconnecting...');assert lua.eval('require("trade").pairing_challenge()') is None;snapshot('trade-link')
+account(1);g.fresh();has('Reconnecting...');assert 'Waiting for connection' not in g.visible()
+reconnecting=next(w for w in g.widgets.values() if w.text=='Reconnecting...')
+assert reconnecting.y==110 and reconnecting.styles['text_align']=='center'
+assert lua.eval('require("trade").pairing_challenge()') is None;snapshot('trade-link')
 account(2);tick(2000);has('@badge_test');has('1000.000')
 press('A','A','A');has('BUY YES');press('UP');has('x2');snapshot('trade-amount')
 press('A');has('Getting a live quote');assert '\tQUOTE\t' in g.files['appdata/request.txt']

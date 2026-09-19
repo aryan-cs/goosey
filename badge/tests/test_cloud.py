@@ -20,7 +20,10 @@ def load(data, generation):
     tick(g.clock+2000)
     tick(g.clock+2000)
 
-g.fresh();has('Account offline');has('Reconnecting...')
+g.fresh();has('Reconnecting...')
+assert 'Waiting for connection' not in g.visible()
+reconnecting=next(w for w in g.widgets.values() if w.text=='Reconnecting...')
+assert reconnecting.y==110 and reconnecting.styles['text_align']=='center'
 assert '765.43' not in g.visible() and '@old_local' not in g.visible()
 g.files['appdata/account.txt']=f'GA1\t1\t{challenge}\tREADY\tbadge_test\t1000000\tEND\n'
 load(source,100)
@@ -37,6 +40,7 @@ for generation,points in ((101,[]),(102,[[50,1234567890000]])):
     if not points:has('No history')
     snapshot('cloud-empty' if not points else 'cloud-single');press('B')
 # Reopening cannot trust a cached account frame as a fresh login.
-g.on_exit();g.fresh();has('Account offline');has('Reconnecting...')
+g.on_exit();g.fresh();has('Reconnecting...')
+assert 'Waiting for connection' not in g.visible()
 assert dict(g.saved.items())==before and g.writes==0
 print('PASS cloud mailbox metadata/history, empty/single charts, navigation, account freshness and saved-wallet isolation')
