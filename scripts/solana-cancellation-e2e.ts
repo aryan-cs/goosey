@@ -4,7 +4,7 @@
  * Launch with solana-program-e2e-isolated.ts --suite cancellation. */
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readFile, realpath } from "node:fs/promises";
+import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { address, appendTransactionMessageInstructions, blockhash, createKeyPairSignerFromBytes,
@@ -21,6 +21,9 @@ import { buildBookSetupInstruction, deriveGooseyBookAddress, buildPlaceOrderInst
   buildCancelOrderInstruction, buildCleanupOrderInstruction, type ChainOrderInput,
   type ChainOrderTarget, GOOSEY_BOOK_BYTES } from "../src/lib/solana/exchange-client";
 import { readCanonicalOrderBook } from "../src/lib/solana/order-book-read";
+import { buildInitializeResolutionInstruction } from "../src/lib/solana/resolution-client";
+import { prepareCancelOrder } from "../src/lib/solana/prepare-cancel";
+import { submitSignedWalletTransaction, type TransferSubmission } from "../src/lib/solana/submit-transfer";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -123,7 +126,7 @@ refunds, authorization, expiry/close, slot reuse, replay and transaction rollbac
   }
   const initialized = await buildInitializeInstruction({ programAddress: PROGRAM, admin, environment: 1,
     genesisDomain: createHash("sha256").update(genesis).digest(), enrollmentAuthority: admin.address,
-    perWalletCap: GRANT, campaignCap: 4n * GRANT });
+    perWalletCap: GRANT, campaignCap: 4n * GRANT + 2n });
   await execute("initialize actual program/mint", [initialized.instruction]);
   const actors = await Promise.all(Array.from({ length: 4 }, () => generateKeyPairSigner()));
   await execute("fund disposable wallet rent", actors.map(wallet => getTransferSolInstruction({ source: admin,
@@ -137,6 +140,14 @@ refunds, authorization, expiry/close, slot reuse, replay and transaction rollbac
     await execute(`mint real feathers to signing wallet ${i}`, claim.instructions);
     walletTokens.push(claim.walletTokens); watched.add(claim.walletTokens); watched.add(claim.enrollment); watched.add(grant.identity);
     assert.equal(getTokenDecoder().decode(bytes((await accounts([claim.walletTokens]))[0])).amount, GRANT);
+  }
+  const reviewers = await Promise.all([generateKeyPairSigner(), generateKeyPairSigner()]);
+  assert.equal(new Set([admin.address, ...actors.map(a => a.address), ...reviewers.map(r => r.address)]).size, 7);
+  for (const [i, reviewer] of reviewers.entries()) {
+    const grant = await buildAuthorizeEnrollmentInstruction({ programAddress: PROGRAM, enrollmentAuthority: admin,
+      wallet: reviewer.address, identityDigest: randomBytes(32), allowance: 1n, expiresAt: (await time()) + 900n });
+    await execute(`enroll independent reviewer ${i} without token claim`, [grant.instruction]);
+    watched.add(grant.enrollment); watched.add(grant.identity);
   }
   type Market = { marketId: bigint; market: Address; seats: Address; vault: Address; book: Address; closesAt: bigint };
   async function createMarket(marketId: bigint, duration: bigint): Promise<Market> {
@@ -164,6 +175,10 @@ refunds, authorization, expiry/close, slot reuse, replay and transaction rollbac
       await execute(`grow canonical book ${marketId} from observed ${size}`, [await setup({ kind: "grow", expectedSize: size })]);
     }
     await execute(`finalize canonical book ${marketId}`, [await setup({ kind: "finalize" })]);
+    const resolution = await buildInitializeResolutionInstruction({ programAddress: PROGRAM, marketId, seats: m.seats,
+      creator: admin, proposer: reviewers[0].address, approver: reviewers[1].address });
+    await execute(`initialize independent two-person resolution before first trade ${marketId}`, [resolution.instruction]);
+    watched.add(resolution.resolution);
     return m;
   }
   async function state(m: Market, commitment = "confirmed") {
@@ -328,12 +343,71 @@ refunds, authorization, expiry/close, slot reuse, replay and transaction rollbac
   for (const r of afterClose.rows) assert.deepEqual([r.reserved, r.reservedYes, r.reservedNo], [0n, 0n, 0n]);
   // Exact-signature finality gate, then shipping reader over coherent finalized
   // snapshots. Immediate checks above deliberately used confirmed test state.
-  const deadline = Date.now() + 60_000;
-  for (;;) {
-    const status = (await rpc<Context<({ confirmationStatus: string; err: unknown } | null)[]>>("getSignatureStatuses", [[last.signature], { searchTransactionHistory: true }])).value[0];
-    if (status?.confirmationStatus === "finalized") { assert.equal(status.err, null); break; }
-    assert(Date.now() < deadline, "Cancellation did not finalize"); await delay(200);
+  async function finalized(signature: string) {
+    const deadline = Date.now() + 60_000;
+    for (;;) {
+      const status = (await rpc<Context<({ confirmationStatus: string; err: unknown } | null)[]>>("getSignatureStatuses", [[signature], { searchTransactionHistory: true }])).value[0];
+      if (status?.confirmationStatus === "finalized") { assert.equal(status.err, null); return; }
+      assert(Date.now() < deadline, "Exact transaction did not finalize"); await delay(200);
+    }
   }
+  await finalized(last.signature);
+  // Additional high-level path. Preserve the original 88-case baseline above;
+  // this is a new wallet-paid, finalized-snapshot preparation/submission case.
+  const preparedOrder = await place(m, 3, orderInput("BUY", "YES", 12_345n, 2n));
+  await finalized(String(receipts.at(-1)!.signature));
+  const runtime = { cluster: "localnet" as const, rpcUrl: endpoint.toString(), genesisHash: genesis, programAddress: PROGRAM };
+  const beforePrepared = await state(m, "finalized");
+  const prepared = await prepareCancelOrder({ runtime, sender: actors[3], marketId: m.marketId, orderId: preparedOrder });
+  assert.equal(prepared.expectedNonce, beforePrepared.rows[3].nonce);
+  assert.deepEqual(prepared.target, await target(m, preparedOrder));
+  assert.equal(prepared.bookRevision, beforePrepared.revision);
+  assert.deepEqual(prepared.observedReserve, { cash: 24_693n, yes: 0n, no: 0n });
+  assert.equal(prepared.sender, actors[3].address);
+  const signed = await signTransactionMessageWithSigners(prepared.message);
+  const signature = getSignatureFromTransaction(signed);
+  assert.deepEqual(Object.keys(signed.signatures), [actors[3].address], "Only the user wallet may sign the prepared cancellation");
+  const persisted: Omit<TransferSubmission, "status">[] = [];
+  const submission = await submitSignedWalletTransaction({ runtime, prepared, signed,
+    onPrepared: async receipt => {
+      const status = (await rpc<Context<(unknown | null)[]>>("getSignatureStatuses", [[receipt.signature], { searchTransactionHistory: true }])).value[0];
+      assert.equal(status, null, "Receipt must persist before first send");
+      await writeFile(path.join(path.dirname(adminPath), "prepared-cancel-submission.json"), JSON.stringify(receipt,
+        (_, v: unknown) => typeof v === "bigint" ? v.toString() : v), { flag: "wx", mode: 0o600 });
+      persisted.push(receipt);
+    } });
+  assert.equal(persisted.length, 1); assert.equal(submission.signature, signature);
+  assert.equal(submission.signedWireBase64, getBase64EncodedWireTransaction(signed));
+  assert.equal(submission.lastValidBlockHeight, prepared.lifetime.lastValidBlockHeight);
+  assert(["submitted", "unknown"].includes(submission.status));
+  const submissionDeadline = Date.now() + 60_000;
+  let preparedReceipt: Receipt | null = null; let resentAt = Date.now();
+  while (Date.now() < submissionDeadline) {
+    preparedReceipt = await rpc("getTransaction", [signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
+    if (preparedReceipt?.meta) break;
+    if (Date.now() - resentAt > 1_000) {
+      await pin();
+      assert.equal(await rpc("sendTransaction", [persisted[0].signedWireBase64,
+        { encoding: "base64", skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 0 }]), signature);
+      resentAt = Date.now();
+    }
+    await delay(200);
+  }
+  assert(preparedReceipt?.meta); assert.equal(preparedReceipt.meta.err, null, JSON.stringify(preparedReceipt));
+  const preparedEvent = removedEvent(preparedReceipt.meta.logMessages ?? []);
+  assert.equal(preparedEvent.id, preparedOrder); assert.equal(preparedEvent.reason, 0);
+  assert.equal(preparedEvent.nonce, prepared.expectedNonce); assert.equal(preparedEvent.cash, 24_693n);
+  const afterPrepared = await state(m);
+  assert.equal(afterPrepared.orders.length, 0);
+  assert.deepEqual(afterPrepared.rows[3], { ...beforePrepared.rows[3], available: beforePrepared.rows[3].available + 24_693n,
+    reserved: beforePrepared.rows[3].reserved - 24_693n, nonce: beforePrepared.rows[3].nonce + 1n });
+  assert.deepEqual(afterPrepared.rows.slice(0, 3), beforePrepared.rows.slice(0, 3));
+  assert.deepEqual([afterPrepared.accounted, afterPrepared.collateral, afterPrepared.fees],
+    [beforePrepared.accounted, beforePrepared.collateral, beforePrepared.fees]);
+  receipts.push({ name: "finalized prepareCancelOrder -> user signing -> persisted submitSignedWalletTransaction",
+    signature, slot: preparedReceipt.slot, error: null, cu: preparedReceipt.meta.computeUnitsConsumed });
+  console.log(`PASS finalized wallet-prepared cancellation: ${signature} (${preparedReceipt.meta.computeUnitsConsumed} CU)`);
+  await finalized(signature);
   for (const market of [m, short]) {
     const final = await state(market, "finalized");
     const snapshot = (index: number, key: Address) => ({ address: key, owner: final.raw[index]!.owner,
@@ -345,7 +419,9 @@ refunds, authorization, expiry/close, slot reuse, replay and transaction rollbac
   console.log(JSON.stringify({ result: "PASS", scope: "Actual compiled-program cancellation/cleanup RPC integration",
     rpc: endpoint.toString(), genesis, program: PROGRAM, validator: await rpc("getVersion"), transactionCaseCount: receipts.length,
     payout: PAYOUT, feeBps: FEE, realFunding: "authorized SPL mint claims -> wallet-signed deposits -> actual order fills",
-    finalizedSignature: last.signature, receipts,
+    finalizedSignature: signature, baselineEvidence: "/tmp/goosey-solana-runner-MtYRJq/program-e2e.log (88 cases, commit2608d10; retained unchanged)",
+    additionalChecks: ["two independently enrolled nontrading reviewers; allowance1 each, no claims", "resolution initialized before trading",
+      "finalized preparation nonce/hint", "wallet-only signing", "durable pre-send receipt", "exact-message submission and exact-signature finality"], receipts,
     gaps: ["full 1024-order onchain cleanup CU stress (covered by host heap tests)", "restart/fork recovery", "permissionless multi-order batch instruction (one target per invocation)",
       "nonce-overflow/corrupt reserve states are not injected", "resolution approval/redemption is owned by its separate suite"] },
     (_, v: unknown) => typeof v === "bigint" ? v.toString() : v, 2));
