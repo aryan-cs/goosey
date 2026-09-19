@@ -24,6 +24,7 @@ function MarketMenu() {
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const selectedCategory = pathname === "/markets" ? searchParams.get("category") : null;
 
   useEffect(() => {
@@ -31,7 +32,10 @@ function MarketMenu() {
       if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        if (menuRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
+      }
     }
     document.addEventListener("pointerdown", dismiss);
     document.addEventListener("keydown", handleKeyDown);
@@ -42,8 +46,11 @@ function MarketMenu() {
   }, []);
 
   return (
-    <div className={`market-menu${open ? " is-open" : ""}`} ref={menuRef}>
+    <div className={`market-menu${open ? " is-open" : ""}`} ref={menuRef} onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    }}>
       <button
+        ref={triggerRef}
         className="market-menu-trigger"
         type="button"
         aria-expanded={open}
@@ -87,6 +94,11 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
     if (!moreOpen) return;
     const panel = morePanel.current;
     const previousOverflow = document.body.style.overflow;
+    const mobileViewport = window.matchMedia("(max-width: 1059.98px)");
+    function closeOnDesktop() {
+      if (!mobileViewport.matches) setMoreOpen(false);
+    }
+    mobileViewport.addEventListener("change", closeOnDesktop);
     document.body.style.overflow = "hidden";
     panel?.querySelector<HTMLElement>("button, a")?.focus();
     function handleKeyDown(event: KeyboardEvent) {
@@ -105,6 +117,7 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      mobileViewport.removeEventListener("change", closeOnDesktop);
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };

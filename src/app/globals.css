@@ -630,7 +630,7 @@ kbd { min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border
 }
 
 @media (max-width: 370px) {
-  .auth-card { border-left: 0; border-right: 0; border-radius: 0; padding-inline: 18px; }
+  .auth-card { padding-inline: 18px; }
   .quick-values { grid-template-columns: repeat(2, 1fr); }
   .trade-actions { flex-direction: column-reverse; }
   .metric-grid { grid-template-columns: 1fr; }.chance-row { grid-template-columns: 1fr 44px 58px 58px; gap: 5px; }
