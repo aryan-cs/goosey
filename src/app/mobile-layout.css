@@ -1,8 +1,9 @@
 /* Phone layouts keep the same surfaces and type hierarchy as desktop, with
    room for readable labels, wrapped names, and finger-sized controls. */
 @media (max-width: 809.98px) {
-  .leaderboard-podium { gap: 10px; min-height: 0; align-items: stretch; padding-top: 24px; }
-  .podium-place { min-width: 0; min-height: 216px; padding: 18px 12px; gap: 8px; border-radius: var(--radius-md); justify-content: flex-start; }
+  .leaderboard-podium { gap: 10px; min-height: 0; align-items: end; padding-top: 24px; }
+  .podium-place { min-width: 0; min-height: 192px; padding: 18px 12px; gap: 8px; border-radius: var(--radius-md); justify-content: flex-start; }
+  .podium-place.podium-2 { min-height: 216px; }
   .podium-place.podium-1 { min-height: 240px; margin-top: -24px; padding-top: 26px; }
   .podium-place .leader-avatar { width: 44px; height: 44px; margin: 0; flex-shrink: 0; }
   .podium-place strong { width: 100%; font-size: 13px; line-height: 18px; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }

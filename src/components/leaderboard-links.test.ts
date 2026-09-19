@@ -16,6 +16,7 @@ describe("leaderboard profile navigation", () => {
       expect(html).toContain('href="/users/public_goose"');
       expect(html).toContain("1,000");
     }
+    expect(renderToStaticMarkup(React.createElement(LeaderboardPodium, { users: [visible] }))).toContain('id="player-test-id"');
   });
   it("keeps private players visible without a link to an unavailable profile", () => {
     for (const profilePublic of [false, undefined]) {

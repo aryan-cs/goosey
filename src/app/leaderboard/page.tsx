@@ -15,6 +15,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
   const requested = typeof query.page === "string" && /^[1-9]\d{0,5}$/.test(query.page) ? Number(query.page) : 1;
   const { rows, page, totalPages, total, viewer } = await getLeaderboardPage(requested, 50, sessionUser?.id);
   const ranked = rows.map((row) => ({ id: row.userId, username: row.username, displayName: row.displayName, profilePublic: row.profilePublic, score: Number(row.equityMilli) / 1_000, availableBalance: Number(row.cashMilli) / 1_000, marketsTraded: row.marketsTraded, rank: row.rank }));
+  const listed = page === 1 ? ranked.filter((user) => user.rank > 3) : ranked;
   return <div className="page-shell leaderboard-page">
     <header className="page-header"><span className="eyebrow">Hackathon standings</span><h1>Leaderboard</h1><p>Total balance includes your available feathers, reserved feathers and open positions. Available is what you can spend now. Rank is based on total portfolio value, highest first, including welcome feathers.</p><LivePageRefresh showButton={false} /></header>
     <div className={viewer ? styles.layout : undefined}>
@@ -28,7 +29,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
     <div className={styles.standings}>
     {ranked.length ? <>
       {page === 1 && <LeaderboardPodium users={ranked.slice(0, 3)} />}
-      <section className="leaderboard-table" aria-label="Leaderboard standings">{ranked.map((user) => <div id={`player-${user.id}`} className={styles.player} key={user.id}><LeaderboardRow user={user} /></div>)}</section>
+      {listed.length > 0 && <section className="leaderboard-table" aria-label="Leaderboard standings">{listed.map((user) => <div id={`player-${user.id}`} className={styles.player} key={user.id}><LeaderboardRow user={user} /></div>)}</section>}
       <PageNavigation page={page} totalPages={totalPages} totalResults={total} pageSize={50} visibleResults={ranked.length} href={number => `/leaderboard?page=${number}`} label="Leaderboard pages" />
     </> : <EmptyState title="No rankings yet" description="Active players appear here automatically." action={<Link className="button button-primary" href="/signup">Join Goosey</Link>} />}
     </div></div>

@@ -16,10 +16,10 @@ export function PositionRow(props: PositionRowProps) {
 }
 
 export interface LeaderboardUser { id: string; username: string; rank: number; displayName: string; score: number; profilePublic?: boolean; availableBalance?: number; movement?: number; marketsTraded?: number; badge?: string }
-function LeaderboardIdentity({ user, className, label, children }: { user: LeaderboardUser; className: string; label: string; children: ReactNode }) {
+function LeaderboardIdentity({ user, className, label, id, children }: { user: LeaderboardUser; className: string; label: string; id?: string; children: ReactNode }) {
   return user.profilePublic
-    ? <Link className={className} href={`/users/${encodeURIComponent(user.username)}`} aria-label={`View ${user.displayName}'s profile. ${label}`}>{children}</Link>
-    : <div className={className} aria-label={label}>{children}</div>;
+    ? <Link id={id} className={className} href={`/users/${encodeURIComponent(user.username)}`} aria-label={`View ${user.displayName}'s profile. ${label}`}>{children}</Link>
+    : <div id={id} className={className} aria-label={label}>{children}</div>;
 }
 
 export function LeaderboardRow({ user, current = false }: { user: LeaderboardUser; current?: boolean }) {
@@ -28,7 +28,7 @@ export function LeaderboardRow({ user, current = false }: { user: LeaderboardUse
 }
 
 export function LeaderboardPodium({ users }: { users: LeaderboardUser[] }) {
-  return <div className="leaderboard-podium" aria-label="Top forecasters">{users.map((user) => <LeaderboardIdentity user={user} className={`podium-place podium-${user.rank}`} label={`${user.displayName}, rank ${user.rank}, ${user.score.toLocaleString(undefined, { maximumFractionDigits: 0 })} feathers total`} key={user.id}><span className="podium-icon" aria-hidden="true">{user.rank === 1 ? <Trophy /> : <span className="rank">{user.rank}</span>}</span><div className="leader-avatar" aria-hidden="true">{initials(user.displayName)}</div><strong>{user.displayName}</strong><span aria-hidden="true">Total · <FeatherIcon /> {user.score.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></LeaderboardIdentity>)}</div>;
+  return <div className="leaderboard-podium" aria-label="Top forecasters">{users.map((user) => <LeaderboardIdentity id={`player-${user.id}`} user={user} className={`podium-place podium-${user.rank}`} label={`${user.displayName}, rank ${user.rank}, ${user.score.toLocaleString(undefined, { maximumFractionDigits: 0 })} feathers total`} key={user.id}><span className="podium-icon" aria-hidden="true">{user.rank === 1 ? <Trophy /> : <span className="rank">{user.rank}</span>}</span><div className="leader-avatar" aria-hidden="true">{initials(user.displayName)}</div><strong>{user.displayName}</strong><span aria-hidden="true">Total · <FeatherIcon /> {user.score.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></LeaderboardIdentity>)}</div>;
 }
 
 export function SectionHeader({ eyebrow, title, description, href, linkLabel = "View all" }: { eyebrow?: string; title: string; description?: string; href?: string; linkLabel?: string }) {
