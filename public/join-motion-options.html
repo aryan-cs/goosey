@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goosey · Join motion options</title>
+<style>
+@font-face{font-family:Saans;src:url('/fonts/m-saans-600.woff2');font-weight:600}
+*{box-sizing:border-box}body{margin:0;background:#141414;color:#fff;font:16px/1.5 Saans,Arial,sans-serif;padding:60px 24px}main{max-width:1000px;margin:auto}h1{font-size:36px;line-height:1.15}p{color:#adadad}section{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin:40px 0}article{background:#242424;border:1px solid #ffffff20;border-radius:24px;padding:28px}h2{font-size:20px;margin:0 0 8px}article p{font-size:14px;min-height:84px}.stage{display:grid;place-items:center;height:140px;background:#1d1d1d;border-radius:20px}
+.join{position:relative;isolation:isolate;width:154px;height:52px;border:0;border-radius:99px;background:#f5f5f5;color:#141414;font:600 18px Saans,Arial,sans-serif;cursor:pointer;overflow:hidden;transition:background .26s,color .26s,box-shadow .26s;outline-offset:5px}
+.join span{pointer-events:none}.label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:0}.old{transition:opacity .18s,transform .26s cubic-bezier(.22,1,.36,1)}.new i{display:inline-block;font-style:normal;white-space:pre;opacity:0;transform:translateY(18px);transition:opacity .2s,transform .35s cubic-bezier(.2,1.55,.4,1),color .25s;transition-delay:calc((9 - var(--i))*12ms)}
+.join:is(:hover,:focus-visible) .old{opacity:0;transform:translateY(-16px)}.join:is(:hover,:focus-visible) .new i{opacity:1;transform:translateY(0);transition-delay:calc(var(--i)*20ms)}
+.hop{transition-duration:.22s}.hop .old{transition-duration:.15s,.22s}.hop .new i{transition-duration:.17s,.3s,.22s;transition-delay:calc((9 - var(--i))*10ms)}.hop:is(:hover,:focus-visible) .new i{transition-delay:calc(var(--i)*16ms)}
+.hop:is(:hover,:focus-visible){background:#78eb54;color:#141414;box-shadow:0 6px 20px #78eb5426}
+.rim:is(:hover,:focus-visible){background:#242424;color:#9bf47d;box-shadow:inset 0 0 0 1px #78eb54,0 5px 16px #78eb541a}.rim .new i{transition-duration:.2s,.28s,.25s}
+.wipe:before{content:"";position:absolute;inset:0;background:#78eb54;border-radius:inherit;transform:translateX(-101%);transition:transform .38s cubic-bezier(.65,0,.35,1);z-index:-1}.wipe:is(:hover,:focus-visible):before{transform:translateX(0)}
+body.light{background:#fff;color:#141414}.light p{color:#717171}.light article{background:#fafafa;border-color:#14141420}.light .stage{background:#ededed}.light .join{background:#141414;color:#fff}.light .hop:is(:hover,:focus-visible),.light .wipe:is(:hover,:focus-visible){color:#141414}.light .hop:is(:hover,:focus-visible){background:#78eb54}.light .rim:is(:hover,:focus-visible){color:#9bf47d}
+.theme{font:inherit;background:transparent;border:1px solid #888;border-radius:99px;color:inherit;padding:10px 18px;cursor:pointer}
+@media(max-width:740px){section{grid-template-columns:1fr}article p{min-height:0}body{padding-top:24px}}
+@media(prefers-reduced-motion:reduce){.join *,.join:before{transition-duration:.01ms!important;transition-delay:0ms!important}}
+</style>
+<main><h1>Choose the Join animation</h1><p>Hover each button, then move away. The clickable pill stays still while the letters move.</p><button class="theme" type="button">Switch to light</button><section>
+<article><h2>1. Goose Hop</h2><p>Lime fill, dark letters, and a soft staggered bounce. The most playful option.</p><div class="stage"><button class="join hop" type="button" aria-label="Preview Goose Hop"><span class="label old" aria-hidden="true">Join</span><span class="label new" aria-hidden="true"></span></button></div></article>
+<article><h2>2. Mobbin+</h2><p>A fine lime rim and green letters with a smaller bounce. The quietest option.</p><div class="stage"><button class="join rim" type="button" aria-label="Preview Mobbin plus"><span class="label old" aria-hidden="true">Join</span><span class="label new" aria-hidden="true"></span></button></div></article>
+<article><h2>3. Lime Wipe</h2><p>A green sweep followed by bouncing letters. The most expressive option.</p><div class="stage"><button class="join wipe" type="button" aria-label="Preview Lime Wipe"><span class="label old" aria-hidden="true">Join</span><span class="label new" aria-hidden="true"></span></button></div></article>
+</section><p>Keyboard: Tab to preview. Reduced motion follows your system setting.</p></main>
+<script>
+document.querySelectorAll('.new').forEach(label=>{[...'Get Goosey'].forEach((letter,index)=>{const span=document.createElement('i');span.textContent=letter;span.style.setProperty('--i',index);label.append(span)})});
+document.querySelector('.theme').addEventListener('click',event=>{const light=document.body.classList.toggle('light');event.currentTarget.textContent=light?'Switch to dark':'Switch to light'});
+</script>
+</html>

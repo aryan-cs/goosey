@@ -1,0 +1,3 @@
+export default function PrivacySettingsPage() {
+  return <div className="page-shell reading-page"><header className="page-header"><h1>Your privacy</h1><p>A quick guide to what other people can see.</p></header><section><h2>What can be public</h2><p>If your profile is public, people may see your display name, username, comments, and overall prediction stats.</p></section><section><h2>What stays private</h2><p>Your email, password, balance, sessions, and account details stay private.</p></section><section><h2>Feathers stay in Goosey</h2><p>Feathers have no cash value and cannot be transferred outside Goosey.</p></section></div>;
+}

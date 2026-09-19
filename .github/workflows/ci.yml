@@ -1,0 +1,236 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+  DATABASE_PROVIDER: sqlite
+  DATABASE_URL: file:./dev.db
+  RATE_LIMIT_KEY_SECRET: "0000000000000000000000000000000000000000000000000000000000000000"
+
+jobs:
+  postgres-schema-contract:
+    name: Offline PostgreSQL schema contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate schemas, logical parity, and migration contract
+        run: npm run db:validate
+
+      - name: Generate isolated PostgreSQL Prisma client
+        run: npm run db:generate:postgres
+
+      - name: Verify the offline baseline is reproducible
+        shell: bash
+        run: |
+          set -euo pipefail
+          POSTGRES_DATABASE_URL="postgresql://goosey:goosey@127.0.0.1:5432/goosey" \
+          POSTGRES_DIRECT_DATABASE_URL="postgresql://goosey:goosey@127.0.0.1:5432/goosey" \
+            npx prisma migrate diff \
+              --from-empty \
+              --to-schema-datamodel prisma/postgresql/schema.prisma \
+              --script \
+              --output "$RUNNER_TEMP/postgresql-baseline.sql"
+          diff -u prisma/postgresql/baseline.generated.sql "$RUNNER_TEMP/postgresql-baseline.sql"
+
+  checks:
+    name: Static checks and unit tests
+    needs: postgres-schema-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm run test
+
+  build:
+    name: Production build
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Build application
+        run: npm run build
+
+  api-e2e:
+    name: API E2E
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Build application
+        run: npm run build
+
+      - name: Run isolated API E2E
+        run: npm run test:e2e
+
+  settlement-e2e:
+    name: Settlement E2E
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run isolated settlement E2E
+        run: npm run test:settlement
+
+  orderbook-e2e:
+    name: Order-book E2E
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run isolated order-book E2E
+        run: npm run test:orderbook
+
+  reconciliation:
+    name: Ledger reconciliation
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Reconcile an isolated fixture copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          reconcile_db="$RUNNER_TEMP/goosey-reconcile.db"
+          cp prisma/dev.db "$reconcile_db"
+          DATABASE_URL="file:$reconcile_db" npm run reconcile

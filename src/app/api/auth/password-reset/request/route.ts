@@ -1,0 +1,36 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+import { requestPasswordReset } from "@/lib/auth-recovery";
+import { EmailDeliveryError } from "@/lib/email";
+import { authRouteError, InvalidRequestError, jsonError, noStore, readJsonObject } from "@/lib/http";
+import {
+  assertMutationOrigin,
+  canonicalizeEmail,
+  enforceRateLimit,
+  identityRateLimitKey,
+  requestRateLimitKey,
+} from "@/lib/security";
+
+const schema = z.object({ email: z.string() }).strict();
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    assertMutationOrigin(request);
+    await enforceRateLimit(requestRateLimitKey(request, "password-reset-request:ip"), 5, 60 * 60_000);
+    const parsed = schema.safeParse(await readJsonObject(request));
+    const email = parsed.success ? canonicalizeEmail(parsed.data.email) : null;
+    if (!email) throw new InvalidRequestError();
+    await enforceRateLimit(identityRateLimitKey("password-reset-request:email", email), 3, 60 * 60_000);
+    await requestPasswordReset(email);
+    return noStore(NextResponse.json(
+      { accepted: true, message: "If this account can be recovered, an email will arrive shortly." },
+      { status: 202 },
+    ));
+  } catch (error) {
+    if (error instanceof EmailDeliveryError) {
+      return jsonError(503, "EMAIL_UNAVAILABLE", "Email delivery is temporarily unavailable.");
+    }
+    return authRouteError(error);
+  }
+}

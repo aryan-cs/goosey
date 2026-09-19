@@ -1,0 +1,717 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String                       @id @default(cuid())
+  email                  String                       @unique
+  username               String                       @unique
+  displayName            String
+  passwordHash           String
+  emailVerifiedAt        DateTime?
+  role                   String                       @default("USER")
+  status                 String                       @default("ACTIVE")
+  bio                    String                       @default("")
+  profilePublic          Boolean                      @default(false)
+  leaderboardVisible     Boolean                      @default(false)
+  balanceMilli           BigInt                       @default(0)
+  realizedPnlMilli       BigInt                       @default(0)
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+  lastActiveAt           DateTime                     @default(now())
+  sessions               Session[]
+  accountTokens          AccountToken[]
+  createdMarkets         Market[]                     @relation("MarketCreator")
+  createdEvents          MarketEvent[]                @relation("MarketEventCreator")
+  eventCreationRequests  MarketEventCreationRequest[] @relation("MarketEventCreationActor")
+  positions              Position[]
+  trades                 Trade[]
+  journalEntries         JournalEntry[]               @relation("JournalActor")
+  comments               Comment[]
+  watchlist              WatchlistEntry[]
+  suggestions            MarketSuggestion[]           @relation("SuggestionAuthor")
+  reviewedSuggestions    MarketSuggestion[]           @relation("SuggestionReviewer")
+  resolutionProposals    MarketResolutionProposal[]   @relation("ResolutionProposer")
+  approvedResolutions    MarketResolutionProposal[]   @relation("ResolutionApprover")
+  approvedSettlementRuns MarketSettlementRun[]        @relation("SettlementRunApprover")
+  createdInvites         RegistrationInvite[]         @relation("InviteCreator")
+  inviteClaim            RegistrationInviteClaim?
+  auditLogs              AuditLog[]                   @relation("AuditActor")
+  notifications          Notification[]
+  reportsMade            CommentReport[]              @relation("ReportAuthor")
+  reportsResolved        CommentReport[]              @relation("ReportResolver")
+  marketOrders           MarketOrder[]
+  orderEvents            OrderEvent[]
+  orderCommands          OrderCommand[]
+  orderReservations      OrderReservation[]
+
+  @@index([role, status])
+  @@index([balanceMilli])
+}
+
+model AccountToken {
+  id         String    @id @default(cuid())
+  userId     String
+  purpose    String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, consumedAt])
+  @@index([purpose, expiresAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userAgent String?
+  ipHash    String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Market {
+  id                  String                     @id @default(cuid())
+  slug                String                     @unique
+  title               String
+  shortTitle          String
+  description         String
+  rules               String
+  resolutionSource    String
+  category            String
+  status              String                     @default("OPEN")
+  resolution          String?
+  featured            Boolean                    @default(false)
+  color               String                     @default("gold")
+  icon                String                     @default("sparkles")
+  closesAt            DateTime
+  resolvesAt          DateTime
+  resolvedAt          DateTime?
+  yesShares           Int                        @default(0)
+  noShares            Int                        @default(0)
+  liquidityParameter  Int                        @default(40)
+  payoutMilli         BigInt                     @default(100000)
+  feeBps              Int                        @default(0)
+  volumeMilli         BigInt                     @default(0)
+  traderCount         Int                        @default(0)
+  commentCount        Int                        @default(0)
+  version             Int                        @default(0)
+  pricingModel        String                     @default("LMSR")
+  bookSequence        BigInt                     @default(0)
+  commandSequence     BigInt                     @default(0)
+  tradeSequence       BigInt                     @default(0)
+  engineVersion       Int                        @default(1)
+  acceptingOrders     Boolean                    @default(true)
+  createdById         String
+  eventId             String?
+  collateralAccountId String                     @unique
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  createdBy           User                       @relation("MarketCreator", fields: [createdById], references: [id])
+  event               MarketEvent?               @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  collateralAccount   LedgerAccount              @relation("MarketCollateral", fields: [collateralAccountId], references: [id])
+  positions           Position[]
+  trades              Trade[]
+  comments            Comment[]
+  priceHistory        MarketPriceSnapshot[]
+  watchlist           WatchlistEntry[]
+  suggestions         MarketSuggestion[]
+  quotes              TradeQuote[]
+  settlements         PositionSettlement[]
+  resolutionProposals MarketResolutionProposal[]
+  settlementRun       MarketSettlementRun?
+  orders              MarketOrder[]
+  orderFills          OrderFill[]
+  orderEvents         OrderEvent[]
+  orderCommands       OrderCommand[]
+  orderReservations   OrderReservation[]
+
+  @@index([status, closesAt])
+  @@index([eventId, status, closesAt])
+  @@index([category, status])
+  @@index([featured, status])
+  @@index([volumeMilli])
+}
+
+model MarketEvent {
+  id              String                      @id @default(cuid())
+  slug            String                      @unique
+  title           String
+  shortTitle      String
+  description     String
+  category        String
+  featured        Boolean                     @default(false)
+  color           String                      @default("gold")
+  icon            String                      @default("sparkles")
+  startsAt        DateTime
+  endsAt          DateTime
+  version         Int                         @default(0)
+  createdById     String?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  createdBy       User?                       @relation("MarketEventCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  creationRequest MarketEventCreationRequest?
+  markets         Market[]
+
+  @@index([featured, startsAt])
+  @@index([category, startsAt])
+  @@index([startsAt, endsAt])
+  @@index([createdById, createdAt])
+}
+
+model MarketEventCreationRequest {
+  id          String      @id @default(cuid())
+  actorUserId String
+  eventId     String      @unique
+  key         String
+  requestHash String
+  createdAt   DateTime    @default(now())
+  actor       User        @relation("MarketEventCreationActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  event       MarketEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  @@unique([actorUserId, key])
+  @@index([createdAt])
+}
+
+model Position {
+  id                String   @id @default(cuid())
+  userId            String
+  marketId          String
+  yesShares         Int      @default(0)
+  noShares          Int      @default(0)
+  netCostMilli      BigInt   @default(0)
+  yesCostBasisMilli BigInt   @default(0)
+  noCostBasisMilli  BigInt   @default(0)
+  realizedPnlMilli  BigInt   @default(0)
+  reservedYesShares Int      @default(0)
+  reservedNoShares  Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market            Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, marketId])
+  @@index([marketId])
+}
+
+model Trade {
+  id             String   @id @default(cuid())
+  userId         String
+  marketId       String
+  side           String
+  action         String
+  quantity       Int
+  amountMilli    BigInt
+  feeMilli       BigInt   @default(0)
+  priceBeforeBps Int
+  priceAfterBps  Int
+  idempotencyKey String
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  market         Market   @relation(fields: [marketId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([marketId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model MarketOrder {
+  id                  String            @id @default(cuid())
+  userId              String
+  marketId            String
+  clientOrderId       String
+  outcome             String
+  action              String
+  bookSide            String
+  limitPriceMilli     BigInt
+  originalQuantity    Int
+  remainingQuantity   Int
+  filledQuantity      Int               @default(0)
+  canceledQuantity    Int               @default(0)
+  status              String            @default("OPEN")
+  timeInForce         String            @default("GTC")
+  postOnly            Boolean           @default(false)
+  stpOwnerId          String
+  selfTradePrevention String            @default("CANCEL_AGGRESSOR")
+  reservedCashMilli   BigInt            @default(0)
+  reservedFeeMilli    BigInt            @default(0)
+  reservedShares      Int               @default(0)
+  cumulativeFeeMilli  BigInt            @default(0)
+  acceptedSequence    BigInt
+  prioritySequence    BigInt
+  terminalSequence    BigInt?
+  version             Int               @default(0)
+  orderChainId        String
+  replacementVersion  Int               @default(0)
+  replacedOrderId     String?           @unique
+  expiresAt           DateTime?
+  cancelOnPause       Boolean           @default(true)
+  reduceOnly          Boolean           @default(false)
+  terminalReason      String?
+  terminalAt          DateTime?
+  canceledAt          DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  user                User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  market              Market            @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  replacedOrder       MarketOrder?      @relation("OrderReplacement", fields: [replacedOrderId], references: [id], onDelete: Restrict)
+  replacementOrder    MarketOrder?      @relation("OrderReplacement")
+  makerFills          OrderFill[]       @relation("OrderFillMakerOrder")
+  takerFills          OrderFill[]       @relation("OrderFillTakerOrder")
+  reservation         OrderReservation?
+  commands            OrderCommand[]
+
+  @@unique([userId, clientOrderId])
+  @@unique([marketId, prioritySequence])
+  @@unique([orderChainId, replacementVersion])
+  @@index([marketId, bookSide, status, limitPriceMilli, prioritySequence, id])
+  @@index([marketId, userId, status, createdAt, id])
+  @@index([status, remainingQuantity, expiresAt, id])
+}
+
+model OrderFill {
+  id                     String       @id @default(cuid())
+  marketId               String
+  makerOrderId           String
+  takerOrderId           String
+  canonicalYesPriceMilli BigInt
+  quantity               Int
+  makerFeeMilli          BigInt       @default(0)
+  takerFeeMilli          BigInt       @default(0)
+  matchType              String
+  commandSequence        BigInt
+  tradeSequence          BigInt
+  effectIndex            Int
+  journalEntryId         String       @unique
+  createdAt              DateTime     @default(now())
+  market                 Market       @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  makerOrder             MarketOrder  @relation("OrderFillMakerOrder", fields: [makerOrderId], references: [id], onDelete: Restrict)
+  takerOrder             MarketOrder  @relation("OrderFillTakerOrder", fields: [takerOrderId], references: [id], onDelete: Restrict)
+  journalEntry           JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  @@unique([marketId, commandSequence, effectIndex])
+  @@unique([marketId, tradeSequence])
+  @@index([marketId, createdAt, id])
+  @@index([makerOrderId, createdAt, id])
+  @@index([takerOrderId, createdAt, id])
+}
+
+model OrderEvent {
+  id              String   @id @default(cuid())
+  marketId        String
+  userId          String?
+  commandSequence BigInt
+  eventSequence   BigInt
+  effectIndex     Int
+  type            String
+  visibility      String   @default("PUBLIC")
+  payload         String
+  schemaVersion   Int      @default(1)
+  createdAt       DateTime @default(now())
+  market          Market   @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([marketId, commandSequence, effectIndex])
+  @@unique([marketId, eventSequence])
+  @@index([marketId, eventSequence])
+  @@index([userId, eventSequence])
+}
+
+model OrderCommand {
+  id              String       @id @default(cuid())
+  marketId        String
+  actorUserId     String
+  orderId         String?
+  scope           String
+  idempotencyKey  String
+  requestHash     String
+  commandType     String
+  commandSequence BigInt
+  status          String       @default("PROCESSING")
+  responseCode    Int?
+  responseBody    String?
+  createdAt       DateTime     @default(now())
+  completedAt     DateTime?
+  market          Market       @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  actor           User         @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  order           MarketOrder? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([actorUserId, scope, idempotencyKey])
+  @@unique([marketId, commandSequence])
+  @@index([marketId, commandSequence])
+  @@index([orderId])
+}
+
+model OrderReservation {
+  orderId                String         @id
+  userId                 String
+  marketId               String
+  cashAccountId          String?
+  reserveJournalId       String?        @unique
+  releaseJournalId       String?        @unique
+  reservedPrincipalMilli BigInt         @default(0)
+  reservedFeeMilli       BigInt         @default(0)
+  reservedYesQuantity    Int            @default(0)
+  reservedNoQuantity     Int            @default(0)
+  version                Int            @default(0)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  order                  MarketOrder    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  user                   User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  market                 Market         @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  cashAccount            LedgerAccount? @relation("OrderReservationCash", fields: [cashAccountId], references: [id], onDelete: Restrict)
+
+  @@index([userId, marketId])
+  @@index([cashAccountId])
+}
+
+model LedgerAccount {
+  id                String             @id @default(cuid())
+  ownerType         String
+  ownerId           String?
+  purpose           String
+  balanceMilli      BigInt             @default(0)
+  allowsNegative    Boolean            @default(false)
+  status            String             @default("ACTIVE")
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  postings          LedgerPosting[]
+  collateralFor     Market?            @relation("MarketCollateral")
+  orderReservations OrderReservation[] @relation("OrderReservationCash")
+
+  @@unique([ownerType, ownerId, purpose])
+  @@index([ownerType, ownerId])
+}
+
+model JournalEntry {
+  id               String          @id @default(cuid())
+  type             String
+  status           String          @default("POSTED")
+  referenceType    String
+  referenceId      String
+  idempotencyScope String
+  idempotencyKey   String
+  actorUserId      String?
+  metadata         String          @default("{}")
+  createdAt        DateTime        @default(now())
+  postedAt         DateTime?       @default(now())
+  actor            User?           @relation("JournalActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  postings         LedgerPosting[]
+  orderFill        OrderFill?
+
+  @@unique([idempotencyScope, idempotencyKey])
+  @@index([referenceType, referenceId])
+  @@index([actorUserId, createdAt])
+}
+
+model LedgerPosting {
+  id              String        @id @default(cuid())
+  journalEntryId  String
+  ledgerAccountId String
+  amountMilli     BigInt
+  createdAt       DateTime      @default(now())
+  journalEntry    JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  ledgerAccount   LedgerAccount @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+
+  @@index([journalEntryId])
+  @@index([ledgerAccountId, createdAt])
+}
+
+model TradeQuote {
+  id             String    @id @default(cuid())
+  userId         String
+  marketId       String
+  side           String
+  action         String
+  quantity       Int
+  amountMilli    BigInt
+  feeMilli       BigInt    @default(0)
+  marketVersion  Int
+  maxDebitMilli  BigInt?
+  minCreditMilli BigInt?
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  market         Market    @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([marketId, createdAt])
+}
+
+model IdempotencyRequest {
+  id           String   @id @default(cuid())
+  userId       String
+  route        String
+  key          String
+  requestHash  String
+  status       String   @default("PROCESSING")
+  responseCode Int?
+  responseBody String?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@unique([userId, route, key])
+  @@index([expiresAt])
+}
+
+model PositionSettlement {
+  id              String               @id @default(cuid())
+  marketId        String
+  userId          String
+  payoutMilli     BigInt
+  journalEntryId  String?              @unique
+  settlementRunId String?
+  createdAt       DateTime             @default(now())
+  market          Market               @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  settlementRun   MarketSettlementRun? @relation(fields: [settlementRunId], references: [id], onDelete: Restrict)
+
+  @@unique([marketId, userId])
+  @@index([userId, createdAt])
+  @@index([settlementRunId, createdAt])
+}
+
+model MarketResolutionProposal {
+  id                     String               @id @default(cuid())
+  marketId               String
+  proposerId             String
+  approverId             String?
+  outcome                String
+  reason                 String
+  evidence               String
+  status                 String               @default("PENDING")
+  reviewNote             String               @default("")
+  idempotencyKey         String
+  requestHash            String
+  pendingKey             String?              @unique
+  approvalIdempotencyKey String?
+  approvalRequestHash    String?
+  createdAt              DateTime             @default(now())
+  decidedAt              DateTime?
+  market                 Market               @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  proposer               User                 @relation("ResolutionProposer", fields: [proposerId], references: [id], onDelete: Restrict)
+  approver               User?                @relation("ResolutionApprover", fields: [approverId], references: [id], onDelete: Restrict)
+  settlementRun          MarketSettlementRun?
+
+  @@unique([proposerId, idempotencyKey])
+  @@unique([approverId, approvalIdempotencyKey])
+  @@index([marketId, status, createdAt])
+  @@index([status, createdAt])
+}
+
+model MarketSettlementRun {
+  id                     String                   @id @default(cuid())
+  marketId               String                   @unique
+  proposalId             String                   @unique
+  outcome                String
+  reason                 String
+  evidence               String
+  approvedById           String
+  approvalIdempotencyKey String
+  approvalRequestHash    String
+  status                 String                   @default("READY")
+  cursorPositionId       String?
+  totalPositions         Int
+  processedCount         Int                      @default(0)
+  totalPayoutMilli       BigInt                   @default(0)
+  batchCount             Int                      @default(0)
+  claimToken             String?
+  leaseExpiresAt         DateTime?
+  lastError              String?
+  startedAt              DateTime?
+  completedAt            DateTime?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  market                 Market                   @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  proposal               MarketResolutionProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  approvedBy             User                     @relation("SettlementRunApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  settlements            PositionSettlement[]
+
+  @@unique([approvedById, approvalIdempotencyKey])
+  @@index([status, leaseExpiresAt, createdAt])
+}
+
+model WorkerState {
+  id                     String   @id
+  workerName             String   @unique
+  instanceId             String
+  status                 String   @default("STARTING")
+  startedAt              DateTime
+  lastHeartbeatAt        DateTime
+  lastCycleStartedAt     DateTime?
+  lastCycleSucceededAt   DateTime?
+  lastCycleFailedAt      DateTime?
+  stoppedAt              DateTime?
+  consecutiveFailures    Int      @default(0)
+  lastError              String?
+  cycleCount             BigInt   @default(0)
+  successCount           BigInt   @default(0)
+  failureCount           BigInt   @default(0)
+  closedMarketCount      BigInt   @default(0)
+  completedRunCount      BigInt   @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([status, lastHeartbeatAt])
+}
+
+model MarketPriceSnapshot {
+  id                String   @id @default(cuid())
+  marketId          String
+  yesProbabilityBps Int
+  createdAt         DateTime @default(now())
+  market            Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([marketId, createdAt])
+}
+
+model Comment {
+  id                   String          @id @default(cuid())
+  userId               String
+  marketId             String
+  parentId             String?
+  body                 String
+  status               String          @default("VISIBLE")
+  positionSideSnapshot String?
+  positionQtySnapshot  Int?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  market               Market          @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  parent               Comment?        @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies              Comment[]       @relation("CommentReplies")
+  reports              CommentReport[]
+
+  @@index([marketId, createdAt])
+  @@index([parentId])
+}
+
+model CommentReport {
+  id           String    @id @default(cuid())
+  commentId    String
+  reporterId   String
+  reason       String
+  details      String    @default("")
+  status       String    @default("PENDING")
+  resolvedById String?
+  resolution   String?
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+  comment      Comment   @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reporter     User      @relation("ReportAuthor", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy   User?     @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@unique([commentId, reporterId])
+  @@index([status, createdAt])
+}
+
+model WatchlistEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  marketId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, marketId])
+}
+
+model MarketSuggestion {
+  id           String    @id @default(cuid())
+  userId       String
+  title        String
+  description  String
+  category     String
+  status       String    @default("PENDING")
+  marketId     String?
+  reviewedById String?
+  reviewNote   String    @default("")
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation("SuggestionAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy   User?     @relation("SuggestionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  market       Market?   @relation(fields: [marketId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+model RateLimitBucket {
+  key       String   @id
+  points    Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String
+  action      String
+  entityType  String
+  entityId    String
+  metadata    String   @default("{}")
+  createdAt   DateTime @default(now())
+  actor       User     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+  @@index([createdAt, id])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model RegistrationInvite {
+  id          String                    @id @default(cuid())
+  codeHash    String                    @unique
+  issuanceKey String?                   @unique
+  requestHash String?
+  label       String
+  status      String                    @default("ACTIVE")
+  maxUses     Int                       @default(1)
+  useCount    Int                       @default(0)
+  expiresAt   DateTime?
+  createdById String
+  createdAt   DateTime                  @default(now())
+  createdBy   User                      @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  claims      RegistrationInviteClaim[]
+
+  @@index([status, expiresAt])
+}
+
+model RegistrationInviteClaim {
+  id        String             @id @default(cuid())
+  inviteId  String
+  userId    String             @unique
+  claimedAt DateTime           @default(now())
+  invite    RegistrationInvite @relation(fields: [inviteId], references: [id], onDelete: Restrict)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([inviteId, userId])
+  @@index([inviteId, claimedAt])
+}
