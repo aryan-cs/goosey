@@ -1,6 +1,6 @@
 .page { max-width: 1240px; margin: 0 auto; display: grid; gap: 24px; }
 .header { display: grid; gap: 12px; }
-.header h1, .question { font-size: clamp(28px, 4vw, 44px); line-height: 1.15; margin: 0; overflow-wrap: anywhere; }
+.header h1 { font-size: clamp(28px, 4vw, 44px); line-height: 1.15; margin: 0; overflow-wrap: anywhere; }
 .header p { color: var(--ink-muted); margin: 0; }
 .layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
 .column { min-width: 0; display: grid; gap: 20px; }
@@ -26,3 +26,7 @@
 .rules a { overflow-wrap: anywhere; }
 .review { scroll-margin-top: 110px; }
 @media(max-width:800px) { .layout { grid-template-columns: minmax(0,1fr); } .page { gap: 20px; } }
+.rules h3 { margin: 0; font-size: 15px; line-height: 1.4; }
+.rules > div { display: grid; gap: 8px; }
+.rules details > p, .rules details > code { margin-top: 12px; display: block; }
+.review h2 { scroll-margin-top: 110px; }

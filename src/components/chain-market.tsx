@@ -28,10 +28,11 @@ const phaseNames = ["Open", "Closed", "Under review", "Resolved", "Finalized"];
 const date = (seconds: bigint) => new Date(Number(seconds) * 1000).toLocaleString();
 
 export function ChainMarket({ marketId }: { marketId: string }) {
-  return <div className={styles.page}><header className={styles.header}><Link href="/markets" className="section-link">Markets</Link><h1>On-chain market {marketId}</h1><p>Connect a wallet to view this market and your positions.</p></header><SolanaWallet renderAccount={props => <MarketAccount key={marketId} {...props} marketId={BigInt(marketId)} />} /></div>;
+  const [title, setTitle] = useState(`On-chain market ${marketId}`);
+  return <div className={styles.page}><header className={styles.header}><Link href="/markets" className="section-link">Markets</Link><h1>{title}</h1></header><SolanaWallet renderAccount={props => <MarketAccount key={marketId} {...props} marketId={BigInt(marketId)} onTitle={setTitle} />} /></div>;
 }
 
-function MarketAccount({ runtime, wallet, snapshot, marketId }: WalletAccountProps & { marketId: bigint }) {
+function MarketAccount({ runtime, wallet, snapshot, marketId, onTitle }: WalletAccountProps & { marketId: bigint; onTitle: (title: string) => void }) {
   const account = snapshot.account!.address;
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +55,12 @@ function MarketAccount({ runtime, wallet, snapshot, marketId }: WalletAccountPro
   useEffect(() => {
     const c = new AbortController(); let timer: ReturnType<typeof setTimeout>;
     async function read() {
-      try { const next = await loadChainMarket(runtime, marketId, address(account), AbortSignal.any([c.signal, AbortSignal.timeout(30_000)])); if (!c.signal.aborted) { setView(next); setLoadError(null); } }
+      try { const next = await loadChainMarket(runtime, marketId, address(account), AbortSignal.any([c.signal, AbortSignal.timeout(30_000)])); if (!c.signal.aborted) { setView(next); onTitle(next.terms.question); setLoadError(null); } }
       catch(reason) { if (!c.signal.aborted) { setView(null); setReview(null); setLoadError(describe(reason)); } }
       finally { if (!c.signal.aborted) timer = setTimeout(read, 15_000); }
     }
     void read(); return () => { c.abort(); clearTimeout(timer); };
-  }, [runtime, marketId, account, reload]);
+  }, [runtime, marketId, account, reload, onTitle]);
   function unchanged(signal: AbortSignal) {
     signal.throwIfAborted(); const current = wallet.getSnapshot();
     if (current.generation !== snapshot.generation || current.status !== "connected" || current.account?.address !== account) throw new Error("Wallet changed. Prepare this action again.");
@@ -116,12 +117,13 @@ function MarketAccount({ runtime, wallet, snapshot, marketId }: WalletAccountPro
   function escrow(kind: "deposit"|"withdrawal") { try { void prepare({kind, amount: parseFeatherAmount(cash)}); } catch(reason) { setError(describe(reason)); } }
   const data = view?.snapshot, seat = data?.seat, terms = view?.terms;
   const own = data?.orderBook.orders.filter(item => item.wallet === account) ?? [];
+  const reviewer = data?.marketTerms.proposer.wallet === account || data?.marketTerms.approver.wallet === account;
   return <div className={styles.column}>
     {(error || loadError || tx.error) && <section className={shared.panel}><p className={shared.error} role="alert">{error ?? loadError ?? tx.error}</p><button className="button button-secondary" onClick={() => { setError(null); refresh(); void tx.recover(); }} disabled={Boolean(tx.busy)}>Try again</button></section>}
     {(preparing || tx.busy) && <p role="status">{tx.busy ?? "Preparing transaction…"}</p>}
     {!view && !loadError && <p role="status">Verifying finalized market data and committed terms…</p>}
     {data && terms && <>
-      <header className={styles.header}><h2 className={styles.question}>{terms.question}</h2><p>{phaseNames[data.resolution.phase]} · Closes {date(data.marketState.closesAt)} · {feathers(data.marketState.payoutMilli)} feathers per winning contract</p></header>
+      <header className={styles.header}><p>{phaseNames[data.resolution.phase]} · Closes {date(data.marketState.closesAt)} · {feathers(data.marketState.payoutMilli)} feathers per winning contract</p></header>
       <div className={styles.layout}>
         <div className={styles.column}>
           <section className={shared.panel}><h2>Order book</h2><p>Resting orders · YES-equivalent prices · finalized slot {data.finalizedSlot.toString()}</p><Book orders={data.orderBook.bids} label="Bids" /><Book orders={data.orderBook.asks} label="Asks" /></section>
@@ -134,17 +136,17 @@ function MarketAccount({ runtime, wallet, snapshot, marketId }: WalletAccountPro
         </div>
         <div className={styles.column}>
           <section className={shared.panel}><h2>Trade</h2>{!seat ? <><p>Register this wallet’s market seat before depositing collateral or trading.</p><button className="button button-primary" disabled={disabled || Boolean(review)} onClick={()=>void prepare({kind:"register"})}>Review registration</button></> : <form className={shared.form} onSubmit={event=>{event.preventDefault();order();}}>
-            <fieldset disabled={disabled || Boolean(review) || (data.resolution.phase !== 0 || !data.marketTerms.sealed || data.marketTerms.acceptanceBits !== 3)} className={shared.form} style={{border:0,padding:0,margin:0,minWidth:0}}><legend className="sr-only">Limit order</legend>
+            <fieldset disabled={disabled || Boolean(review) || (reviewer || data.resolution.phase !== 0 || !data.marketTerms.sealed || data.marketTerms.acceptanceBits !== 3)} className={shared.form} style={{border:0,padding:0,margin:0,minWidth:0}}><legend className="sr-only">Limit order</legend>
             <div className={styles.toggle} role="group" aria-label="Order action">{(["BUY","SELL"] as const).map(value=><button key={value} type="button" aria-pressed={value===action} onClick={()=>setAction(value)}>{value==="BUY"?"Buy":"Sell"}</button>)}</div>
             <div className={styles.toggle} role="group" aria-label="Outcome">{(["YES","NO"] as const).map(value=><button key={value} type="button" aria-pressed={value===outcome} onClick={()=>setOutcome(value)}>{value}</button>)}</div>
             <label htmlFor={`${id}-price`}>Limit price (feathers)</label><input id={`${id}-price`} value={price} onChange={e=>setPrice(e.target.value)} inputMode="decimal" placeholder={`Below ${feathers(data.marketState.payoutMilli)}`} required />
             <label htmlFor={`${id}-quantity`}>Contracts</label><input id={`${id}-quantity`} value={quantity} onChange={e=>setQuantity(e.target.value)} inputMode="numeric" required />
             <label htmlFor={`${id}-tif`}>Time in force</label><div className={shared.select}><select id={`${id}-tif`} value={timeInForce} onChange={e=>setTimeInForce(e.target.value as typeof timeInForce)}><option value="GTC">Good until canceled</option><option value="IOC">Immediate or cancel</option><option value="FOK">Fill or kill</option></select><ChevronDown aria-hidden="true" /></div>
             <button className="button button-primary">Review {action.toLowerCase()}</button></fieldset>
-            {data.resolution.phase !== 0 && <p>New orders are closed.</p>}{!data.marketTerms.sealed && <p>Trading opens after both reviewers accept and the terms are sealed.</p>}
+            {reviewer && <p>Designated reviewers cannot trade this market.</p>}{data.resolution.phase !== 0 && <p>New orders are closed.</p>}{!data.marketTerms.sealed && <p>Trading opens after both reviewers accept and the terms are sealed.</p>}
           </form>}<Link href="/wallet" className="section-link">Manage wallet and account link</Link></section>
           {seat && <section className={shared.panel}><h2>Market collateral</h2><p>Wallet feathers: {data.walletTokenAmount === null ? "No token account" : feathers(data.walletTokenAmount)}</p><div className={shared.form}><label htmlFor={`${id}-cash`}>Feathers</label><input id={`${id}-cash`} value={cash} onChange={e=>setCash(e.target.value)} inputMode="decimal" placeholder="Amount" disabled={disabled || Boolean(review)} /><div className={shared.actions}><button className="button button-secondary" disabled={disabled || Boolean(review)} onClick={()=>escrow("deposit")}>Deposit</button><button className="button button-secondary" disabled={disabled || Boolean(review)} onClick={()=>escrow("withdrawal")}>Withdraw</button></div></div></section>}
-          {review && <section className={`${shared.panel} ${styles.review}`} aria-label="Transaction review"><h2 ref={reviewHeading} tabIndex={-1}>Review transaction</h2><dl className={shared.facts}>{review.facts.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}<div><dt>Network fee estimate</dt><dd>{Number(review.fee)/1e9} SOL</dd></div><div><dt>Account deposit estimate</dt><dd>{Number(review.rent)/1e9} SOL</dd></div></dl><p>Approval signs this exact transaction. Orders may fill partially or fail as the book changes; FOK orders must fill completely.</p><div className={shared.actions}><button className="button button-secondary" disabled={preparing || Boolean(tx.busy)} onClick={()=>setReview(null)}>Cancel review</button><button className="button button-primary" disabled={disabled} onClick={()=>void approve()}>Approve transaction</button></div></section>}
+          {review && <section className={`${shared.panel} ${styles.review}`} aria-label="Transaction review"><h2 ref={reviewHeading} tabIndex={-1}>Review transaction</h2><dl className={shared.facts}>{review.facts.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}<div><dt>Network fee estimate</dt><dd>{Number(review.fee)/1e9} SOL</dd></div><div><dt>Account deposit estimate</dt><dd>{Number(review.rent)/1e9} SOL</dd></div></dl>{review.intent.kind === "order" && <p>Orders may fill partially or fail as the book changes; FOK orders must fill completely.</p>}<div className={shared.actions}><button className="button button-secondary" disabled={preparing || Boolean(tx.busy)} onClick={()=>setReview(null)}>Cancel review</button><button className="button button-primary" disabled={disabled} onClick={()=>void approve()}>Approve transaction</button></div></section>}
         </div>
       </div>
     </>}
