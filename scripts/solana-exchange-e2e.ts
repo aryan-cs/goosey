@@ -4,6 +4,7 @@
  * Does not launch, reset or stop any validator. See --help; no default endpoint.
  */
 import assert from "node:assert/strict";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "../src/lib/solana/runtime";
 import { createHash, randomBytes } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
@@ -28,6 +29,7 @@ import { buildInitializeResolutionInstruction } from "../src/lib/solana/resoluti
 import { buildInitializeMarketTermsInstruction, buildAcceptMarketTermsInstruction, buildSealMarketTermsInstruction,
   deriveGooseyMarketTermsAddresses } from "../src/lib/solana/market-terms-client";
 import { encodeMarketTerms, hashMarketTerms } from "../src/lib/solana/market-terms";
+import { decodeFinalizedProgramEvents, type GooseyProgramEvent } from "../src/lib/solana/program-events";
 
 const PROGRAM = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 const LOADER = address("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -81,9 +83,10 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   assert(["127.0.0.1", "[::1]"].includes(endpoint.hostname) && ["http:", "https:"].includes(endpoint.protocol), "Literal loopback RPC required");
   assert(!endpoint.username && !endpoint.password && !endpoint.hash && !endpoint.search, "Unsafe RPC URL");
   assert(!["18999", "8080"].includes(endpoint.port), "Shared validator/app ports are prohibited");
-  const genesis = process.env.GOOSEY_SOLANA_GENESIS_HASH;
+  const genesis = process.env.GOOSEY_SOLANA_GENESIS_HASH ?? "";
   assert(genesis && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(genesis), "Explicit genesis pin required");
-  assert(!["5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "EtWTRABZaYq6iMfeYKouRu166VU2xqa1", "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY"].includes(genesis), "Public clusters prohibited");
+  address(genesis);
+  assert(![MAINNET_GENESIS_HASH, DEVNET_GENESIS_HASH, TESTNET_GENESIS_HASH].includes(genesis), "Public clusters prohibited");
   assert(process.env.GOOSEY_SOLANA_TEST_ADMIN_KEYPAIR, "Explicit disposable test-admin path required");
   const adminPath = await realpath(process.env.GOOSEY_SOLANA_TEST_ADMIN_KEYPAIR);
   const relative = path.relative(await realpath("/tmp"), adminPath).split(path.sep);
@@ -191,17 +194,19 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   const initialized = await buildInitializeInstruction({ programAddress: PROGRAM, admin, environment: 1,
     genesisDomain: createHash("sha256").update(genesis).digest(), enrollmentAuthority: admin.address,
     perWalletCap: GRANT, campaignCap: 4n * GRANT + 2n });
-  await execute("initialize real program and 3-decimal feather mint", [initialized.instruction]);
+  const initializationReceipt = await execute("initialize real program and 3-decimal feather mint", [initialized.instruction]);
   const actors = await Promise.all(Array.from({ length: 4 }, () => generateKeyPairSigner()));
   await execute("fund four ephemeral wallets with local SOL for account rent", actors.map(wallet => getTransferSolInstruction({ source: admin, destination: wallet.address, amount: 1_000_000_000n })));
   const walletTokens: Address[] = [], enrollments: Address[] = [];
+  const enrollmentReceipts: Awaited<ReturnType<typeof execute>>[] = [];
+  const claimReceipts: Awaited<ReturnType<typeof execute>>[] = [];
   const closesAt = (await time()) + 900n;
   for (const [i, wallet] of actors.entries()) {
     const enrolled = await buildAuthorizeEnrollmentInstruction({ programAddress: PROGRAM, enrollmentAuthority: admin,
       wallet: wallet.address, identityDigest: randomBytes(32), allowance: GRANT, expiresAt: closesAt });
-    await execute(`authorize real unique wallet ${i}`, [enrolled.instruction]);
+    enrollmentReceipts.push(await execute(`authorize real unique wallet ${i}`, [enrolled.instruction]));
     const claim = await buildClaimFeathersInstructions({ programAddress: PROGRAM, wallet, payer: admin, createAta: true });
-    await execute(`wallet ${i} claims actual SPL feathers`, claim.instructions);
+    claimReceipts.push(await execute(`wallet ${i} claims actual SPL feathers`, claim.instructions));
     walletTokens.push(claim.walletTokens); enrollments.push(claim.enrollment);
     watched.add(claim.walletTokens); watched.add(claim.enrollment); watched.add(enrolled.identity);
   }
@@ -458,9 +463,10 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     console.log(`PASS finalized shipping escrow reader: ${label}, all four actual participants`);
   }
   invariants(await state());
+  const depositReceipts: Awaited<ReturnType<typeof execute>>[] = [];
   for (const [i, wallet] of actors.entries()) {
     const deposit = await buildDepositInstruction({ programAddress: PROGRAM, marketId: 1n, wallet, seats: market.seats, amount: GRANT, expectedNonce: 0n });
-    await execute(`wallet ${i} deposits only actual claimed SPL balance`, [deposit.instruction]); invariants(await state());
+    depositReceipts.push(await execute(`wallet ${i} deposits only actual claimed SPL balance`, [deposit.instruction])); invariants(await state());
   }
   function events(logs: string[]) {
     const orders: OrderEvent[] = [], trades: TradeEvent[] = [], removed: RemovalEvent[] = [];
@@ -576,7 +582,7 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   const partial = await order("partial IOC releases unused cash reserve", 2, buyYes(750n, 1n, 1), { ...fill, filled: 1n });
   assert.equal(partial.after.seats[0].reservedYes, 2n);
   assert.equal(partial.before.seats[2].available - partial.after.seats[2].available, 707n);
-  await order("atomic FOK cannot consume available partial liquidity", 2, buyYes(700n, 3n, 2), { error: 7011 });
+  const failedFok = await order("atomic FOK cannot consume available partial liquidity", 2, buyYes(700n, 3n, 2), { error: 7011 });
   const partialIoc = await order("partial IOC cancels remainder without leaving a reserve", 3, buyYes(700n, 5n, 1), { filled: 2n, canceled: 3n, rested: 0n, disposition: 4 });
   assert.equal(partialIoc.before.seats[3].available - partialIoc.after.seats[3].available, 1_414n);
   await order("empty IOC advances nonce but creates no order or fee", 3, buyYes(100n, 1n, 1), { filled: 0n, canceled: 1n, rested: 0n, disposition: 3 });
@@ -659,8 +665,9 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   await execute("reserved trading cash cannot be withdrawn", [excessive.instruction], 6012);
   await order("release final cash reservation through self-trade prevention", 0, { ...sellYes(100n, 1n, 1), selfTrade: 2 }, { canceled: 1n, rested: 0n });
   current = await state();
+  const withdrawalAmount = current.seats[0].available;
   const withdrawal = await buildWithdrawInstruction({ programAddress: PROGRAM, marketId: 1n, wallet: actors[0], seats: market.seats,
-    amount: current.seats[0].available, expectedNonce: current.seats[0].nonce });
+    amount: withdrawalAmount, expectedNonce: current.seats[0].nonce });
   const finalWithdrawal = await execute("withdraw real unreserved cash while minted positions remain collateralized", [withdrawal.instruction]);
   const final = await state(); invariants(final); assert.equal(final.orders.length, 0); assert.equal(final.seats[0].available, 0n);
   // Preserve the original behavioral cases, not a frozen count that excludes
@@ -844,13 +851,91 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
     slot: preparedReceipt.slot, error: preparedReceipt.meta.err, feeLamports: preparedReceipt.meta.fee, computeUnits: preparedReceipt.meta.computeUnitsConsumed });
   await verifyReaders("after sole-wallet prepared order fills actual minted YES", preparedAfter, preparedRoot);
   console.log(`PASS prepared sole-wallet order finalized: ${preparedSignature}; wallet paid ${preparedReceipt.meta.fee} lamports`);
+
+  // Decode only validator-returned finalized transaction logs. These records
+  // are tied to exact signatures above; no locally encoded event fixture is
+  // accepted as runtime evidence.
+  async function finalizedEvents(result: Awaited<ReturnType<typeof execute>>) {
+    const originalMeta = result.receipt.meta; assert(originalMeta);
+    const deadline = Date.now() + 60_000;
+    let actual: Receipt | null = null;
+    while (Date.now() < deadline) {
+      actual = await rpc("getTransaction", [result.signature, { commitment: "finalized", maxSupportedTransactionVersion: 0 }]);
+      if (actual?.meta) break;
+      await delay(200);
+    }
+    assert(actual?.meta, `Finalized event receipt unavailable: ${result.signature}`);
+    assert.equal(actual.slot, result.receipt.slot);
+    assert.deepEqual(actual.meta.err, originalMeta.err);
+    const decoded = await decodeFinalizedProgramEvents({ programAddress: PROGRAM, genesisHash: genesis,
+      signature: result.signature, slot: BigInt(actual.slot), commitment: "finalized",
+      meta: { err: actual.meta.err, logMessages: actual.meta.logMessages } });
+    const keys = decoded.records.map(record => record.eventKey);
+    assert.equal(new Set(keys).size, keys.length);
+    keys.forEach(key => assert(key.startsWith(`${genesis}:${PROGRAM}:${result.signature}:`)));
+    return decoded;
+  }
+  function known<K extends GooseyProgramEvent["kind"]>(
+    decoded: Awaited<ReturnType<typeof decodeFinalizedProgramEvents>>, kind: K,
+  ): Extract<GooseyProgramEvent, { kind: K }>[] {
+    return decoded.records.flatMap(record => record.status === "known" && record.event.kind === kind
+      ? [record.event as Extract<GooseyProgramEvent, { kind: K }>] : []);
+  }
+  const configuredDecoded = await finalizedEvents(initializationReceipt);
+  assert.equal(configuredDecoded.status, "decoded");
+  assert.equal(configuredDecoded.records.some(record => record.status === "unknown"), false);
+  assert.deepEqual(known(configuredDecoded, "Configured"), [{ kind: "Configured", config: base.config,
+    mint: base.featherMint, environment: 1n, genesisDomain: createHash("sha256").update(genesis).digest("hex") }]);
+
+  const enrollmentDecoded = await finalizedEvents(enrollmentReceipts[0]);
+  assert.deepEqual(known(enrollmentDecoded, "EnrollmentAuthorized"), [{ kind: "EnrollmentAuthorized",
+    wallet: actors[0].address, enrollment: enrollments[0], allowance: GRANT, expiresAt: closesAt }]);
+  const claimDecoded = await finalizedEvents(claimReceipts[0]);
+  assert.deepEqual(known(claimDecoded, "FeathersClaimed"), [{ kind: "FeathersClaimed",
+    wallet: actors[0].address, amount: GRANT, lifetimeMinted: GRANT }]);
+
+  const depositDecoded = await finalizedEvents(depositReceipts[0]);
+  assert.deepEqual(known(depositDecoded, "CashMoved"), [{ kind: "CashMoved", market: market.market,
+    wallet: actors[0].address, amount: GRANT, deposit: true, nonce: 0n }]);
+  const withdrawalDecoded = await finalizedEvents(finalWithdrawal);
+  assert.deepEqual(known(withdrawalDecoded, "CashMoved"), [{ kind: "CashMoved", market: market.market,
+    wallet: actors[0].address, amount: withdrawalAmount, deposit: false,
+    nonce: final.seats[0].nonce - 1n }]);
+
+  const fillDecoded = await finalizedEvents(mintFill);
+  const orderEvents = known(fillDecoded, "OrderExecuted"), tradeEvents = known(fillDecoded, "TradeExecuted");
+  assert.equal(orderEvents.length, 1); assert.equal(tradeEvents.length, 1);
+  const legacyOrder = mintFill.events.orders[0], legacyTrade = mintFill.events.trades[0];
+  assert.deepEqual(orderEvents[0], { kind: "OrderExecuted", market: market.market, wallet: actors[1].address,
+    orderId: legacyOrder.orderId, nonce: mintFill.command.expectedNonce, filled: legacyOrder.filled,
+    canceled: legacyOrder.canceled, rested: legacyOrder.rested, disposition: BigInt(legacyOrder.disposition),
+    outcome: BigInt(mintFill.command.outcome), action: BigInt(mintFill.command.action), price: mintFill.command.price });
+  assert.deepEqual(tradeEvents[0], { kind: "TradeExecuted", market: market.market,
+    makerOrderId: legacyTrade.makerOrderId, takerOrderId: legacyTrade.takerOrderId,
+    makerSeat: legacyTrade.makerSeat, takerSeat: legacyTrade.takerSeat, quantity: legacyTrade.quantity,
+    yesPrice: legacyTrade.yesPrice, makerFee: legacyTrade.makerFee, takerFee: legacyTrade.takerFee,
+    makerOutcome: BigInt(legacyTrade.makerOutcome), makerAction: BigInt(legacyTrade.makerAction),
+    takerOutcome: BigInt(legacyTrade.takerOutcome), takerAction: BigInt(legacyTrade.takerAction) });
+
+  const failedDecoded = await finalizedEvents(failedFok);
+  assert.equal(failedDecoded.status, "failed-transaction");
+  assert.deepEqual(failedDecoded.records, [], "Rolled-back failed transaction exposed program events");
+  const decodedEventEvidence = {
+    finalizedReceipts: 7,
+    signatures: [initializationReceipt.signature, enrollmentReceipts[0].signature, claimReceipts[0].signature,
+      depositReceipts[0].signature, mintFill.signature, finalWithdrawal.signature, failedFok.signature],
+    knownKinds: ["Configured", "EnrollmentAuthorized", "FeathersClaimed", "CashMoved", "OrderExecuted", "TradeExecuted"],
+    failedReceiptExcludedEvents: true,
+  };
+  console.log("PASS finalized compiled-program event decoding matches actual enrollment, cash, order and fill receipts");
   console.log(JSON.stringify({ result: "PASS", scope: "Actual RPC compiled-program exchange integration, not a host arithmetic simulation",
     rpc: endpoint.toString(), genesis, program: PROGRAM, validator: await rpc("getVersion"), market: market.market, seats: market.seats, book,
     bookBytes: BOOK_BYTES, bootstrapSizes: [10_240, 20_480, 30_720, 40_960, 51_200, 61_440, 69_720], transactionCaseCount: receipts.length,
     successBuilders: ["program-client.ts", "escrow-client.ts", "exchange-client.ts", "resolution-client.ts"],
     resolutionAdmission: { resolution, reviewers: reviewers.map((wallet, i) => ({ wallet: wallet.address, enrollment: reviewerEnrollments[i] })),
       reviewerAllowanceEach: 1, reviewerClaims: 0, finalizedReaderBatchAccounts: 10 },
-    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots"],
+    additionalChecks: ["identical signed transaction replay", "exact-signature finality", "heap/free-list and exact live-order reserves after every placement", "18 finalized shipping escrow reader snapshots", "actual finalized program-event decoding"],
+    decodedEventEvidence,
     preparedOrder: { signature: preparedSignature, submissionStatus: submittedOrder.status, finalizedSlot: preparedRoot,
       sender: prepared.sender, expectedNonce: prepared.expectedNonce, observedSlot: prepared.observedSlot,
       bookRevision: prepared.bookRevision, receiptStorage: "in-memory callback only; not durable storage proof",

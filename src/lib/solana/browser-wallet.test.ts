@@ -12,6 +12,7 @@ import { createBrowserWallet } from "./browser-wallet";
 import { createWalletChallenge, verifyWalletChallenge, type WalletChallenge } from "./wallet-challenge";
 import { buildFeatherTransfer } from "./feather-transfer";
 import { submitSignedFeatherTransfer } from "./submit-transfer";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "./runtime";
 
 const mock = vi.hoisted(() => ({ registry: vi.fn(), genesis: vi.fn(), height: vi.fn(), send: vi.fn() }));
 vi.mock("@wallet-standard/app", () => ({ getWallets: mock.registry }));
@@ -144,15 +145,22 @@ describe("browser wallet lifecycle (mocked Wallet Standard, not browser proof)",
   });
   it("rejects unsupported cluster/genesis combinations", () => {
     for (const input of [{ chain: "solana:mainnet", genesisHash }, { ...network, genesisHash: "" },
-      { ...network, genesisHash: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" }, { chain: "solana:devnet", genesisHash }]) {
+      { ...network, genesisHash: DEVNET_GENESIS_HASH }, { chain: "solana:devnet", genesisHash }]) {
       expect(() => createBrowserWallet(input as typeof network)).toThrow();
+    }
+  });
+  it("rejects truncated pins and full mainnet on both permitted wallet chain labels", () => {
+    for (const chain of ["solana:localnet", "solana:devnet"] as const) {
+      for (const pin of [DEVNET_GENESIS_HASH.slice(0, 32), MAINNET_GENESIS_HASH.slice(0, 32), MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH]) {
+        expect(() => createBrowserWallet({ chain, genesisHash: pin })).toThrow();
+      }
     }
   });
   it("supports explicit devnet without treating it as localnet capability", async () => {
     const f = await fixture();
     f.state.chains = ["solana:devnet"];
     f.state.accounts = [{ ...f.account, chains: ["solana:devnet"] }];
-    const dev = createBrowserWallet({ chain: "solana:devnet", genesisHash: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" });
+    const dev = createBrowserWallet({ chain: "solana:devnet", genesisHash: DEVNET_GENESIS_HASH });
     controllers.push(dev);
     await dev.connect(f.wallet); dev.selectAccount(f.key.address);
     expect(dev.getSigner().address).toBe(f.key.address);

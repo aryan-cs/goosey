@@ -1,5 +1,6 @@
 import { createPublicKey, randomBytes, verify as verifyEd25519 } from "node:crypto";
 import { address, getAddressEncoder, getBase58Decoder, getBase58Encoder, type Address } from "@solana/kit";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "./runtime";
 
 export const WALLET_CHALLENGE_MAX_LIFETIME_MS = 5 * 60 * 1_000;
 export const WALLET_CHALLENGE_STATEMENT =
@@ -93,9 +94,7 @@ function normalizeGenesisHash(raw: string): string {
   try {
     if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(raw)) throw new Error("invalid characters");
     const bytes = getBase58Encoder().encode(raw);
-    // Solana's public genesis identifiers include 24-byte encodings, while a
-    // fresh local validator may expose a full 32-byte hash.
-    if (bytes.length < 24 || bytes.length > 32 || getBase58Decoder().decode(bytes) !== raw) {
+    if (bytes.length !== 32 || getBase58Decoder().decode(bytes) !== raw) {
       throw new Error("invalid length");
     }
     return raw;
@@ -157,6 +156,10 @@ function normalizeContext(context: WalletChallengeContext) {
   validateChain(context.chainId);
   const walletAddress = normalizeAddress(context.walletAddress, "Wallet address");
   const genesisHash = normalizeGenesisHash(context.genesisHash);
+  if (genesisHash === MAINNET_GENESIS_HASH || genesisHash === TESTNET_GENESIS_HASH || (context.chainId === "solana:devnet"
+    ? genesisHash !== DEVNET_GENESIS_HASH : genesisHash === DEVNET_GENESIS_HASH)) {
+    throw new Error("Genesis hash does not identify the selected non-mainnet chain.");
+  }
   return { origin, domain, chainId: context.chainId, walletAddress, genesisHash } as const;
 }
 

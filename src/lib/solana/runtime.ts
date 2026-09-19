@@ -2,8 +2,10 @@ import { address, createSolanaRpc, type Address } from "@solana/kit";
 
 // No mainnet mode: Goosey feathers have no monetary value. Genesis pinning
 // catches an RPC URL that silently points at a different Solana network.
-export const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
-export const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+// Full 32-byte getGenesisHash values, not shortened explorer identifiers.
+export const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+export const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+export const TESTNET_GENESIS_HASH = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY";
 export type SolanaRuntime = Readonly<{
   cluster: "localnet" | "devnet";
   rpcUrl: string;
@@ -32,7 +34,9 @@ export function resolveSolanaRuntime(env: Record<string, string | undefined> = p
   if (!genesisHash || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(genesisHash)) {
     throw new Error("Localnet requires its actual GOOSEY_SOLANA_GENESIS_HASH; read it from your validator.");
   }
-  if (genesisHash === MAINNET_GENESIS_HASH || (cluster === "localnet" && genesisHash === DEVNET_GENESIS_HASH)) {
+  try { address(genesisHash); }
+  catch { throw new Error("Genesis hash must decode to exactly 32 bytes."); }
+  if (genesisHash === MAINNET_GENESIS_HASH || genesisHash === TESTNET_GENESIS_HASH || (cluster === "localnet" && genesisHash === DEVNET_GENESIS_HASH)) {
     throw new Error("The configured genesis hash does not identify the selected non-mainnet cluster.");
   }
   if (cluster === "devnet" && env.GOOSEY_SOLANA_GENESIS_HASH && env.GOOSEY_SOLANA_GENESIS_HASH !== DEVNET_GENESIS_HASH) {

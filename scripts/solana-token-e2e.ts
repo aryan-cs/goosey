@@ -3,9 +3,10 @@
  * are touched. Run with node --import tsx scripts/solana-token-e2e.ts.
  */
 import assert from "node:assert/strict";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "../src/lib/solana/runtime";
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  appendTransactionMessageInstructions,
+  address, appendTransactionMessageInstructions,
   blockhash,
   createTransactionMessage,
   generateKeyPairSigner,
@@ -48,10 +49,11 @@ async function main() {
   assert(!endpoint.username && !endpoint.password && !endpoint.hash && !endpoint.search, "Unexpected RPC URL credentials/fragment/query");
   const genesis = process.env.GOOSEY_SOLANA_GENESIS_HASH;
   assert(genesis && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(genesis), "Explicit genesis pin required");
+  address(genesis);
   assert(![
-    "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", // mainnet
-    "EtWTRABZaYq6iMfeYKouRu166VU2xqa1", // devnet
-    "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY", // testnet
+    MAINNET_GENESIS_HASH,
+    DEVNET_GENESIS_HASH,
+    TESTNET_GENESIS_HASH,
   ].includes(genesis), "Public cluster genesis is prohibited");
   let requestId = 0;
   async function rpc<T>(method: string, params: unknown[] = []): Promise<T> {

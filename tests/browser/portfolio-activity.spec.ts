@@ -82,8 +82,25 @@ test("private activity shows real NO prices, fills, pagination, recovery and emp
     expect(BigInt(fills[0].feeMilli)).toBeGreaterThan(0n);
 
     await page.goto("/portfolio");
-    await page.getByRole("link", { name: /orders.*fills/i }).click();
-    await expect(page).toHaveURL(/\/portfolio\/activity$/);
+    await expect(page.getByRole("heading", { name: "Your positions", exact: true })).toBeVisible();
+    const position = page.locator(".position-row");
+    await expect(position).toHaveCount(1);
+    await expect(position).toHaveAttribute("href", `/markets/${market.slug}?outcome=NO`);
+    await expect(position).toContainText("Open");
+    await mkdir("output/playwright/portfolio-activity", { recursive: true });
+    await page.screenshot({ path: `output/playwright/portfolio-activity/positions-${testInfo.project.name}.png`, fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const views = page.getByRole("navigation", { name: "Portfolio views" });
+    await views.getByRole("link", { name: "History", exact: true }).click();
+    await expect(page.getByRole("list", { name: "Trade history" })).toContainText("Bought 1 contract");
+    await views.getByRole("link", { name: "Orders", exact: true }).click();
+    await expect(page.getByLabel("Order status")).toHaveValue("open");
+    await expect(page.getByRole("region", { name: "Order history" }).getByRole("listitem")).toHaveCount(20);
+    await place(page.request, "NO", "12000");
+    await expect(page.getByRole("region", { name: "Order history" }).getByRole("listitem").first()).toContainText("12 feathers", { timeout: 25_000 });
+    await page.screenshot({ path: `output/playwright/portfolio-activity/open-orders-${testInfo.project.name}.png`, fullPage: false });
+    // Existing deep links keep the detailed orders/fills view.
+    await page.goto("/portfolio/activity");
     const orders = page.getByRole("region", { name: "Order history" });
     await expect(orders.getByRole("listitem")).toHaveCount(20);
     const cards = orders.getByRole("listitem");
@@ -93,7 +110,7 @@ test("private activity shows real NO prices, fills, pagination, recovery and emp
     await expect(fact(filled, "Filled / remaining")).toHaveText("1 / 0");
     await expect(fact(cards.filter({ hasText: "10 feathers" }).first(), "Limit price")).toHaveText("10 feathers");
     await orders.getByRole("button", { name: "Load more" }).click();
-    await expect(cards).toHaveCount(22);
+    await expect(cards).toHaveCount(23);
     await expect(orders.getByRole("button", { name: "Load more" })).toHaveCount(0);
 
     await mkdir("output/playwright/portfolio-activity", { recursive: true });
@@ -104,9 +121,11 @@ test("private activity shows real NO prices, fills, pagination, recovery and emp
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     expect((await refreshed).ok()).toBeTruthy();
     await expect(cards).toHaveCount(20);
-    await page.route("**/api/v1/fills?**", route => route.abort("failed"), { times: 1 });
+    await page.route("**/api/v1/fills?**", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: { message: "Temporary test failure" } }) }));
     await page.getByRole("button", { name: "Fills", exact: true }).click();
     const history = page.getByRole("region", { name: "Fill history" });
+    await expect(history.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    await page.unroute("**/api/v1/fills?**");
     await history.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(history.getByRole("listitem")).toHaveCount(1);
     const fill = history.getByRole("listitem");

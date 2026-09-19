@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { getAddressDecoder, getAddressEncoder, getProgramDerivedAddress, address } from "@solana/kit";
 import { beforeAll, describe, expect, it } from "vitest";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH } from "./runtime";
 import { decodeMarketTerms, encodeMarketTerms, hashMarketTerms, verifyMarketTerms,
   MARKET_TERMS_HASH_DOMAIN, MARKET_TERMS_MAX_BYTES, type MarketTerms } from "./market-terms";
 
@@ -31,6 +32,16 @@ const expected = async (value = fixture) => ({ digest: await hashMarketTerms(enc
   economics: value.economics, proposer: value.oracle.proposer, approver: value.oracle.approver });
 
 describe("canonical market terms (offline unit proof only)", () => {
+  it("accepts full devnet and rejects truncated pins/full mainnet for either cluster", async () => {
+    const value = fresh(); value.binding.cluster = "devnet"; value.binding.genesisHash = DEVNET_GENESIS_HASH;
+    await expect(verifyMarketTerms(encodeMarketTerms(value), await expected(value))).resolves.toEqual(value);
+    for (const cluster of ["localnet", "devnet"] as const) {
+      for (const genesisHash of [DEVNET_GENESIS_HASH.slice(0, 32), MAINNET_GENESIS_HASH.slice(0, 32), MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH]) {
+        const bad = fresh(); bad.binding = { ...bad.binding, cluster, genesisHash };
+        expect(() => encodeMarketTerms(bad)).toThrow();
+      }
+    }
+  });
   it("roundtrips and verifies all PDA/economic/reviewer bindings", async () => {
     const bytes = encodeMarketTerms(fixture);
     expect(decodeMarketTerms(bytes)).toEqual(fixture);
@@ -83,7 +94,7 @@ describe("canonical market terms (offline unit proof only)", () => {
     (v: MarketTerms) => { v.sources = []; },
     (v: MarketTerms) => { v.sources.push(v.sources[0]); },
     (v: MarketTerms) => { v.binding.program = "11111111111111111111111111111111"; },
-    (v: MarketTerms) => { v.binding.genesisHash = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"; },
+    (v: MarketTerms) => { v.binding.genesisHash = MAINNET_GENESIS_HASH; },
   ])("rejects invalid semantic boundary %#", change => { const v = fresh(); change(v); expect(() => encodeMarketTerms(v)).toThrow(); });
   it.each(["http://example.invalid/", "https://user:pass@example.invalid/", "https://example.invalid/#fragment", "https://EXAMPLE.invalid/", "https://example.invalid", "javascript:alert(1)"])("rejects source locator %s", uri => {
     const v = fresh(); v.sources[0].uri = uri; expect(() => encodeMarketTerms(v)).toThrow();

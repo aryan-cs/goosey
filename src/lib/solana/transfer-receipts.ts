@@ -1,7 +1,7 @@
 import { address, getBase64Encoder, getBase64EncodedWireTransaction, getPublicKeyFromAddress,
   getSignatureFromTransaction, getTransactionDecoder, signature, verifySignature } from "@solana/kit";
 import type { TransferSubmission } from "./submit-transfer";
-import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, type SolanaRuntime } from "./runtime";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH, type SolanaRuntime } from "./runtime";
 
 type Receipt = Omit<TransferSubmission, "status">;
 type StoragePort = Pick<Storage, "getItem" | "setItem" | "key" | "length">;
@@ -18,11 +18,13 @@ export function createTransferReceiptStore(storage: StoragePort, domain: Domain)
   address(context.programAddress); address(context.walletAddress);
   if (!["localnet", "devnet"].includes(context.cluster)
     || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(context.genesisHash)
-    || context.genesisHash === MAINNET_GENESIS_HASH
+    || context.genesisHash === MAINNET_GENESIS_HASH || context.genesisHash === TESTNET_GENESIS_HASH
     || (context.cluster === "devnet" && context.genesisHash !== DEVNET_GENESIS_HASH)
     || (context.cluster === "localnet" && context.genesisHash === DEVNET_GENESIS_HASH)) {
     throw new Error("Invalid receipt network domain");
   }
+  try { address(context.genesisHash); }
+  catch { throw new Error("Invalid receipt network domain: genesis must be 32 bytes"); }
   const prefix = `goosey:transfer:v1:${context.cluster}:${context.genesisHash}:${context.programAddress}:${context.walletAddress}:`;
   async function validate(receipt: Receipt) {
     signature(receipt.signature);

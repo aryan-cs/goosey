@@ -43,10 +43,15 @@ function History({ kind, filter }: { kind: "orders" | "fills"; filter: OrderFilt
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const cancelPending = useRef(false);
+  const editingOrders = useRef(new Set<string>());
+  const readPending = useRef(false);
+  const activeRead = useRef<AbortController | null>(null);
   const cancelAttempts = useRef(new Map<string, { version: number; key: string }>());
   const [request, setRequest] = useState<{ cursor: string | null; attempt: number }>({ cursor: null, attempt: 0 });
   useEffect(() => {
     const controller = new AbortController();
+    activeRead.current = controller;
+    readPending.current = true;
     const query = new URLSearchParams({ limit: "20" });
     if (request.cursor) query.set("cursor", request.cursor);
     if (kind === "orders" && filter !== "all") {
@@ -57,16 +62,34 @@ function History({ kind, filter }: { kind: "orders" | "fills"; filter: OrderFilt
         if (response.status === 401) { setRows([]); setSignedOut(true); return; }
         if (!response.ok) throw new Error("Please try again. Your activity has not changed.");
         const body = await response.json() as { orders?: Activity[]; fills?: Activity[]; nextCursor: string | null };
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || cancelPending.current || editingOrders.current.size) return;
         const incoming = body[kind];
         if (!Array.isArray(incoming)) throw new Error("Activity could not be read. Please try again.");
         setRows(previous => request.cursor ? [...new Map([...previous, ...incoming].map(row => [row.fillId ?? row.orderId, row])).values()] : incoming);
         setCursor(body.nextCursor);
         setError(null);
       }).catch(reason => { if (!controller.signal.aborted) setError(reason.message); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
+      .finally(() => { if (activeRead.current === controller) readPending.current = false; if (!controller.signal.aborted) setLoading(false); });
+    return () => { controller.abort(); if (activeRead.current === controller) readPending.current = false; };
   }, [kind, filter, request]);
+
+  useEffect(() => {
+    function refresh() {
+      if (document.visibilityState !== "visible" || !navigator.onLine || cancelPending.current || editingOrders.current.size || readPending.current || loading || error || request.cursor) return;
+      readPending.current = true;
+      setRequest(previous => ({ cursor: null, attempt: previous.attempt + 1 }));
+    }
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loading, error, request.cursor]);
 
   function load(next: string | null) {
     setLoading(true); setError(null);
@@ -75,6 +98,7 @@ function History({ kind, filter }: { kind: "orders" | "fills"; filter: OrderFilt
 
   async function cancel(row: Activity) {
     if (cancelPending.current || row.version === undefined) return;
+    activeRead.current?.abort();
     cancelPending.current = true;
     setCanceling(row.orderId); setCancelError(null); setCancelMessage(null);
     let attempt = cancelAttempts.current.get(row.orderId);
@@ -131,6 +155,7 @@ function History({ kind, filter }: { kind: "orders" | "fills"; filter: OrderFilt
           order={{ orderId: row.orderId, version: row.version, outcome: row.outcome, action: row.action, limitPriceMilli: row.limitPriceMilli, remainingQuantity: row.remainingQuantity }}
           payoutMilli={row.market.payoutMilli}
           disabled={canceling !== null || amending || loading}
+          onEditingChange={(editing) => { if (editing) { editingOrders.current.add(row.orderId); activeRead.current?.abort(); } else editingOrders.current.delete(row.orderId); }}
           onBusyChange={(value) => { cancelPending.current = value; setAmending(value); }}
           onComplete={amendmentComplete}
         />}
@@ -142,9 +167,9 @@ function History({ kind, filter }: { kind: "orders" | "fills"; filter: OrderFilt
   </section>;
 }
 
-export function PortfolioActivity() {
+export function PortfolioActivity({ ordersOnly = false }: { ordersOnly?: boolean }) {
   const [kind, setKind] = useState<"orders" | "fills">("orders");
   const [revision, setRevision] = useState(0);
-  const [filter, setFilter] = useState<OrderFilter>("all");
-  return <div className={styles.root}><div className={styles.toolbar}><div className={styles.tabs} aria-label="Activity type">{(["orders", "fills"] as const).map(value => <button key={value} type="button" aria-pressed={kind === value} onClick={() => setKind(value)}>{value === "orders" ? "Orders" : "Fills"}</button>)}</div>{kind === "orders" && <label className={styles.filter}>Order status<select value={filter} onChange={(event) => setFilter(event.target.value as OrderFilter)}><option value="all">All orders</option><option value="open">Open orders</option><option value="closed">Closed orders</option></select></label>}<button className="button button-secondary" onClick={() => setRevision(value => value + 1)}>Refresh</button></div><History key={`${kind}-${filter}-${revision}`} kind={kind} filter={filter} /></div>;
+  const [filter, setFilter] = useState<OrderFilter>(ordersOnly ? "open" : "all");
+  return <div className={styles.root}><div className={styles.toolbar}>{!ordersOnly && <div className={styles.tabs} aria-label="Activity type">{(["orders", "fills"] as const).map(value => <button key={value} type="button" aria-pressed={kind === value} onClick={() => setKind(value)}>{value === "orders" ? "Orders" : "Fills"}</button>)}</div>}{kind === "orders" && <label className={styles.filter}>Order status<select value={filter} onChange={(event) => setFilter(event.target.value as OrderFilter)}><option value="all">All orders</option><option value="open">Open orders</option><option value="closed">Closed orders</option></select></label>}{!ordersOnly && <button className="button button-secondary" onClick={() => setRevision(value => value + 1)}>Refresh</button>}</div><History key={`${kind}-${filter}-${revision}`} kind={kind} filter={filter} /></div>;
 }

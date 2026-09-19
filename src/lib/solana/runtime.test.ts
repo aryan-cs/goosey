@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, probeSolanaRuntime, resolveSolanaRuntime, type SolanaProbeClient } from "./runtime";
+import { address, getAddressEncoder } from "@solana/kit";
+import { DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH, probeSolanaRuntime, resolveSolanaRuntime, type SolanaProbeClient } from "./runtime";
 
 const env = {
   GOOSEY_SOLANA_CLUSTER: "localnet",
@@ -9,6 +10,17 @@ const env = {
 };
 
 describe("explicit non-mainnet Solana configuration", () => {
+  it("uses actual full 32-byte network pins and rejects shortened identifiers", () => {
+    expect(DEVNET_GENESIS_HASH).toBe("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG");
+    expect(MAINNET_GENESIS_HASH).toBe("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d");
+    expect(TESTNET_GENESIS_HASH).toBe("4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY");
+    for (const pin of [DEVNET_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET_GENESIS_HASH]) {
+      expect(getAddressEncoder().encode(address(pin))).toHaveLength(32);
+      expect(() => resolveSolanaRuntime({ ...env, GOOSEY_SOLANA_GENESIS_HASH: pin.slice(0, 32) })).toThrow();
+      expect(() => resolveSolanaRuntime({ ...env, GOOSEY_SOLANA_CLUSTER: "devnet", GOOSEY_SOLANA_RPC_URL: "https://api.devnet.solana.com",
+        GOOSEY_SOLANA_GENESIS_HASH: pin === DEVNET_GENESIS_HASH ? pin.slice(0, 32) : pin })).toThrow();
+    }
+  });
   it("requires configuration rather than silently selecting a network", () => {
     expect(() => resolveSolanaRuntime({})).toThrow("explicitly");
     expect(() => resolveSolanaRuntime({ ...env, GOOSEY_SOLANA_CLUSTER: "mainnet-beta" })).toThrow("unsupported");
@@ -19,12 +31,13 @@ describe("explicit non-mainnet Solana configuration", () => {
   it("accepts IPv6 loopback without selecting devnet", () => {
     expect(resolveSolanaRuntime({ ...env, GOOSEY_SOLANA_RPC_URL: "http://[::1]:8899" }).cluster).toBe("localnet");
   });
-  it.each([undefined, "", "bad", MAINNET_GENESIS_HASH, DEVNET_GENESIS_HASH])("rejects invalid local genesis %s", (hash) => {
+  it.each([undefined, "", "bad", MAINNET_GENESIS_HASH, DEVNET_GENESIS_HASH, TESTNET_GENESIS_HASH])("rejects invalid local genesis %s", (hash) => {
     expect(() => resolveSolanaRuntime({ ...env, GOOSEY_SOLANA_GENESIS_HASH: hash })).toThrow();
   });
   it("pins devnet and requires TLS", () => {
     const dev = { ...env, GOOSEY_SOLANA_CLUSTER: "devnet", GOOSEY_SOLANA_RPC_URL: "https://api.devnet.solana.com", GOOSEY_SOLANA_GENESIS_HASH: undefined };
     expect(resolveSolanaRuntime(dev).genesisHash).toBe(DEVNET_GENESIS_HASH);
+    expect(resolveSolanaRuntime({ ...dev, GOOSEY_SOLANA_GENESIS_HASH: DEVNET_GENESIS_HASH }).genesisHash).toBe(DEVNET_GENESIS_HASH);
     expect(() => resolveSolanaRuntime({ ...dev, GOOSEY_SOLANA_GENESIS_HASH: env.GOOSEY_SOLANA_GENESIS_HASH })).toThrow();
     expect(() => resolveSolanaRuntime({ ...dev, GOOSEY_SOLANA_RPC_URL: "http://api.devnet.solana.com" })).toThrow("HTTPS");
   });
