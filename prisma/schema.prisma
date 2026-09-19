@@ -8,50 +8,51 @@ datasource db {
 }
 
 model User {
-  id                     String                       @id @default(cuid())
-  email                  String                       @unique
-  username               String                       @unique
-  displayName            String
-  passwordHash           String
-  emailVerifiedAt        DateTime?
-  role                   String                       @default("USER")
-  status                 String                       @default("ACTIVE")
-  bio                    String                       @default("")
-  profilePublic          Boolean                      @default(false)
-  leaderboardVisible     Boolean                      @default(false)
+  id                      String                       @id @default(cuid())
+  email                   String                       @unique
+  username                String                       @unique
+  displayName             String
+  passwordHash            String
+  emailVerifiedAt         DateTime?
+  role                    String                       @default("USER")
+  status                  String                       @default("ACTIVE")
+  bio                     String                       @default("")
+  profilePublic           Boolean                      @default(false)
+  leaderboardVisible      Boolean                      @default(false)
   notificationPreferences String                       @default("{}")
-  balanceMilli           BigInt                       @default(0)
-  realizedPnlMilli       BigInt                       @default(0)
-  createdAt              DateTime                     @default(now())
-  updatedAt              DateTime                     @updatedAt
-  lastActiveAt           DateTime                     @default(now())
-  sessions               Session[]
-  accountTokens          AccountToken[]
-  createdMarkets         Market[]                     @relation("MarketCreator")
-  createdEvents          MarketEvent[]                @relation("MarketEventCreator")
-  eventCreationRequests  MarketEventCreationRequest[] @relation("MarketEventCreationActor")
-  positions              Position[]
-  trades                 Trade[]
-  journalEntries         JournalEntry[]               @relation("JournalActor")
-  comments               Comment[]
-  watchlist              WatchlistEntry[]
-  suggestions            MarketSuggestion[]           @relation("SuggestionAuthor")
-  reviewedSuggestions    MarketSuggestion[]           @relation("SuggestionReviewer")
-  resolutionProposals    MarketResolutionProposal[]   @relation("ResolutionProposer")
-  approvedResolutions    MarketResolutionProposal[]   @relation("ResolutionApprover")
-  approvedSettlementRuns MarketSettlementRun[]        @relation("SettlementRunApprover")
-  createdInvites         RegistrationInvite[]         @relation("InviteCreator")
-  inviteClaim            RegistrationInviteClaim?
-  auditLogs              AuditLog[]                   @relation("AuditActor")
-  notifications          Notification[]
-  reportsMade            CommentReport[]              @relation("ReportAuthor")
-  reportsResolved        CommentReport[]              @relation("ReportResolver")
-  marketOrders           MarketOrder[]
-  orderEvents            OrderEvent[]
-  orderCommands          OrderCommand[]
-  orderReservations      OrderReservation[]
-  solanaWalletChallenges SolanaWalletLinkChallenge[]
-  solanaWalletLinks      SolanaWalletLink[]
+  balanceMilli            BigInt                       @default(0)
+  realizedPnlMilli        BigInt                       @default(0)
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+  lastActiveAt            DateTime                     @default(now())
+  sessions                Session[]
+  accountTokens           AccountToken[]
+  createdMarkets          Market[]                     @relation("MarketCreator")
+  createdEvents           MarketEvent[]                @relation("MarketEventCreator")
+  eventCreationRequests   MarketEventCreationRequest[] @relation("MarketEventCreationActor")
+  positions               Position[]
+  trades                  Trade[]
+  journalEntries          JournalEntry[]               @relation("JournalActor")
+  comments                Comment[]
+  watchlist               WatchlistEntry[]
+  suggestions             MarketSuggestion[]           @relation("SuggestionAuthor")
+  reviewedSuggestions     MarketSuggestion[]           @relation("SuggestionReviewer")
+  resolutionProposals     MarketResolutionProposal[]   @relation("ResolutionProposer")
+  approvedResolutions     MarketResolutionProposal[]   @relation("ResolutionApprover")
+  approvedSettlementRuns  MarketSettlementRun[]        @relation("SettlementRunApprover")
+  createdInvites          RegistrationInvite[]         @relation("InviteCreator")
+  inviteClaim             RegistrationInviteClaim?
+  auditLogs               AuditLog[]                   @relation("AuditActor")
+  notifications           Notification[]
+  reportsMade             CommentReport[]              @relation("ReportAuthor")
+  reportsResolved         CommentReport[]              @relation("ReportResolver")
+  marketOrders            MarketOrder[]
+  orderEvents             OrderEvent[]
+  orderCommands           OrderCommand[]
+  orderReservations       OrderReservation[]
+  solanaWalletChallenges  SolanaWalletLinkChallenge[]
+  solanaWalletLinks       SolanaWalletLink[]
+  solanaCustodyIdentities SolanaCustodyIdentity[]
 
   @@index([role, status])
   @@index([balanceMilli])
@@ -87,24 +88,24 @@ model Session {
 }
 
 model SolanaWalletLinkChallenge {
-  id            String   @id
+  id            String    @id
   userId        String
   /// Immutable binding value; intentionally not a foreign key so session rotation cannot erase a consumed nonce tombstone.
   sessionId     String
-  purpose       String   @default("LINK_WALLET")
+  purpose       String    @default("LINK_WALLET")
   origin        String
   domain        String
   uri           String
   chainId       String
   genesisHash   String
   walletAddress String
-  nonceHash     String   @unique
+  nonceHash     String    @unique
   messageHash   String
   issuedAt      DateTime
   expiresAt     DateTime
   consumedAt    DateTime?
-  createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, sessionId, consumedAt])
   @@index([expiresAt])
@@ -123,6 +124,29 @@ model SolanaWalletLink {
 
   @@unique([chainId, genesisHash, walletAddress])
   @@unique([userId, chainId, genesisHash])
+  @@index([userId])
+}
+
+/// App-managed, non-exportable Solana identity for invisible localnet/devnet settlement.
+/// encryptedSecretKey is AES-256-GCM ciphertext; key material is never exposed by DTOs.
+model SolanaCustodyIdentity {
+  id                  String   @id @default(cuid())
+  userId              String
+  chainId             String
+  genesisHash         String
+  walletAddress       String
+  encryptionAlgorithm String   @default("AES-256-GCM")
+  keyVersion          Int      @default(1)
+  keyId               String
+  encryptedSecretKey  String
+  encryptionNonce     String
+  encryptionAuthTag   String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chainId, genesisHash], map: "SolanaCustody_user_domain_key")
+  @@unique([chainId, genesisHash, walletAddress], map: "SolanaCustody_domain_wallet_key")
   @@index([userId])
 }
 
@@ -155,6 +179,34 @@ model SolanaIngestionCursor {
   updatedAt              DateTime @updatedAt
 
   @@unique([genesisHash, programAddress], map: "SolanaCursor_domain_key")
+}
+
+/// Immutable operator evidence for an explicit localnet-only coverage boundary rotation.
+/// Database triggers reject UPDATE and DELETE so prior cursor state cannot be rewritten.
+model SolanaCoverageRotation {
+  id                             String   @id
+  genesisHash                    String
+  programAddress                 String
+  previousCoverageStartSignature String
+  previousCommittedHeadSignature String?
+  previousScanHeadSignature      String?
+  previousScanBeforeSignature    String?
+  previousBackfillComplete       Boolean
+  previousRevision               Int
+  previousCursorCreatedAt        DateTime
+  previousCursorUpdatedAt        DateTime
+  previousCursorSha256           String
+  newCoverageStartSignature      String
+  newBoundarySlot                BigInt
+  newBoundaryConfigurationSlot   BigInt
+  newBoundaryEventKey            String
+  newBoundaryWalletAddress       String
+  newBoundaryEnrollmentAddress   String
+  reason                         String
+  createdAt                      DateTime @default(now())
+
+  @@unique([genesisHash, programAddress, previousRevision], map: "SolanaRotation_domain_revision_key")
+  @@index([genesisHash, programAddress, createdAt], map: "SolanaRotation_domain_created_idx")
 }
 
 /// Application validates status: PENDING, BLOCKED, VERIFIED_SUCCESS, VERIFIED_FAILED, VERIFIED_NOT_INVOKED.
@@ -684,25 +736,25 @@ model MarketSettlementRun {
 }
 
 model WorkerState {
-  id                     String   @id
-  workerName             String   @unique
-  instanceId             String
-  status                 String   @default("STARTING")
-  startedAt              DateTime
-  lastHeartbeatAt        DateTime
-  lastCycleStartedAt     DateTime?
-  lastCycleSucceededAt   DateTime?
-  lastCycleFailedAt      DateTime?
-  stoppedAt              DateTime?
-  consecutiveFailures    Int      @default(0)
-  lastError              String?
-  cycleCount             BigInt   @default(0)
-  successCount           BigInt   @default(0)
-  failureCount           BigInt   @default(0)
-  closedMarketCount      BigInt   @default(0)
-  completedRunCount      BigInt   @default(0)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                   String    @id
+  workerName           String    @unique
+  instanceId           String
+  status               String    @default("STARTING")
+  startedAt            DateTime
+  lastHeartbeatAt      DateTime
+  lastCycleStartedAt   DateTime?
+  lastCycleSucceededAt DateTime?
+  lastCycleFailedAt    DateTime?
+  stoppedAt            DateTime?
+  consecutiveFailures  Int       @default(0)
+  lastError            String?
+  cycleCount           BigInt    @default(0)
+  successCount         BigInt    @default(0)
+  failureCount         BigInt    @default(0)
+  closedMarketCount    BigInt    @default(0)
+  completedRunCount    BigInt    @default(0)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([status, lastHeartbeatAt])
 }

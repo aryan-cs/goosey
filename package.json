@@ -12,6 +12,7 @@
     "chain:publish": "tsx scripts/solana-publish-market.ts",
     "db:upgrade:solana:sqlite": "tsx scripts/solana-upgrade-sqlite.ts",
     "chain:index": "tsx scripts/solana-indexer.ts",
+    "chain:index:rotate-coverage": "tsx scripts/solana-rotate-indexer-coverage.ts",
     "test:chain:tokens": "tsx scripts/solana-token-e2e.ts",
     "chain:build": "cargo-build-sbf --manifest-path chain/programs/goosey-exchange/Cargo.toml --arch v3",
     "test:chain:program": "tsx scripts/solana-program-e2e.ts",
