@@ -54,7 +54,7 @@ export function BadgeLink() {
     {loading ? <p>Loading your account…</p> : !user ? <><p>Sign in once to use your Goosey balance on your badge.</p><Link className="button button-primary" href={`/login?next=${next}`}>Sign in</Link><Link href={`/signup?next=${next}`}>Create an account</Link></> : <>
       <p>Signed in as <strong>@{user.username}</strong>.</p>
       {challenge && !linked ? <>
-        <p>Check that your badge shows <strong>{challenge.slice(0,8).toUpperCase()}</strong>.</p>
+        <p>Link the badge you scanned to your Goosey account.</p>
         <p>Linking lets this badge’s USB gateway read your balance and submit trades you confirm on the badge. Access expires in seven days and can be revoked here.</p>
         <button className="button button-primary" disabled={busy} onClick={() => void update("POST", { challenge })}>Link this badge</button>
       </> : !linked ? <p>Start the USB gateway and open the link it shows to connect a badge.</p> : null}

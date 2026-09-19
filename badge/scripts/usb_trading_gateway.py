@@ -18,6 +18,7 @@ from urllib.parse import urlparse, quote
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from badge_console import Console
 from cloud_snapshot import fetch_snapshot, mailbox_frame
+from pairing_qr import make_qr
 
 PRIVATE = '/littlefs/appdata/goosey_base/'
 HEX = re.compile(r'^[a-f0-9]{64}$')
@@ -153,7 +154,12 @@ def main():
             config={'origin':origin,'badge':identity,'token':secrets.token_hex(32),'trades':{}}
         atomic_json(path,config)
         gateway=Gateway(origin,config,path)
-        print('Open this link and approve the matching code on your badge:',flush=True)
+        # Public QR is guarded by a private per-device stamp; copied app assets cannot
+        # display someone else's pairing challenge on another badge.
+        console.put(PRIVATE+'qr_challenge.txt',b'')
+        console.put('/littlefs/apps/goosey_base/pairing.bin',make_qr(origin,gateway.challenge))
+        console.put(PRIVATE+'qr_challenge.txt',gateway.challenge.encode())
+        print('Scan the badge QR or open this link and approve the matching code:',flush=True)
         print(origin+'/badge#'+gateway.challenge,flush=True)
         account_at=market_at=0;last_response=None;last_auth=None
         while True:
