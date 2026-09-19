@@ -1,8 +1,13 @@
 # Canonical market terms v1
 
-This is an implemented offline codec/hash contract, **not an installed on-chain
-admission rule**. Rust, existing layouts and current clients are unchanged.
+The codec, client builders/decoder and Rust initialize/accept/seal handlers are
+implemented. The handlers are wired into the program, with 41 passing crate
+tests including eight terms tests. They are **not yet a mandatory on-chain
+admission rule**. Existing Market/Seats layouts and trading ABIs are unchanged.
 No fixture in the unit tests is a live market or source-availability claim.
+The integrated program built successfully for SBPFv3 with SHA-256
+`ec0a147a7b8474362dc9f65f7e140517149c0bf9bdb7e8a09814596864dd5d37`.
+This is compilation evidence, not validator execution or a web-backend cutover.
 
 The TypeScript implementation also includes unsigned initialize/accept/seal
 builders and a strict 240-byte account decoder. `readGooseyEscrow` can request
@@ -60,10 +65,10 @@ Obtain expectations from a coherent finalized chain snapshot—not this same
 untrusted document. No RPC, signature, eligibility, source truth or finality is
 proved by a successful codec call.
 
-## Proposed future on-chain ABI (not active)
+## Terms account ABI and pending admission integration
 
 Keep Market/Seats/vault layouts unchanged. Canonical PDA seeds:
-`[b"market_terms", market_pubkey_bytes]` under the exchange program. Proposed
+`[b"market_terms", market_pubkey_bytes]` under the exchange program.
 Anchor `MarketTerms` fixed layout (240 bytes including discriminator): version
 u8, market pubkey, creator pubkey, digest [u8;32], manifest_len u32 LE,
 proposer wallet/enrollment pubkeys, approver wallet/enrollment pubkeys,
@@ -73,7 +78,7 @@ before seal. No editor, reset, close/recreate or post-seal reviewer substitution
 Digest and length identify separately retained canonical bytes; this small account
 does not claim to store or make the entire manifest available on-chain.
 
-Proposed instructions:
+Implemented handlers (actual validator execution is still a verification gate):
 
 - `initialize_market_terms(version:u8,digest:[u8;32],manifest_len:u32)`:
   accounts creator signer/writable, config readonly, market readonly, seats
