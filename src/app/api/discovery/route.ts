@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import { apiErrorResponse, jsonResponse, prisma } from "@/lib/market-service";
 import { chronologicalPriceHistory } from "@/lib/price-history";
-import { yesProbabilityBps } from "@/lib/trading";
+import { loadMarketMarks } from "@/lib/market-marks";
+import { impliedProbabilityBps } from "@/lib/order-book-pricing";
+import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,10 @@ const marketSelect = {
   shortTitle: true,
   category: true,
   status: true,
+  pricingModel: true,
+  acceptingOrders: true,
+  resolution: true,
+  payoutMilli: true,
   featured: true,
   closesAt: true,
   yesShares: true,
@@ -23,6 +29,11 @@ const marketSelect = {
   commentCount: true,
   updatedAt: true,
   event: { select: { slug: true, shortTitle: true } },
+  orderFills: {
+    orderBy: { tradeSequence: "desc" as const },
+    take: 30,
+    select: { createdAt: true, canonicalYesPriceMilli: true },
+  },
   priceHistory: {
     orderBy: { createdAt: "desc" as const },
     take: 30,
@@ -30,55 +41,71 @@ const marketSelect = {
   },
 } as const;
 
-function marketCard<T extends { yesShares: number; noShares: number; liquidityParameter: number; updatedAt: Date; priceHistory: Array<{ createdAt: Date; yesProbabilityBps: number }> }>(market: T) {
-  const probability = yesProbabilityBps(market.yesShares, market.noShares, market.liquidityParameter);
-  const { priceHistory, ...card } = market;
+type Marks = Awaited<ReturnType<typeof loadMarketMarks>>;
+
+function marketCard<T extends { id: string; pricingModel: string; payoutMilli: bigint; updatedAt: Date; orderFills: Array<{ createdAt: Date; canonicalYesPriceMilli: bigint }>; priceHistory: Array<{ createdAt: Date; yesProbabilityBps: number }> }>(market: T, marks: Marks) {
+  const mark = marks.get(market.id)!;
+  const probability = mark.probabilityYesBps;
+  const { priceHistory, orderFills, ...card } = market;
   return {
     ...card,
     probabilityYesBps: probability,
-    priceHistory: chronologicalPriceHistory(
-      priceHistory.map((point) => ({ timestamp: point.createdAt, probabilityYesBps: point.yesProbabilityBps })),
-      probability,
-      market.updatedAt,
-    ),
+    probabilitySource: mark.source,
+    probabilityStale: mark.stale,
+    priceHistory: market.pricingModel === "ORDER_BOOK"
+      ? orderFills.slice().reverse().map((fill) => ({
+          timestamp: fill.createdAt,
+          probabilityYesBps: Number(impliedProbabilityBps(fill.canonicalYesPriceMilli, market.payoutMilli)),
+        }))
+      : probability === null ? [] : chronologicalPriceHistory(
+          priceHistory.map((point) => ({ timestamp: point.createdAt, probabilityYesBps: point.yesProbabilityBps })),
+          probability,
+          market.updatedAt,
+        ),
   };
 }
 
 export async function GET(): Promise<NextResponse> {
   try {
     const now = new Date();
-    const [featuredEvents, trending, newest, closingSoon, moverCandidates] = await Promise.all([
-      prisma.marketEvent.findMany({
-        where: { featured: true, endsAt: { gt: now }, markets: { some: { status: "OPEN", closesAt: { gt: now } } } },
-        orderBy: [{ startsAt: "asc" }, { id: "asc" }],
-        take: 6,
-        select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true, _count: { select: { markets: { where: { status: "OPEN", closesAt: { gt: now } } } } } },
-      }),
-      prisma.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ featured: "desc" }, { traderCount: "desc" }, { volumeMilli: "desc" }, { id: "asc" }], take: 12, select: marketSelect }),
-      prisma.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 12, select: marketSelect }),
-      prisma.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ closesAt: "asc" }, { id: "asc" }], take: 12, select: marketSelect }),
-      prisma.market.findMany({
-        where: { status: "OPEN", closesAt: { gt: now } },
-        take: 100,
-        select: marketSelect,
-      }),
-    ]);
-    const movers = moverCandidates
-      .map((market) => {
-        const current = market.priceHistory[0]?.yesProbabilityBps ?? yesProbabilityBps(market.yesShares, market.noShares, market.liquidityParameter);
-        const prior = market.priceHistory[1]?.yesProbabilityBps ?? current;
-        return { ...marketCard(market), changeBps: current - prior };
-      })
-      .sort((left, right) => Math.abs(right.changeBps) - Math.abs(left.changeBps) || left.title.localeCompare(right.title))
-      .slice(0, 12);
-    return jsonResponse({
-      generatedAt: now,
-      featuredEvents: featuredEvents.map((event) => ({ ...event, marketCount: event._count.markets, _count: undefined })),
-      trending: trending.map(marketCard),
-      newest: newest.map(marketCard),
-      closingSoon: closingSoon.map(marketCard),
-      movers,
-    }, { headers: { "Cache-Control": "public, max-age=10, stale-while-revalidate=30" } });
+    return await runSerializableTransaction(prisma, async (tx) => {
+      const [featuredEvents, trending, newest, closingSoon, moverCandidates] = await Promise.all([
+        tx.marketEvent.findMany({
+          where: { featured: true, endsAt: { gt: now }, markets: { some: { status: "OPEN", closesAt: { gt: now } } } },
+          orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+          take: 6,
+          select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true, _count: { select: { markets: { where: { status: "OPEN", closesAt: { gt: now } } } } } },
+        }),
+        tx.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ featured: "desc" }, { traderCount: "desc" }, { volumeMilli: "desc" }, { id: "asc" }], take: 12, select: marketSelect }),
+        tx.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 12, select: marketSelect }),
+        tx.market.findMany({ where: { status: "OPEN", closesAt: { gt: now } }, orderBy: [{ closesAt: "asc" }, { id: "asc" }], take: 12, select: marketSelect }),
+        tx.market.findMany({
+          where: { status: "OPEN", closesAt: { gt: now } },
+          take: 100,
+          select: marketSelect,
+        }),
+      ]);
+      const markets = [...new Map([...trending, ...newest, ...closingSoon, ...moverCandidates].map((market) => [market.id, market])).values()];
+      const marks = await loadMarketMarks(tx, markets, now);
+      const movers = moverCandidates
+        .flatMap((market) => {
+          const card = marketCard(market, marks);
+          const current = card.probabilityYesBps;
+          if (current === null) return [];
+          const prior = card.priceHistory.at(-2)?.probabilityYesBps ?? current;
+          return [{ ...card, changeBps: current - prior }];
+        })
+        .sort((left, right) => Math.abs(right.changeBps) - Math.abs(left.changeBps) || left.title.localeCompare(right.title))
+        .slice(0, 12);
+      return jsonResponse({
+        generatedAt: now,
+        featuredEvents: featuredEvents.map((event) => ({ ...event, marketCount: event._count.markets, _count: undefined })),
+        trending: trending.map((market) => marketCard(market, marks)),
+        newest: newest.map((market) => marketCard(market, marks)),
+        closingSoon: closingSoon.map((market) => marketCard(market, marks)),
+        movers,
+      }, { headers: { "Cache-Control": "public, max-age=10, stale-while-revalidate=30" } });
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }

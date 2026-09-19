@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ApiError, apiErrorResponse, jsonResponse, prisma } from "@/lib/market-service";
-import { yesProbabilityBps } from "@/lib/trading";
+import { loadMarketMarks } from "@/lib/market-marks";
+import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
 export const dynamic = "force-dynamic";
 
@@ -11,32 +12,43 @@ const querySchema = z.object({ from: instant.optional(), to: instant.optional(),
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    for (const key of request.nextUrl.searchParams.keys()) {
+      if (request.nextUrl.searchParams.getAll(key).length !== 1) {
+        throw new ApiError(400, "INVALID_REQUEST", "Calendar parameters cannot be repeated.");
+      }
+    }
     const query = querySchema.parse(Object.fromEntries(request.nextUrl.searchParams));
     const from = query.from ?? new Date();
     const to = query.to ?? new Date(from.getTime() + 7 * 24 * 60 * 60_000);
     if (to <= from || to.getTime() - from.getTime() > 31 * 24 * 60 * 60_000) {
       throw new ApiError(400, "INVALID_CALENDAR_RANGE", "Calendar ranges must be positive and no longer than 31 days.");
     }
-    const [markets, events] = await Promise.all([
-      prisma.market.findMany({
-        where: { status: { not: "DRAFT" }, closesAt: { gte: from, lt: to }, ...(query.category ? { category: query.category } : {}) },
-        orderBy: [{ closesAt: "asc" }, { id: "asc" }],
-        take: 500,
-        select: { id: true, slug: true, title: true, shortTitle: true, category: true, status: true, closesAt: true, resolvesAt: true, yesShares: true, noShares: true, liquidityParameter: true, event: { select: { slug: true, shortTitle: true } } },
-      }),
-      prisma.marketEvent.findMany({
-        where: { startsAt: { lt: to }, endsAt: { gte: from }, markets: { some: { status: { not: "DRAFT" } } }, ...(query.category ? { category: query.category } : {}) },
-        orderBy: [{ startsAt: "asc" }, { id: "asc" }],
-        take: 100,
-        select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true },
-      }),
-    ]);
-    return jsonResponse({
-      from,
-      to,
-      events,
-      markets: markets.map((market) => ({ ...market, probabilityYesBps: yesProbabilityBps(market.yesShares, market.noShares, market.liquidityParameter) })),
-    }, { headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=45" } });
+    return await runSerializableTransaction(prisma, async (tx) => {
+      const [markets, events] = await Promise.all([
+        tx.market.findMany({
+          where: { status: { not: "DRAFT" }, closesAt: { gte: from, lt: to }, ...(query.category ? { category: query.category } : {}) },
+          orderBy: [{ closesAt: "asc" }, { id: "asc" }],
+          take: 500,
+          select: { id: true, slug: true, title: true, shortTitle: true, category: true, status: true, pricingModel: true, acceptingOrders: true, resolution: true, payoutMilli: true, closesAt: true, resolvesAt: true, yesShares: true, noShares: true, liquidityParameter: true, event: { select: { slug: true, shortTitle: true } } },
+        }),
+        tx.marketEvent.findMany({
+          where: { startsAt: { lt: to }, endsAt: { gte: from }, markets: { some: { status: { not: "DRAFT" } } }, ...(query.category ? { category: query.category } : {}) },
+          orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+          take: 100,
+          select: { id: true, slug: true, title: true, shortTitle: true, description: true, category: true, startsAt: true, endsAt: true },
+        }),
+      ]);
+      const marks = await loadMarketMarks(tx, markets);
+      return jsonResponse({
+        from,
+        to,
+        events,
+        markets: markets.map((market) => {
+          const mark = marks.get(market.id)!;
+          return { ...market, probabilityYesBps: mark.probabilityYesBps, probabilitySource: mark.source, probabilityStale: mark.stale };
+        }),
+      }, { headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=45" } });
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }

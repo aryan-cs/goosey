@@ -4,7 +4,9 @@ import { z } from "zod";
 import { ApiError, apiErrorResponse, prisma } from "@/lib/market-service";
 import { chronologicalPriceHistory } from "@/lib/price-history";
 import { decodeCursor, encodeCursor, jsonSafe } from "@/lib/serializers";
-import { yesProbabilityBps } from "@/lib/trading";
+import { loadMarketMarks } from "@/lib/market-marks";
+import { impliedProbabilityBps } from "@/lib/order-book-pricing";
+import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +23,19 @@ const querySchema = z
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    for (const key of request.nextUrl.searchParams.keys()) {
+      if (request.nextUrl.searchParams.getAll(key).length !== 1) {
+        throw new ApiError(400, "INVALID_REQUEST", "Market parameters cannot be repeated.");
+      }
+    }
     const parsed = querySchema.parse(Object.fromEntries(request.nextUrl.searchParams));
     const cursor = decodeCursor(parsed.cursor);
     if (parsed.cursor && !cursor?.id) throw new ApiError(400, "INVALID_CURSOR", "Cursor is invalid.");
+    const now = new Date();
 
     const where: Prisma.MarketWhereInput = {
       status: parsed.status,
-      ...(parsed.status === "OPEN" ? { closesAt: { gt: new Date() } } : {}),
+      ...(parsed.status === "OPEN" ? { closesAt: { gt: now } } : {}),
       ...(parsed.category ? { category: parsed.category } : {}),
       ...(parsed.q
         ? {
@@ -48,65 +56,79 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             ? [{ volumeMilli: "desc" }, { id: "asc" }]
             : [{ featured: "desc" }, { traderCount: "desc" }, { volumeMilli: "desc" }, { id: "asc" }];
 
-    const rows = await prisma.market.findMany({
-      where,
-      orderBy,
-      take: parsed.limit + 1,
-      ...(cursor?.id ? { cursor: { id: cursor.id }, skip: 1 } : {}),
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        shortTitle: true,
-        description: true,
-        category: true,
-        status: true,
-        resolution: true,
-        featured: true,
-        color: true,
-        icon: true,
-        closesAt: true,
-        resolvesAt: true,
-        yesShares: true,
-        noShares: true,
-        liquidityParameter: true,
-        payoutMilli: true,
-        volumeMilli: true,
-        traderCount: true,
-        commentCount: true,
-        version: true,
-        updatedAt: true,
-        priceHistory: {
-          orderBy: { createdAt: "desc" },
-          take: 30,
-          select: { createdAt: true, yesProbabilityBps: true },
+    return await runSerializableTransaction(prisma, async (tx) => {
+      const rows = await tx.market.findMany({
+        where,
+        orderBy,
+        take: parsed.limit + 1,
+        ...(cursor?.id ? { cursor: { id: cursor.id }, skip: 1 } : {}),
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          shortTitle: true,
+          description: true,
+          category: true,
+          status: true,
+          pricingModel: true,
+          acceptingOrders: true,
+          resolution: true,
+          featured: true,
+          color: true,
+          icon: true,
+          closesAt: true,
+          resolvesAt: true,
+          yesShares: true,
+          noShares: true,
+          liquidityParameter: true,
+          payoutMilli: true,
+          volumeMilli: true,
+          traderCount: true,
+          commentCount: true,
+          version: true,
+          updatedAt: true,
+          orderFills: {
+            orderBy: { tradeSequence: "desc" },
+            take: 30,
+            select: { createdAt: true, canonicalYesPriceMilli: true },
+          },
+          priceHistory: {
+            orderBy: { createdAt: "desc" },
+            take: 30,
+            select: { createdAt: true, yesProbabilityBps: true },
+          },
         },
-      },
-    });
-    const hasMore = rows.length > parsed.limit;
-    const items = rows.slice(0, parsed.limit).map((market) => {
-      const probability = yesProbabilityBps(
-        market.yesShares,
-        market.noShares,
-        market.liquidityParameter,
+      });
+      const hasMore = rows.length > parsed.limit;
+      const marks = await loadMarketMarks(tx, rows.slice(0, parsed.limit), now);
+      const items = rows.slice(0, parsed.limit).map((market) => {
+        const mark = marks.get(market.id)!;
+        const probability = mark.probabilityYesBps;
+        const { priceHistory, orderFills, ...summary } = market;
+        return {
+          ...summary,
+          probabilityYesBps: probability,
+          probabilitySource: mark.source,
+          probabilityStale: mark.stale,
+          priceHistory: market.pricingModel === "ORDER_BOOK"
+            ? orderFills.slice().reverse().map((fill) => ({
+                timestamp: fill.createdAt,
+                probabilityYesBps: Number(impliedProbabilityBps(fill.canonicalYesPriceMilli, market.payoutMilli)),
+              }))
+            : probability === null ? [] : chronologicalPriceHistory(
+                priceHistory.map((point) => ({ timestamp: point.createdAt, probabilityYesBps: point.yesProbabilityBps })),
+                probability,
+                market.updatedAt,
+              ),
+        };
+      });
+      return NextResponse.json(
+        jsonSafe({
+          items,
+          nextCursor: hasMore ? encodeCursor({ id: items.at(-1)!.id }) : null,
+        }),
       );
-      const { priceHistory, ...summary } = market;
-      return {
-        ...summary,
-        probabilityYesBps: probability,
-        priceHistory: chronologicalPriceHistory(
-          priceHistory.map((point) => ({ timestamp: point.createdAt, probabilityYesBps: point.yesProbabilityBps })),
-          probability,
-          market.updatedAt,
-        ),
-      };
     });
-    return NextResponse.json(
-      jsonSafe({
-        items,
-        nextCursor: hasMore ? encodeCursor({ id: items.at(-1)!.id }) : null,
-      }),
-    );
   } catch (error) {
     return apiErrorResponse(error);
   }
