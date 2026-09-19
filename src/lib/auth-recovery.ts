@@ -243,6 +243,10 @@ export async function confirmPasswordResetWithDatabase(
     });
     if (updated.count !== 1) throw new InvalidAccountTokenError();
     await tx.session.deleteMany({ where: { userId: record.userId } });
+    await tx.accountToken.updateMany({
+      where: { userId: record.userId, purpose: "BADGE_DEVICE", consumedAt: null },
+      data: { consumedAt: now },
+    });
     await tx.auditLog.create({
       data: {
         actorUserId: record.userId,

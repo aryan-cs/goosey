@@ -164,6 +164,7 @@ export function isLmsrMarketOpen(
 export async function createTradeQuote(input: {
   userId: string;
   authRequest?: NextRequest;
+  authorize?: (tx: Prisma.TransactionClient) => Promise<void>;
   marketId: string;
   side: Side;
   action: Action;
@@ -173,6 +174,7 @@ export async function createTradeQuote(input: {
   await consumeRateLimit(prisma, `quote:${input.userId}`, 60, 60_000);
   return runSerializableTransaction(prisma, async (tx) => {
     if (input.authRequest) await assertMutationSession(tx, input.authRequest, input.userId);
+    if (input.authorize) await input.authorize(tx);
     await tx.tradeQuote.deleteMany({ where: { expiresAt: { lt: new Date() } } });
     const user = await tx.user.findUnique({ where: { id: input.userId }, select: { role: true, status: true, emailVerifiedAt: true } });
     if (!user || user.status !== "ACTIVE") throw new ApiError(403, "ACCOUNT_INACTIVE", "Account is not active.");
@@ -288,6 +290,7 @@ function positionMutation(
 export async function executeTrade(input: {
   userId: string;
   authRequest?: NextRequest;
+  authorize?: (tx: Prisma.TransactionClient) => Promise<void>;
   marketId: string;
   quoteId: string;
   marketVersion?: number;
@@ -315,6 +318,7 @@ export async function executeTrade(input: {
     prisma,
     async (tx) => {
       if (input.authRequest) await assertMutationSession(tx, input.authRequest, input.userId);
+      if (input.authorize) await input.authorize(tx);
       const existingRequest = await tx.idempotencyRequest.findUnique({
         where: { userId_route_key: { userId: input.userId, route, key: input.idempotencyKey } },
       });

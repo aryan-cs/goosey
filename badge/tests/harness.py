@@ -7,7 +7,7 @@ output = Path(os.environ.get('BADGE_OUTPUT', root / 'badge/dist'))
 code = (output / 'main.lua').read_text()
 lua = LuaRuntime(unpack_returned_tuples=True)
 lua.execute('''
-widgets={}; saved={}; writes=0; clock=0; leds={}; fail_save=false; mailbox=nil
+widgets={}; files={}; saved={}; writes=0; clock=0; leds={}; fail_save=false; mailbox=nil
 local methods={}
 function methods:set_pos(x,y) assert(x%1==0 and y%1==0); self.x=x; self.y=y end
 function methods:set_size(w,h) assert(w%1==0 and h%1==0); self.w=w; self.h=h end
@@ -24,7 +24,8 @@ local function widget(kind)
   widgets[#widgets+1]=w; return w
 end
 badge={
- fs={read=function() return mailbox end},
+ fs={read=function(path) if path=="appdata/market_snapshot.txt" then return mailbox end return files[path] end,
+ write=function(path,value) if not fail_save then files[path]=value end end},
  ui={box=function(_,w,h) local t=widget("box");t.w=w;t.h=h;return t end,
  label=function(_,s) local t=widget("label");t.text=s;return t end,
  line=function(_,p) local t=widget("line");t.points=p;return t end},
@@ -42,6 +43,7 @@ function visible()
 end
 function fresh() widgets={};on_enter({}) end
 ''')
+lua.execute("package.path=" + repr(str(output / "?.lua")) + "..';'..package.path")
 lua.execute(code)
 g=lua.globals()
 def press(*keys):

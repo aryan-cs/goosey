@@ -1,5 +1,6 @@
 local cloud=__CLOUD__
 __CLOUD_READER__
+local trade
 local C={bg=0xc5d99b,panel=0x91ad65,text=0x1c3524,muted=0x4f6b3e}
 local page,selected,side,setting="list",1,1,1
 local labels,header,status,stamp,mark,chart,track,dot,midline
@@ -37,9 +38,10 @@ end
 local function render()
   for i=1,#labels do labels[i]:set_text("") end
   mark:hidden(true);chart:hidden(true);track:hidden(true);dot:hidden(true);midline:hidden(true)
-  header:set_text(({list="Markets",detail="Market",settings="Settings",link="Account"})[page])
+  header:set_text(({list="Markets",detail="Market",settings="Settings",link="Trade"})[page])
   status:set_text(lastRx and badge.sys.ms()-lastRx<45000 and "USB updated" or "Saved snapshot")
   stamp:set_text(cloud.capturedAt)
+  if trade then local user,balance=trade.header();status:set_text(user);stamp:set_text(balance) end
   local m=cloud.markets[selected]
   if page=="list" then
     local first=math.floor((selected-1)/3)*3+1
@@ -75,14 +77,12 @@ local function render()
     text(9,string.format("YES  %.0f%%",m.probability),18,212,132,16)
     text(10,string.format("NO  %.0f%%",100-m.probability),176,212,132,16)
   elseif page=="settings" then
-    local options={"Return to markets","Portfolio on website","Account on website"}
+    local options={"Return to markets","Trade selected market","Linked account"}
     for i=1,3 do text(i,options[i],18,54+(i-1)*46,285,18) end
     focus(7,47+(setting-1)*46,307,39)
-    text(5,"USB market sync / website trading",10,211,300,14)
+    text(5,"USB account and market sync",10,211,300,14)
   else
-    text(1,"getgoosey.vercel.app",10,45,300,20)
-    text(2,wrap("Sign in on your phone to trade and see your balance.",34),10,85,300,16)
-    text(3,wrap("Badge account linking is not connected yet. Only public prices sync over USB.",35),10,150,300,14)
+    trade.draw(text,wrap)
   end
 end
 function on_enter(root)
@@ -90,15 +90,17 @@ function on_enter(root)
   page,selected,side,setting="list",1,1,1
   lastRead,lastRx,lastGC=0,nil,0
   refresh(true)
+  badge.sys.gc_step()
+  trade=require("trade");trade.init()
   local function box(x,y,w,h,color)
     local b=badge.ui.box(root,w,h);b:set_pos(x,y)
     b:style({bg_color=color,border_width=0,pad_all=0,radius=0});return b
   end
   box(0,0,320,240,C.bg);box(10,34,300,1,C.panel)
   mark=box(7,47,307,58,C.panel);mark:style({border_width=1,border_color=C.text,radius=3})
-  header=badge.ui.label(root,"");header:set_pos(10,7);header:set_size(138,22)
+  header=badge.ui.label(root,"");header:set_pos(10,7);header:set_size(110,22)
   header:style({text_font=18,text_color=C.text})
-  status=badge.ui.label(root,"");status:set_pos(149,1);status:set_size(161,17)
+  status=badge.ui.label(root,"");status:set_pos(120,1);status:set_size(190,17)
   status:style({text_font=14,text_color=C.text,text_align="right"})
   stamp=badge.ui.label(root,"");stamp:set_pos(149,16);stamp:set_size(161,17)
   stamp:style({text_font=14,text_color=C.text,text_align="right"})
@@ -112,17 +114,19 @@ end
 function on_button(button,kind)
   if not initialized or kind~=badge.input.KIND.PRESSED then return end
   local B=badge.input.BUTTON
-  if button==B.START then page=page=="settings" and "list" or "settings";setting=1
+  if page=="link" then
+    if trade.button(button) then page="detail" end
+  elseif button==B.START then page=page=="settings" and "list" or "settings";setting=1
   elseif page=="list" then
     if button==B.UP then selected=(selected-2)%#cloud.markets+1
     elseif button==B.DOWN then selected=selected%#cloud.markets+1
     elseif button==B.A then page="detail";side=1 else return end
   elseif page=="detail" then
     if button==B.LEFT then side=1 elseif button==B.RIGHT then side=2
-    elseif button==B.B then page="list" elseif button==B.A then page="link" else return end
+    elseif button==B.B then page="list" elseif button==B.A then page="link";local m=cloud.markets[selected];trade.open(m.slug,side==1 and "YES" or "NO",m.title) else return end
   elseif page=="settings" then
     if button==B.UP then setting=(setting-2)%3+1 elseif button==B.DOWN then setting=setting%3+1
-    elseif button==B.B then page="list" elseif button==B.A then page=setting==1 and "list" or "link" else return end
+    elseif button==B.B then page="list" elseif button==B.A then page=setting==1 and "list" or "link";if page=="link" then local m=cloud.markets[selected];trade.open(m.slug,side==1 and "YES" or "NO",m.title);if setting==3 then trade.phase="account" end end else return end
   elseif button==B.B then page="list" else return end
   render()
 end
@@ -133,6 +137,7 @@ function on_tick()
   if now-lastRead>=2000 then
     lastRead=now
     local changed=refresh(false)
+    if trade.tick() then changed=true end
     if lastRx and now-lastRx>=45000 then lastRx=nil;changed=true end
     if changed then render() end
   end
