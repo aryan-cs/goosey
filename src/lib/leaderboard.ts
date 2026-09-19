@@ -50,7 +50,7 @@ export async function getLeaderboardRows(limit = 50) {
 }
 
 /** One consistent valuation snapshot, ranked before slicing across pages. */
-export async function getLeaderboardPage(requestedPage = 1, pageSize = 50) {
+export async function getLeaderboardPage(requestedPage = 1, pageSize = 50, viewerId?: string) {
   if (!Number.isSafeInteger(requestedPage) || requestedPage < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
     throw new RangeError("Invalid leaderboard page.");
   }
@@ -58,5 +58,5 @@ export async function getLeaderboardPage(requestedPage = 1, pageSize = 50) {
   const total = ranked.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(requestedPage, totalPages);
-  return { page, pageSize, total, totalPages, rows: ranked.slice((page - 1) * pageSize, page * pageSize) };
+  return { page, pageSize, total, totalPages, viewer: viewerId ? ranked.find(row => row.userId === viewerId) ?? null : null, rows: ranked.slice((page - 1) * pageSize, page * pageSize) };
 }

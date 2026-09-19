@@ -63,7 +63,7 @@ class LinkTests(unittest.TestCase):
 
 class AppSmokeTests(unittest.TestCase):
  def test_lifecycle_for_both_apps(self):
-  for role in ['client','relay']:
+  for role in ['client','relay','minimal']:
    lua=LuaRuntime(unpack_returned_tuples=True)
    lua.execute("""
    files={};sent={};clock=0
@@ -85,7 +85,13 @@ class AppSmokeTests(unittest.TestCase):
    lua.globals().require=lambda name:module if name=='link' else None
    lua.execute((ROOT/'wireless'/role/'main.lua').read_text())
    lua.globals().on_enter('root');lua.globals().on_tick()
-   if role=='client':
+   if role=='minimal':
+    self.assertEqual(lua.globals().sent[1],'GOOSEY-PING')
+    lua.globals().receive('peer',-40,'GOOSEY-PING')
+    self.assertEqual(lua.globals().sent[2],'GOOSEY-PONG')
+    lua.globals().receive('peer',-40,'GOOSEY-PONG')
+    self.assertEqual(lua.globals().screen,'Wireless reply received')
+   elif role=='client':
     lua.globals().on_button(1,1);lua.globals().on_tick()
     self.assertEqual(len(lua.globals().sent),1)
    else:

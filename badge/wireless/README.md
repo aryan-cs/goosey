@@ -71,3 +71,33 @@ probe. Neither are wireless quotes, confirmation, trade receipt recovery or
 multi-client scheduling. Those must be integrated and tested before calling this
 an end-to-end wireless Goosey release. Existing USB app and production data remain
 unchanged.
+
+## Physical firmware findings (2026-09-19)
+
+Tested the connected ESP32-C3 badge on `v0.1.2-392-gd3089c4`, compiled
+2026-09-17, ELF prefix `4c3d3960c`. These results supersede assumptions that
+passing host tests means the radio proof fits the badge:
+
+- Existing client: BLE initialization started with 48,432 free bytes and timed
+  out waiting for host sync, leaving only 1,104 bytes.
+- Clean reboot, minimal enable + one label: BLE ready, about 2,924 free bytes.
+- Clean startup, tiny periodic PING/PONG app in `minimal/`: BLE ready, then the
+  first advertisement failed with `BLE_ERR_MEM_CAPACITY`, native malloc failure
+  and `ble_gap_ext_adv_set_data: 519`. About 1,448 bytes remained.
+- The console `radio` diagnostic itself crashed this build with a load access
+  fault when invoked before radio initialization. Avoid repeating it; use heap
+  and normal startup logs. The device rebooted and preserved its installed apps.
+
+`minimal/` is a reproducer, not a release or authentication transport. Both badges
+can run it for a public radio-only exchange if their firmware has sufficient RAM.
+It sends a fixed PING every five seconds while open, responds to fixed PING with
+PONG and shows a received PONG. A label saying enabled is NOT proof of delivery:
+check native logs and actual reception on a second physical badge. No backend,
+account, secret, order or fabricated market data is involved.
+
+A full wireless Goosey release is blocked on native memory headroom on this
+specific firmware, in addition to the documented secure-channel and multi-user
+work. Increasing the Lua quota does not add RAM. Compare the second device's
+firmware and reproduce there before choosing an organizer firmware update or a
+native integration. No stock firmware was replaced. The existing USB Goosey app
+and private session remain intact.
