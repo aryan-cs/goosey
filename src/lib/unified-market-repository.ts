@@ -151,6 +151,24 @@ export function assertFinalizedSolanaProjectionCoverage(
   return { revision: status.coverage.revision, updatedAt };
 }
 
+/** Public display reads may use a finalized RPC snapshot while the immutable
+ * event tape is explicitly incomplete. This never authorizes a mutation and
+ * never treats partial history as complete. */
+export function resolveSolanaDisplayCoverage(
+  status: Awaited<ReturnType<typeof readPublicSolanaIndexerStatus>>,
+  now: Date,
+) {
+  try {
+    return { ...assertFinalizedSolanaProjectionCoverage(status, now), complete: true as const };
+  } catch (error) {
+    const updatedAt = status.coverage.updatedAt === null ? null : new Date(status.coverage.updatedAt);
+    if ((status.coverage.status !== "partial" && status.coverage.status !== "bounded_complete")
+      || status.coverage.revision === null || !updatedAt || !Number.isFinite(updatedAt.getTime())
+      || updatedAt.getTime() > now.getTime()) throw error;
+    return { revision: status.coverage.revision, updatedAt, complete: false as const };
+  }
+}
+
 function resolutionPrice(outcome: number | null, payoutMilli: bigint): bigint | null {
   if (outcome === null) return null;
   if (outcome === 0) return payoutMilli;
@@ -185,10 +203,12 @@ export async function loadFinalizedSolanaMarketProjection(
   signal.throwIfAborted();
   const health = await runSerializableTransaction(client,
     tx => readPublicSolanaIndexerStatus(runtime, { client: tx, now }));
-  const coverage = assertFinalizedSolanaProjectionCoverage(health, now);
+  const coverage = resolveSolanaDisplayCoverage(health, now);
   const marketId = parseChainMarketId(item.chain.marketId);
   const tape = await readSolanaTradeTape(runtime, marketId, { limit: 50 }, client);
-  if (tape.coverage.status !== "bounded_complete" || tape.coverage.revision !== coverage.revision
+  if ((coverage.complete && tape.coverage.status !== "bounded_complete")
+    || (!coverage.complete && tape.coverage.status !== "partial" && tape.coverage.status !== "bounded_complete")
+    || tape.coverage.revision !== coverage.revision
     || !(tape.coverage.updatedAt instanceof Date)
     || tape.coverage.updatedAt.getTime() !== coverage.updatedAt.getTime()) {
     throw new ApiError(503, "SOLANA_PROJECTION_UNAVAILABLE",
@@ -249,7 +269,7 @@ export async function loadFinalizedSolanaMarketProjection(
     traderCount: snapshot.orderBook.seatReserves.filter(seat => seat.everTraded).length,
     recentTrades: tape.items.map(trade => ({ signature: trade.signature, slot: trade.slot,
       logIndex: trade.logIndex, quantity: trade.quantity, yesPriceMilli: trade.yesPrice })),
-    recentTradeWindowComplete: tape.nextCursor === null,
+    recentTradeWindowComplete: coverage.complete && tape.nextCursor === null,
   };
 }
 
@@ -335,7 +355,8 @@ export function createUnifiedMarketReadRepository(options: UnifiedMarketReposito
           return { kind: "DATABASE" as const, market: database, mark };
         }
         const solana = await tx.market.findUnique({ where: { slug }, select: solanaCatalogSelect });
-        if (!solana || solana.executionBackend !== "SOLANA" || solana.status !== "OPEN") return null;
+        if (!solana || solana.executionBackend !== "SOLANA" || solana.collateralAccountId !== null
+          || solana.status !== "OPEN" || solana.acceptingOrders || !solana.solanaBinding) return null;
         return { kind: "SOLANA" as const, market: solana };
       });
       if (!selected) return null;

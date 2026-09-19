@@ -216,7 +216,7 @@ export function Footer() {
       <div className="footer-inner">
         <div className="footer-brand">
           <GooseMark className="brand-mark" />
-          <div><strong>Goosey</strong><p>Play-money prediction markets with settlement infrastructure built on Solana.</p></div>
+          <div><strong>Goosey</strong><p>Predict Hack the North with play-money feathers.</p></div>
         </div>
         <div className="footer-links">
           <Link href="/markets"><ChartNoAxesColumnIncreasing size={16} /> Markets</Link>
@@ -226,7 +226,7 @@ export function Footer() {
           <Link href="/settings/privacy">Privacy</Link>
         </div>
         <div className="footer-bottom">
-          <p className="legal">Play-money only. Your Goosey account never holds or sends cryptocurrency, and feathers cannot be redeemed for cash. Goosey is an independent community project and is not an official University of Waterloo or Hack the North service.</p>
+          <p className="legal">Play-money only. Feathers cannot be redeemed for cash. Goosey is an independent community project and is not an official University of Waterloo or Hack the North service.</p>
           <a
             className="footer-issue-link"
             href="https://forms.gle/uJVou9X5Gfppeuk67"

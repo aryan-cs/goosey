@@ -62,10 +62,13 @@ describe("legacy server page SQL query boundaries (mocked reads)", () => {
   it("combines browse filters without allowing query text to replace the backend", async () => {
     await MarketsPage({ searchParams: Promise.resolve({ q: "goose", category: "Campus", sort: "closing" }) });
     expect(state.market.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
-      ...boundary, status: "OPEN", closesAt: { gt: expect.any(Date) }, category: "Campus",
-      OR: [{ title: { contains: "goose" } }, { description: { contains: "goose" } }],
-    }, orderBy: { closesAt: "asc" } }));
-    expect(state.marks).toHaveBeenCalledWith(state, []);
+      ...boundary, status: "OPEN", category: "Campus",
+      OR: [{ title: { contains: "goose" } }, { shortTitle: { contains: "goose" } }, { description: { contains: "goose" } }],
+    } }));
+    expect(state.market.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
+      executionBackend: "SOLANA", collateralAccountId: null, status: "OPEN", category: "Campus",
+    }) }));
+    expect(state.marks).toHaveBeenCalledWith(state, [], expect.any(Date));
   });
   it.each(["USER", "ADMIN"])("legacy detail excludes chain slugs even for %s", async (role) => {
     state.serverUser.mockResolvedValue({ id: "viewer", role });

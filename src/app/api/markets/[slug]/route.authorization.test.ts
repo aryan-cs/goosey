@@ -9,7 +9,10 @@ vi.mock("@/lib/market-service", () => {
   return {
     ApiError,
     apiErrorResponse: (error: { status?: number; code?: string }) => Response.json({ error: { code: error.code } }, { status: error.status ?? 500, headers: { "Cache-Control": "private, no-store" } }),
-    prisma: { $transaction: (callback: (tx: unknown) => unknown) => callback({ market: { findUnique: mocks.market } }) },
+    prisma: {
+      $transaction: (callback: (tx: unknown) => unknown) => callback({ market: { findUnique: mocks.market } }),
+      user: { findUnique: vi.fn() },
+    },
   };
 });
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: mocks.user }));
@@ -23,7 +26,7 @@ const request = () => new NextRequest("http://localhost:8080/api/markets/private
 describe("market detail draft authorization and cache isolation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.market.mockResolvedValue({ id: "draft-market", slug: "private-draft", status: "DRAFT", title: "Private draft title", pricingModel: "ORDER_BOOK", payoutMilli: 100_000n, priceHistory: [], orderFills: [], collateralAccountId: "internal-account", createdById: "admin" });
+    mocks.market.mockResolvedValue({ id: "draft-market", slug: "private-draft", status: "DRAFT", executionBackend: "DATABASE", title: "Private draft title", pricingModel: "ORDER_BOOK", payoutMilli: 100_000n, priceHistory: [], orderFills: [], collateralAccountId: "internal-account", createdById: "admin" });
     mocks.marks.mockResolvedValue(new Map([["draft-market", { probabilityYesBps: null, source: "NO_LIQUIDITY", stale: false }]]));
   });
 

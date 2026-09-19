@@ -24,6 +24,8 @@ import { ShareButton } from "@/components/share-button";
 import { getServerUser } from "@/lib/server-session";
 import { OrderBookPanel } from "@/components/order-book-panel";
 import { MarketResolutionNote } from "@/components/market-resolution-note";
+import { UnifiedSolanaMarketDetail } from "@/components/unified-solana-market-detail";
+import { unifiedMarketReadRepository } from "@/lib/unified-market-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,19 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
   const initialOutcome = query.outcome === "NO" ? "NO" : "YES";
   const initialAction = query.action === "SELL" ? "SELL" : "BUY";
   const user = await getServerUser();
+  const backend = await db.market.findUnique({ where: { slug }, select: { id: true, executionBackend: true } });
+  if (backend?.executionBackend === "SOLANA") {
+    const unified = await unifiedMarketReadRepository.findBySlug(slug);
+    if (!unified || unified.executionBackend !== "SOLANA") notFound();
+    return <UnifiedSolanaMarketDetail
+      market={unified}
+      watchAction={<WatchlistButton marketId={backend.id} signedIn={Boolean(user)} icon={<Bookmark />} />}
+      shareAction={<ShareButton title={unified.editorial.title} icon={<Share2 />} />}
+      discussion={focusedComment && !focusedComment.success
+        ? <section className="comments-section" aria-labelledby="discussion-heading"><h2 id="discussion-heading">Linked discussion unavailable</h2><p>This comment link is invalid.</p><Link href={`/markets/${encodeURIComponent(unified.editorial.slug)}#discussion-heading`}>View all discussion</Link></section>
+        : <CommentSection marketId={backend.id} marketSlug={unified.editorial.slug} focusedCommentId={focusedCommentId} currentUserId={user?.id} endpoint={`/api/markets/${unified.editorial.slug}/comments`} />}
+    />;
+  }
   const data = await runSerializableTransaction(db, async (tx) => {
     const market = await tx.market.findUnique({
     where: { slug, AND: [DATABASE_MARKET_FILTER] },

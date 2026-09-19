@@ -8,6 +8,7 @@ import type { TransactionRunner } from "@/lib/serializable-transaction";
 import {
   assertFinalizedSolanaProjectionCoverage,
   createUnifiedMarketReadRepository,
+  resolveSolanaDisplayCoverage,
   type UnifiedSolanaMarketFinancial,
 } from "./unified-market-repository";
 
@@ -275,5 +276,18 @@ describe("finalized projection coverage gate", () => {
     expect(() => assertFinalizedSolanaProjectionCoverage(value as never, now)).toThrow(
       expect.objectContaining({ code: "SOLANA_PROJECTION_UNAVAILABLE" }),
     );
+  });
+
+  it("allows an honest finalized display with explicitly incomplete activity history", () => {
+    const partial = {
+      ...healthy,
+      worker: { ...healthy.worker, state: "stopped" },
+      coverage: { ...healthy.coverage, status: "partial" },
+    };
+    expect(resolveSolanaDisplayCoverage(partial as never, now)).toEqual({
+      revision: 4,
+      updatedAt: new Date(now.getTime() - 1_000),
+      complete: false,
+    });
   });
 });

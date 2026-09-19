@@ -1,39 +1,100 @@
-import Link from "next/link";
-import styles from "./markets.module.css";
+import { formatDistanceStrict } from "date-fns";
 import { Filter, Search } from "lucide-react";
-import { db } from "@/lib/db";
-import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
-import { marketSummary } from "@/lib/view-models";
-import { MarketListRow } from "@/components/market";
+import Link from "next/link";
+
+import { MarketListRow, type MarketSummary } from "@/components/market";
 import { EmptyState } from "@/components/states";
 import { MARKET_CATEGORIES } from "@/lib/market-categories";
-import { loadMarketMarks } from "@/lib/market-marks";
-import { runSerializableTransaction } from "@/lib/serializable-transaction";
 import { MARKET_SUGGESTION_FORM_URL } from "@/lib/market-suggestion";
+import {
+  unifiedMarketReadRepository,
+  type UnifiedMarket,
+  type UnifiedSolanaMarket,
+} from "@/lib/unified-market-repository";
+
+import styles from "./markets.module.css";
 
 export const dynamic = "force-dynamic";
+
+type BrowseSort = "trending" | "new" | "closing";
+
+function closesAt(market: UnifiedMarket) {
+  return market.executionBackend === "SOLANA"
+    ? market.financial.closesAt
+    : market.financial.market.closesAt;
+}
+
+function closeLabel(date: Date, now: Date) {
+  return date > now
+    ? `in ${formatDistanceStrict(date, now)}`
+    : `${formatDistanceStrict(date, now)} ago`;
+}
+
+function compareIds(left: UnifiedMarket, right: UnifiedMarket) {
+  return left.editorial.id.localeCompare(right.editorial.id);
+}
+
+/** Solana projections deliberately do not expose an all-time volume or a
+ * timestamped price series. Keep those fields unavailable rather than deriving
+ * them from a potentially incomplete recent trade window. */
+export function solanaMarketSummary(market: UnifiedSolanaMarket, now = new Date()): MarketSummary {
+  const yesBps = market.financial.probabilityYesBps;
+  return {
+    id: market.editorial.id,
+    slug: market.editorial.slug,
+    title: market.editorial.title,
+    category: market.editorial.category,
+    closesAt: closeLabel(market.financial.closesAt, now),
+    status: market.financial.status.toLowerCase() as MarketSummary["status"],
+    volume: "—",
+    outcomes: [
+      { id: "YES", label: "Yes", probability: yesBps === null ? null : yesBps / 10_000 },
+      { id: "NO", label: "No", probability: yesBps === null ? null : (10_000 - yesBps) / 10_000 },
+    ],
+    sparkline: [],
+  };
+}
+
+export function sortBrowseMarkets(markets: readonly UnifiedMarket[], sort: BrowseSort) {
+  return [...markets].sort((left, right) => {
+    if (sort === "new") {
+      return right.editorial.createdAt.getTime() - left.editorial.createdAt.getTime() || compareIds(left, right);
+    }
+    if (sort === "closing") {
+      return closesAt(left).getTime() - closesAt(right).getTime() || compareIds(left, right);
+    }
+
+    // The finalized Solana projection has no all-time-volume field. Preserve
+    // the established database volume ordering and place unknown-volume cards
+    // after it instead of manufacturing a comparable value from recent trades.
+    if (left.executionBackend !== right.executionBackend) return left.executionBackend === "DATABASE" ? -1 : 1;
+    if (left.executionBackend === "DATABASE" && right.executionBackend === "DATABASE") {
+      const leftVolume = left.financial.market.volumeMilli;
+      const rightVolume = right.financial.market.volumeMilli;
+      if (leftVolume !== rightVolume) return leftVolume > rightVolume ? -1 : 1;
+    }
+    return compareIds(left, right);
+  });
+}
 
 export default async function MarketsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const query = typeof params.q === "string" ? params.q.trim() : "";
   const category = typeof params.category === "string" && params.category !== "Trending" ? params.category : undefined;
-  const sort = typeof params.sort === "string" ? params.sort : "trending";
-  const markets = await runSerializableTransaction(db, async (tx) => {
-    const rows = await tx.market.findMany({
-    where: {
-      ...DATABASE_MARKET_FILTER,
-      ...(category ? { category } : {}),
-      ...(query ? { OR: [{ title: { contains: query } }, { description: { contains: query } }] } : {}),
-      status: "OPEN",
-      closesAt: { gt: new Date() },
-    },
-    include: { priceHistory: { orderBy: { createdAt: "desc" }, take: 30 }, orderFills: { orderBy: { tradeSequence: "desc" }, take: 30, select: { canonicalYesPriceMilli: true, createdAt: true } } },
-    orderBy: sort === "new" ? { createdAt: "desc" } : sort === "closing" ? { closesAt: "asc" } : { volumeMilli: "desc" },
-    take: 100,
-    });
-    const marks = await loadMarketMarks(tx, rows);
-    return rows.map((market) => ({ ...market, mark: marks.get(market.id)! }));
+  const sort: BrowseSort = params.sort === "new" || params.sort === "closing" ? params.sort : "trending";
+  const now = new Date();
+  const loaded = await unifiedMarketReadRepository.list({
+    status: "OPEN",
+    category,
+    q: query || undefined,
+    sort: sort === "new" ? "newest" : sort === "closing" ? "closing" : "featured",
+    limit: 100,
   });
+  const markets = sortBrowseMarkets(loaded.filter((market) =>
+    market.executionBackend === "SOLANA" || market.financial.market.closesAt > now), sort);
+  const summaries = markets.map((market) => market.executionBackend === "DATABASE"
+    ? market.financial.summary
+    : solanaMarketSummary(market, now));
 
   return <div className="page-shell browse-page">
     <div className="browse-layout">
@@ -48,8 +109,8 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
         <button className="button button-primary">Show markets</button>
       </form>
       <section className="browse-results" aria-label="Market results">
-        <div className="results-heading"><strong>{markets.length} market{markets.length === 1 ? "" : "s"}</strong>{category && <span className="filter-chip">{category}</span>}</div>
-        {markets.length ? <div className="market-list browse-list">{markets.map((market) => <MarketListRow market={marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, market.mark.probabilityYesBps)} key={market.id} />)}</div> : <EmptyState title="No markets found" description="Try a broader search or another category." />}
+        <div className="results-heading"><strong>{summaries.length} market{summaries.length === 1 ? "" : "s"}</strong>{category && <span className="filter-chip">{category}</span>}</div>
+        {summaries.length ? <div className="market-list browse-list">{summaries.map((market) => <MarketListRow market={market} key={market.id} />)}</div> : <EmptyState title="No markets found" description="Try a broader search or another category." />}
       </section>
     </div>
   </div>;
