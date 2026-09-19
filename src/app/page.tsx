@@ -1,4 +1,4 @@
-import { TradeActivityDetails } from "@/components/trade-activity-details";
+import { HomeActivity } from "@/components/home-activity";
 import Link from "next/link";
 import styles from "./home-layout.module.css";
 import { MarketCanvasToolbar } from "@/components/market-canvas-toolbar";
@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/states";
 import { getLeaderboardRows } from "@/lib/leaderboard";
 import { loadMarketMarks } from "@/lib/market-marks";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
+import { loadPublicTradeActivity } from "@/lib/public-trade-activity";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,7 @@ export default async function HomePage() {
       return rows.map((market) => ({ ...market, mark: marks.get(market.id)! }));
     }),
     getLeaderboardRows(8),
-    db.trade.findMany({
-      include: { user: { select: { username: true, profilePublic: true } }, market: { select: { slug: true, shortTitle: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 3,
-    }),
+    runSerializableTransaction(db, (tx) => loadPublicTradeActivity(tx, 3)),
   ]);
   const summaries = markets.map((market) => marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, market.mark.probabilityYesBps));
   const featured = summaries.slice(0, 3);
@@ -72,7 +69,7 @@ export default async function HomePage() {
               </section>
               <section className="sidebar-panel" aria-labelledby="activity-preview">
                 <div className="section-heading compact"><h2 id="activity-preview"><Users /> Live activity</h2></div>
-                {recentTrades.length ? <ul className="activity-list">{recentTrades.map((trade) => <li key={trade.id}><span className={`activity-dot ${trade.side.toLowerCase()}`} /><p><strong>{trade.user.profilePublic ? `@${trade.user.username}` : "Someone"}</strong> <TradeActivityDetails trade={trade} /> on <Link href={`/markets/${trade.market.slug}`}>{trade.market.shortTitle}</Link></p></li>)}</ul> : <p className="muted-copy">New trades will show up here.</p>}
+                {recentTrades.length ? <HomeActivity trades={recentTrades} /> : <p className="muted-copy">New trades will show up here.</p>}
               </section>
             </aside>
 
