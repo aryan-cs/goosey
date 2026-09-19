@@ -82,3 +82,43 @@ export async function buildPlaceOrderInstruction(input: ChainOrderInput) {
     meta(addresses.locator), meta(addresses.vault), meta(book.book, true)], data: await data("place_order", ...fields) } satisfies Instruction;
   return { ...addresses, ...book, seats, instruction };
 }
+
+export type ChainOrderTarget = { orderId: bigint; side: "BID" | "ASK"; heapIndex: number };
+function targetBytes(target: ChainOrderTarget) {
+  const id = integer(target.orderId, "order ID", U64_MAX, 1n);
+  if ((target.side !== "BID" && target.side !== "ASK") || !Number.isInteger(target.heapIndex)
+    || target.heapIndex < 0 || target.heapIndex >= 1024) throw new Error("Invalid order target");
+  const result = new Uint8Array(11); result.set(id); result[8] = target.side === "BID" ? 0 : 1;
+  new DataView(result.buffer).setUint16(9, target.heapIndex, true);
+  return result;
+}
+
+/** Owner-authorized removal. Heap position is only a hint: the program checks
+ * order ID, actual owner and nonce before releasing any reserve. A stale hint
+ * must be refreshed, never silently redirected to another resting order. */
+export async function buildCancelOrderInstruction(input: {
+  programAddress: Address; marketId: bigint; wallet: TransactionSigner; seats: Address;
+  target: ChainOrderTarget; expectedNonce: bigint;
+}) {
+  const programAddress = address(input.programAddress), wallet = signer(input.wallet, false), seats = address(input.seats);
+  const target = targetBytes(input.target), nonce = integer(input.expectedNonce, "nonce", U64_MAX - 1n);
+  const addresses = await deriveGooseySeatAddresses({ programAddress, marketId: input.marketId, wallet: wallet.address });
+  const book = await deriveGooseyBookAddress(programAddress, addresses.market);
+  const instruction = { programAddress, accounts: [wallet, meta(addresses.config), meta(addresses.market), meta(seats, true),
+    meta(addresses.locator), meta(book.book, true)], data: await data("cancel_order", target, nonce) } satisfies Instruction;
+  return { ...addresses, ...book, seats, instruction };
+}
+
+/** Permissionless bounded cleanup. The chain Clock must prove expiry or market
+ * close; no client time or owner's nonce is accepted. Transaction fee payer
+ * signing remains necessary even though this instruction has no signer account. */
+export async function buildCleanupOrderInstruction(input: {
+  programAddress: Address; marketId: bigint; seats: Address; target: ChainOrderTarget;
+}) {
+  const programAddress = address(input.programAddress), seats = address(input.seats), target = targetBytes(input.target);
+  const addresses = await deriveGooseyMarketAddresses({ programAddress, marketId: input.marketId });
+  const book = await deriveGooseyBookAddress(programAddress, addresses.market);
+  const instruction = { programAddress, accounts: [meta(addresses.config), meta(addresses.market), meta(seats, true), meta(book.book, true)],
+    data: await data("cleanup_order", target) } satisfies Instruction;
+  return { ...addresses, ...book, seats, instruction };
+}

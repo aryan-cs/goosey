@@ -8,10 +8,12 @@ pub mod arithmetic;
 pub mod escrow;
 pub mod matching;
 pub mod exchange;
+pub mod cancellation;
 #[path = "book-bootstrap.rs"]
 pub mod book_bootstrap;
 use escrow::*;
 use exchange::*;
+use cancellation::*;
 use book_bootstrap::*;
 
 declare_id!("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
@@ -37,6 +39,14 @@ pub mod goosey_exchange {
 
     pub fn place_order(ctx: Context<PlaceOrder>, args: PlaceOrderArgs) -> Result<()> {
         exchange::place_order(ctx, args)
+    }
+
+    pub fn cancel_order(ctx: Context<CancelOrder>, args: CancelOrderArgs) -> Result<()> {
+        cancellation::cancel_order(ctx, args)
+    }
+
+    pub fn cleanup_order(ctx: Context<CleanupOrder>, target: OrderTarget) -> Result<()> {
+        cancellation::cleanup_order(ctx, target)
     }
 
     pub fn create_market(ctx: Context<CreateMarket>, market_id: u64, payout_milli: u64, fee_bps: u16, closes_at: i64, resolves_at: i64) -> Result<()> {

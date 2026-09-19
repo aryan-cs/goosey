@@ -419,7 +419,7 @@ pub mod runtime {
                     | if order.expires_at.is_some() { 8 } else { 0 },
                 next_free: NONE, padding: [0; 4] }
         }
-        fn order(self) -> Result<Order, Error> {
+        pub(crate) fn order(self) -> Result<Order, Error> {
             if self.flags & 1 == 0 || self.flags & !15 != 0 { return Err(Error::InvalidStorage); }
             Ok(Order { id: self.id, owner: self.owner, limit_price: self.limit_price,
                 remaining: self.remaining, sequence: self.sequence, chain_notional: self.chain_notional,
@@ -427,6 +427,8 @@ pub mod runtime {
                 intent: Intent { outcome: if self.flags & 2 != 0 { Outcome::No } else { Outcome::Yes },
                     action: if self.flags & 4 != 0 { Action::Sell } else { Action::Buy } } })
         }
+        /// Canonical freelist record for bounded cancellation; no layout copy.
+        pub(crate) fn freed(next_free: u16) -> Self { Self { next_free, ..Self::default() } }
     }
 
     /// Slices must borrow validated, aligned, program-owned account storage.
@@ -474,6 +476,12 @@ pub mod runtime {
         pub fn next_sequence(&self) -> u64 { self.header.next_sequence }
         pub fn len(&self) -> usize { usize::from(self.header.active_len) }
         pub fn is_empty(&self) -> bool { self.len() == 0 }
+
+        /// Internal adapters share the same typed storage ABI. The exclusive
+        /// borrow prevents a placement plan from being committed concurrently.
+        pub(crate) fn parts_mut(&mut self) -> (&mut Header, &mut [Slot], &mut [u16], &mut [u16]) {
+            (self.header, self.slots, self.bids, self.asks)
+        }
 
         /// Read-only planner. All potential failures happen before writes.
         #[inline(never)]

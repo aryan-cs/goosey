@@ -3,6 +3,7 @@ import { address, getAddressEncoder, type Address } from "@solana/kit";
 import { TOKEN_PROGRAM_ADDRESS, ASSOCIATED_TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import { describe, expect, it, vi } from "vitest";
 import { deriveGooseySeatAddresses } from "./escrow-client";
+import { deriveGooseyBookAddress } from "./exchange-client";
 import { readGooseyEscrow, verifyGooseyEscrowSnapshot, type EscrowReadRpc, type EscrowSnapshotAccounts } from "./escrow-read";
 
 const runtime = { cluster: "localnet" as const, rpcUrl: "http://127.0.0.1:18999",
@@ -197,6 +198,49 @@ describe("finalized read orchestration (mocked RPC, not chain proof)", () => {
       [[f.p.config, f.p.featherMint, f.p.market, seatsAddress, f.p.locator, f.p.vault, f.p.walletTokens],
         { encoding: "base64", commitment: "finalized", minContextSlot: 11n }],
     ]);
+  });
+  async function setupBook() {
+    const f = await setup(), book = Buffer.alloc(69_720);
+    book.set(Buffer.from("GOOSEYB1")); key(book, 8, f.p.market);
+    book.writeBigUInt64LE(1n, 40); book.writeBigUInt64LE(100_000n, 48);
+    book.writeBigUInt64LE(1n, 64); book.writeUInt16LE(1024, 72); book.writeUInt16LE(250, 82);
+    for (let i = 0; i < 1024; i++) book.writeUInt16LE(i === 1023 ? 65535 : i + 1, 88 + i * 64 + 58);
+    book.fill(255, 65_624);
+    const configure = (value: unknown = f.account(book), slot = 12n) => f.batch.mockReset()
+      .mockResolvedValueOnce({ context: { slot: 11n }, value: [f.account(f.market)] })
+      .mockResolvedValueOnce({ context: { slot }, value: [...Object.values(f.accounts()), value] });
+    configure(); return { ...f, book, configure };
+  }
+  it("verifies full order reserves and token backing from the same finalized batch", async () => {
+    const f = await setupBook();
+    const result = await readGooseyEscrow(runtime, input, { rpc: f.rpc, includeOrderBook: true });
+    expect(result).toMatchObject({ finalizedSlot: 12n, vaultSurplus: 3n,
+      orderBook: { orders: [], reservesReconciled: true, revision: 0n, nextSequence: 1n }, exchangeVerified: false });
+    const { book } = await deriveGooseyBookAddress(runtime.programAddress, f.p.market);
+    expect(f.getMultipleAccounts).toHaveBeenCalledTimes(2);
+    expect(f.getMultipleAccounts.mock.calls[1]).toEqual([
+      [f.p.config, f.p.featherMint, f.p.market, seatsAddress, f.p.locator, f.p.vault, f.p.walletTokens, book],
+      { encoding: "base64", commitment: "finalized", minContextSlot: 11n },
+    ]);
+  });
+  it("fails closed on missing, draft, foreign or malformed book instead of returning aggregate-only success", async () => {
+    for (const mode of ["missing", "draft", "foreign", "executable", "encoding", "stale"] as const) {
+      const f = await setupBook();
+      if (mode === "draft") f.book.set(Buffer.from("GOOSEYI1"));
+      let account: unknown = f.account(f.book);
+      if (mode === "missing") account = null;
+      if (mode === "foreign") account = f.account(f.book, TOKEN_PROGRAM_ADDRESS);
+      if (mode === "executable") account = { ...f.account(f.book), executable: true };
+      if (mode === "encoding") account = { ...f.account(f.book), data: ["invalid", "base64"] };
+      f.configure(account, mode === "stale" ? 10n : 12n);
+      await expect(readGooseyEscrow(runtime, input, { rpc: f.rpc, includeOrderBook: true })).rejects.toThrow();
+    }
+  });
+  it("rejects economically balanced but unsupported reserved cash", async () => {
+    const f = await setupBook();
+    f.seats.writeBigUInt64LE(amount - 1n, 112); f.seats.writeBigUInt64LE(1n, 120);
+    f.configure();
+    await expect(readGooseyEscrow(runtime, input, { rpc: f.rpc, includeOrderBook: true })).rejects.toThrow("full book");
   });
   it("rejects stale snapshot context, short batches, and changed Seats binding", async () => {
     for (const mode of ["stale", "short", "binding"] as const) {

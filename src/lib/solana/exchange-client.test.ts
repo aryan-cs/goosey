@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { address, createNoopSigner, getSignersFromInstruction } from "@solana/kit";
 import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";
 import { describe, expect, it } from "vitest";
-import { buildBookSetupInstruction, buildPlaceOrderInstruction, type ChainOrderInput } from "./exchange-client";
+import { buildBookSetupInstruction, buildPlaceOrderInstruction, buildCancelOrderInstruction, buildCleanupOrderInstruction,
+  type ChainOrderInput, type ChainOrderTarget } from "./exchange-client";
 
 // Offline ABI fixtures only; deployment and economic execution are tested by the RPC suite.
 const programAddress = address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
@@ -14,6 +15,36 @@ const input = (): ChainOrderInput => ({ programAddress, marketId: 90071992547409
 const discriminator = (name: string) => createHash("sha256").update(`global:${name}`).digest().subarray(0, 8);
 
 describe("exchange instruction ABI", () => {
+  it("encodes owner cancel with exact nonce, target and signer", async () => {
+    const plan = await buildCancelOrderInstruction({ ...input(), target: { orderId: 9007199254740997n, side: "ASK", heapIndex: 1023 } });
+    const bytes = Buffer.from(plan.instruction.data);
+    expect(bytes.length).toBe(27); expect(bytes.subarray(0, 8)).toEqual(discriminator("cancel_order"));
+    expect(bytes.readBigUInt64LE(8)).toBe(9007199254740997n); expect(bytes[16]).toBe(1);
+    expect(bytes.readUInt16LE(17)).toBe(1023); expect(bytes.readBigUInt64LE(19)).toBe(input().expectedNonce);
+    expect(plan.instruction.accounts.map(m => [m.address, m.role])).toEqual([
+      [wallet.address, 2], [plan.config, 0], [plan.market, 0], [seats, 1], [plan.locator, 0], [plan.book, 1],
+    ]);
+    expect(getSignersFromInstruction(plan.instruction)).toEqual([wallet]);
+  });
+  it("encodes permissionless cleanup without client time, owner nonce or spend authority", async () => {
+    const plan = await buildCleanupOrderInstruction({ ...input(), target: { orderId: 1n, side: "BID", heapIndex: 0 } });
+    const bytes = Buffer.from(plan.instruction.data);
+    expect(bytes.length).toBe(19); expect(bytes.subarray(0, 8)).toEqual(discriminator("cleanup_order"));
+    expect(bytes.readBigUInt64LE(8)).toBe(1n); expect([...bytes.subarray(16)]).toEqual([0, 0, 0]);
+    expect(plan.instruction.accounts.map(m => [m.address, m.role])).toEqual([
+      [plan.config, 0], [plan.market, 0], [seats, 1], [plan.book, 1],
+    ]);
+    expect(getSignersFromInstruction(plan.instruction)).toEqual([]);
+  });
+  it("rejects invalid cancellation targets and exhausted owner nonces", async () => {
+    const target = { orderId: 1n, side: "BID" as const, heapIndex: 0 };
+    const patches = [{ orderId: 0n }, { orderId: 1n << 64n }, { orderId: 1 }, { side: "YES" },
+      { heapIndex: -1 }, { heapIndex: 1024 }, { heapIndex: NaN }, { heapIndex: 0.5 }];
+    for (const patch of patches) for (const build of [buildCancelOrderInstruction, buildCleanupOrderInstruction]) {
+      await expect(build({ ...input(), target: { ...target, ...patch } as ChainOrderTarget })).rejects.toThrow();
+    }
+    await expect(buildCancelOrderInstruction({ ...input(), target, expectedNonce: (1n << 64n) - 1n })).rejects.toThrow("nonce");
+  });
   it.each(["create", "grow", "finalize"] as const)("encodes %s book setup and canonical account privileges", async kind => {
     const plan = await buildBookSetupInstruction({ programAddress, marketId: input().marketId, admin: wallet,
       step: kind === "grow" ? { kind, expectedSize: 61440 } : { kind } });

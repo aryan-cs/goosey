@@ -4,6 +4,8 @@ import { AccountState, getTokenDecoder, TOKEN_PROGRAM_ADDRESS } from "@solana-pr
 import { deriveGooseySeatAddresses } from "./escrow-client";
 import { verifyGooseyConfiguration } from "./configuration";
 import { probeSolanaRuntime, type SolanaRuntime } from "./runtime";
+import { deriveGooseyBookAddress } from "./exchange-client";
+import { readCanonicalOrderBook, GOOSEY_ORDER_BOOK_BYTES } from "./order-book-read";
 
 export type EscrowReadRpc = Pick<ReturnType<typeof createSolanaRpc>, "getGenesisHash" | "getAccountInfo" | "getMultipleAccounts">;
 export type EscrowReadInput = { marketId: bigint; wallet: Address };
@@ -130,9 +132,11 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
  * RPC trust remains necessary; this does not attest the deployed program binary.
  */
 export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowReadInput, options: {
-  rpc?: EscrowReadRpc; signal?: AbortSignal;
+  rpc?: EscrowReadRpc; signal?: AbortSignal; includeOrderBook?: boolean;
 } = {}) {
   input = { ...input };
+  runtime = { ...runtime };
+  const includeOrderBook = options.includeOrderBook === true;
   const signal = options.signal ?? AbortSignal.timeout(8_000);
   signal.throwIfAborted();
   const rpc = options.rpc ?? createSolanaRpc(runtime.rpcUrl);
@@ -144,16 +148,25 @@ export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowRead
     throw new Error("Invalid escrow discovery snapshot");
   }
   const market = await marketData(discovery.value[0], runtime.programAddress);
+  const bookAddress = includeOrderBook ? (await deriveGooseyBookAddress(runtime.programAddress, addresses.market)).book : null;
   const response = await rpc.getMultipleAccounts([addresses.config, addresses.featherMint, addresses.market, market.seats,
-    addresses.locator, addresses.vault, addresses.walletTokens], {
+    addresses.locator, addresses.vault, addresses.walletTokens, ...(bookAddress ? [bookAddress] : [])], {
     encoding: "base64", commitment: "finalized", minContextSlot: discovery.context.slot,
   }).send({ abortSignal: signal });
-  if (typeof response.context.slot !== "bigint" || response.context.slot < discovery.context.slot || response.value.length !== 7) {
+  if (typeof response.context.slot !== "bigint" || response.context.slot < discovery.context.slot || response.value.length !== (includeOrderBook ? 8 : 7)) {
     throw new Error("Invalid escrow final snapshot");
   }
   const [config, mint, marketAccount, seats, locator, vault, walletTokens] = response.value;
   const snapshot = await verifyGooseyEscrowSnapshot(runtime, input, market.seats,
     { config, mint, market: marketAccount, seats, locator, vault, walletTokens });
+  // Use the very same finalized batch as token backing/issuance verification.
+  // A later standalone book read could silently combine incompatible reserves.
+  const orderBook = bookAddress ? await readCanonicalOrderBook({ programAddress: runtime.programAddress, marketId: input.marketId,
+    market: { address: addresses.market, owner: runtime.programAddress, executable: false, data: raw(marketAccount, runtime.programAddress, 195) },
+    seats: { address: market.seats, owner: runtime.programAddress, executable: false, data: raw(seats, runtime.programAddress, 32_816) },
+    book: { address: bookAddress, owner: runtime.programAddress, executable: false,
+      data: raw(response.value[7], runtime.programAddress, GOOSEY_ORDER_BOOK_BYTES) },
+  }) : null;
   signal.throwIfAborted();
-  return { ...snapshot, finalizedSlot: response.context.slot };
+  return { ...snapshot, orderBook, finalizedSlot: response.context.slot };
 }
