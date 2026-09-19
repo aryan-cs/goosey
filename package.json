@@ -6,6 +6,7 @@
   "description": "A University of Waterloo and Hack the North themed prediction market powered by feathers.",
   "scripts": {
     "chain:preflight": "tsx scripts/solana-preflight.ts",
+    "chain:localnet": "tsx scripts/solana-localnet.ts",
     "chain:index": "tsx scripts/solana-indexer.ts",
     "test:chain:tokens": "tsx scripts/solana-token-e2e.ts",
     "chain:build": "cargo-build-sbf --manifest-path chain/programs/goosey-exchange/Cargo.toml --arch v3",
