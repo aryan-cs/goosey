@@ -77,3 +77,50 @@ receipt, or incomplete reviewer acceptance stops safely for inspection.
 
 The final log includes only the local cluster/RPC, public market ID, catalog slug
 and participant public address. It never includes any private key or signed wire.
+
+## Internal-custody retained-localnet matched trade
+
+After the primary bootstrap reports `goosey_local_market_ready`, a separate
+resumable companion can create the first real match:
+
+```sh
+NODE_ENV=development \
+DATABASE_PROVIDER=sqlite \
+DATABASE_URL='file:./dev.db' \
+node --import tsx scripts/solana-local-matched-trade-bootstrap.ts run \
+  --operator-directory /Users/aryan/.local/share/goosey-localnet-20260919 \
+  --market-state /Users/aryan/.local/share/goosey-local-market-bootstrap-20260919 \
+  --trade-state /Users/aryan/.local/share/goosey-local-matched-trade-20260919
+```
+
+This is internal custody/relayer infrastructure, not user wallet UX. Users do
+not connect Phantom or handle these keys. The private operator owns the two
+local-only participant signers and is responsible for access control, signing
+policy, and secure key storage. Nothing in this companion should be exposed as
+a browser wallet flow.
+
+The primary bootstrap reserves issuance capacity for five equal grants: its four
+creator/reviewer/participant actors and one additional matched-trade
+counterparty. The companion reuses the primary dedicated participant as maker
+and creates an independent, dedicated counterparty. It then performs actual
+chain operations in order:
+
+1. Funds only the counterparty's local transaction fees from the retained-localnet admin.
+2. Enrolls the counterparty through the configured enrollment authority and claims its real SPL feathers.
+3. Registers a real market seat and deposits three quarters of its claimed feathers into the market vault.
+4. Freezes a one-time trade plan only after proving both dedicated seats and the full order book are pristine.
+5. Signs and submits a post-only 10-contract YES bid at 400, then a complementary IOC NO buy at 600.
+6. Verifies both finalized seats received their respective positions and that the matched orders no longer rest.
+
+Every transaction's exact signed wire bytes are written with exclusive creation
+before submission. On rerun, the companion reconstructs and verifies the exact
+message and signature; observed state without its retained receipt is a hard
+failure. It never resets or starts a validator, switches cluster, recreates an
+ambiguous transaction, or inserts balances, orders, fills, or positions into
+SQL. Keep the trade-state directory private and never delete a receipt to force
+progress.
+
+The companion deliberately does not update the shared indexer cursor. Indexing
+is a separate backend concern whose retained-history coverage policy must be
+resolved independently; a successful custody proof must not silently redefine
+or overstate that coverage.

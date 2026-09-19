@@ -121,6 +121,12 @@ export function localBootstrapIndexingMode(
     : "retain-existing-boundary" as const;
 }
 
+export function localBootstrapReviewerAcceptanceComplete(acceptanceBits: number, reviewerBit: 1 | 2) {
+  assert(Number.isInteger(acceptanceBits) && acceptanceBits >= 0 && acceptanceBits <= 3,
+    "Invalid reviewer acceptance bits");
+  return (acceptanceBits & reviewerBit) === reviewerBit;
+}
+
 export function validateLocalBootstrapState(value: unknown): BootstrapState {
   assert(value && typeof value === "object" && !Array.isArray(value));
   const state = value as Record<string, unknown>;
@@ -278,17 +284,17 @@ async function command(args: string[], env: NodeJS.ProcessEnv, signal: AbortSign
   await exec(process.execPath, args, { cwd: root, env, signal, timeout: 600_000, maxBuffer: 1024 * 1024 });
 }
 
-async function finalizedEnrollmentState(input: { runtime: SolanaRuntime; wallet: string; identityDigestHex: string;
-  allowance: string; expiresAt: string; signal: AbortSignal }) {
+export function validateFinalizedEnrollmentAccounts(input: {
+  programAddress: string; wallet: string; identityDigestHex: string; allowance: string; expiresAt: string;
+  addresses: Readonly<{ config: string; enrollment: string; identity: string; enrollmentBump: number }>;
+  observedSlot: bigint; enrollmentAccount: Readonly<{ owner: string; executable: boolean; data: readonly [string, string] }> | null;
+  identityAccount: Readonly<{ owner: string; executable: boolean; data: readonly [string, string] }> | null;
+}) {
   const wallet = address(input.wallet), digest = Buffer.from(input.identityDigestHex, "hex");
   assert.equal(digest.length, 32);
-  const addresses = await deriveGooseyEnrollmentAddresses({ programAddress: input.runtime.programAddress,
-    wallet, identityDigest: digest });
-  const response = await createSolanaRpc(input.runtime.rpcUrl).getMultipleAccounts([addresses.enrollment, addresses.identity],
-    { commitment: "finalized", encoding: "base64" }).send({ abortSignal: input.signal });
-  const [enrollmentAccount, identityAccount] = response.value;
-  if (!enrollmentAccount || !identityAccount || enrollmentAccount.owner !== input.runtime.programAddress
-    || identityAccount.owner !== input.runtime.programAddress || enrollmentAccount.executable || identityAccount.executable) return null;
+  const { enrollmentAccount, identityAccount, addresses } = input;
+  if (!enrollmentAccount || !identityAccount || enrollmentAccount.owner !== input.programAddress
+    || identityAccount.owner !== input.programAddress || enrollmentAccount.executable || identityAccount.executable) return null;
   const enrollment = Buffer.from(enrollmentAccount.data[0], "base64"), identity = Buffer.from(identityAccount.data[0], "base64");
   const enrollmentDiscriminator = createHash("sha256").update("account:Enrollment").digest().subarray(0, 8);
   const identityDiscriminator = createHash("sha256").update("account:EnrollmentIdentity").digest().subarray(0, 8);
@@ -302,7 +308,21 @@ async function finalizedEnrollmentState(input: { runtime: SolanaRuntime; wallet:
     || enrollment.readBigUInt64LE(104).toString() !== input.allowance
     || enrollment.readBigUInt64LE(112) !== 0n || enrollment.readBigInt64LE(120).toString() !== input.expiresAt
     || enrollment[128] !== addresses.enrollmentBump) return null;
-  return { observedSlot: response.context.slot.toString(), enrollment: addresses.enrollment, identity: addresses.identity };
+  return { observedSlot: input.observedSlot.toString(), enrollment: addresses.enrollment, identity: addresses.identity };
+}
+
+async function finalizedEnrollmentState(input: { runtime: SolanaRuntime; wallet: string; identityDigestHex: string;
+  allowance: string; expiresAt: string; signal: AbortSignal }) {
+  const wallet = address(input.wallet), digest = Buffer.from(input.identityDigestHex, "hex");
+  assert.equal(digest.length, 32);
+  const addresses = await deriveGooseyEnrollmentAddresses({ programAddress: input.runtime.programAddress,
+    wallet, identityDigest: digest });
+  const response = await createSolanaRpc(input.runtime.rpcUrl).getMultipleAccounts([addresses.enrollment, addresses.identity],
+    { commitment: "finalized", encoding: "base64" }).send({ abortSignal: input.signal });
+  const [enrollmentAccount, identityAccount] = response.value;
+  return validateFinalizedEnrollmentAccounts({ programAddress: input.runtime.programAddress, wallet,
+    identityDigestHex: digest.toString("hex"), allowance: input.allowance, expiresAt: input.expiresAt, addresses,
+    observedSlot: response.context.slot, enrollmentAccount, identityAccount });
 }
 
 async function run(options: LocalBootstrapOptions) {
@@ -343,8 +363,11 @@ async function run(options: LocalBootstrapOptions) {
     if (await exists(stateFile)) state = validateLocalBootstrapState(JSON.parse((await privateRead(stateFile)).toString("utf8")));
     else {
       const now = await chainTime(rpc, signal), remaining = config.campaignCap - config.totalAuthorized;
-      const allowance = [config.perWalletCap, remaining / 4n, 100_000n].reduce((a, b) => a < b ? a : b);
-      assert(allowance >= 10_000n, "Retained localnet lacks issuance capacity for four real bootstrap enrollments");
+      // Four grants are consumed here. Reserve one equal fifth grant for the
+      // companion's dedicated counterparty; the existing participant becomes
+      // the other side of that internal-custody matched trade.
+      const allowance = [config.perWalletCap, remaining / 5n, 100_000n].reduce((a, b) => a < b ? a : b);
+      assert(allowance >= 10_000n, "Retained localnet lacks issuance capacity for five real bootstrap enrollments");
       state = { version: STATE_VERSION, genesisHash, programAddress: runtime.programAddress,
         marketId: deriveLocalBootstrapMarketId(genesisHash).toString(), createdAt: now.toString(),
         closesAt: (now + 31_536_000n).toString(), resolvesAt: (now + 32_140_800n).toString(), allowance: allowance.toString(),
@@ -450,7 +473,7 @@ async function run(options: LocalBootstrapOptions) {
             approver: { wallet: approver.address, enrollment: enrollmentAccounts[2].enrollment } },
           { address: acceptance.terms, owner: response.value.owner, executable: response.value.executable,
             data: new Uint8Array(getBase64Encoder().encode(response.value.data[0])) });
-          return (account.acceptanceBits & bit) === bit;
+          return localBootstrapReviewerAcceptanceComplete(account.acceptanceBits, bit);
         } });
     }
     activeBootstrapStage = "market-seal"; await publish("seal");

@@ -1,13 +1,15 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { getTransferSolInstruction } from "@solana-program/system";
 import { address, appendTransactionMessageInstruction, blockhash, createTransactionMessage, generateKeyPairSigner,
-  getBase64EncodedWireTransaction, getSignatureFromTransaction, pipe, setTransactionMessageFeePayerSigner,
+  getAddressEncoder, getBase64EncodedWireTransaction, getSignatureFromTransaction, pipe, setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash, signTransactionMessageWithSigners } from "@solana/kit";
 import { describe, expect, it } from "vitest";
 import { decodeMarketTerms, hashMarketTerms } from "../src/lib/solana/market-terms";
 import {
   buildLocalBootstrapTerms, deriveLocalBootstrapMarketId, localBootstrapHelp, localBootstrapSlug,
-  localBootstrapIndexingMode, parseLocalBootstrapArguments, validateLocalBootstrapReceipt, validateLocalBootstrapState,
+  localBootstrapIndexingMode, localBootstrapReviewerAcceptanceComplete, parseLocalBootstrapArguments,
+  validateFinalizedEnrollmentAccounts, validateLocalBootstrapReceipt, validateLocalBootstrapState,
 } from "./solana-local-development-bootstrap";
 
 const operator = "/private/tmp/goosey-retained-localnet";
@@ -18,6 +20,7 @@ const args = ["run", "--operator-directory", operator, "--state", stateDirectory
 const genesisHash = "Bax5P2GmYBb2P6UjJFmEVys7cpRzY4A85ncAJqtgvSsm";
 const programAddress = "CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q";
 const creator = "Vote111111111111111111111111111111111111111";
+const config = "Config1111111111111111111111111111111111111";
 const rawState = {
   version: 1, genesisHash, programAddress, marketId: deriveLocalBootstrapMarketId(genesisHash).toString(),
   createdAt: "1789750000", closesAt: "1821286000", resolvesAt: "1821890800", allowance: "100000",
@@ -110,10 +113,66 @@ describe("retained-localnet development market bootstrap", () => {
 
   it("never replaces an existing deployment coverage boundary", () => {
     const boundary = "3f7BW6hDJUdTKLXyQV97haeoQsYVaK3jru7RLVEA4Kwm1QwJ1F97YxfoCdMNxQYDvCDUrUWAk6VSgBPnbi3mmcFn";
+    const retained = Object.freeze({ coverageStartSignature: `${boundary.slice(0, -1)}m` });
     expect(localBootstrapIndexingMode(null, boundary)).toBe("index-bootstrap-boundary");
     expect(localBootstrapIndexingMode({ coverageStartSignature: boundary }, boundary)).toBe("index-bootstrap-boundary");
-    expect(localBootstrapIndexingMode({ coverageStartSignature: `${boundary.slice(0, -1)}m` }, boundary))
-      .toBe("retain-existing-boundary");
+    expect(localBootstrapIndexingMode(retained, boundary)).toBe("retain-existing-boundary");
+    expect(retained.coverageStartSignature).toBe(`${boundary.slice(0, -1)}m`);
+    expect(localBootstrapIndexingMode(retained, `${boundary.slice(0, -2)}zz`)).toBe("retain-existing-boundary");
+  });
+
+  it("recovers enrollment only from complete finalized program state", () => {
+    const wallet = creator, identityDigestHex = "42".repeat(32), allowance = "100000", expiresAt = "1821286000";
+    const encoder = getAddressEncoder(), digest = Buffer.from(identityDigestHex, "hex");
+    const enrollment = Buffer.alloc(129), identity = Buffer.alloc(104);
+    createHash("sha256").update("account:Enrollment").digest().copy(enrollment, 0, 0, 8);
+    createHash("sha256").update("account:EnrollmentIdentity").digest().copy(identity, 0, 0, 8);
+    Buffer.from(encoder.encode(address(config))).copy(enrollment, 8); Buffer.from(encoder.encode(address(config))).copy(identity, 8);
+    Buffer.from(encoder.encode(address(wallet))).copy(enrollment, 40); Buffer.from(encoder.encode(address(wallet))).copy(identity, 40);
+    digest.copy(enrollment, 72); digest.copy(identity, 72);
+    enrollment.writeBigUInt64LE(BigInt(allowance), 104); enrollment.writeBigUInt64LE(0n, 112);
+    enrollment.writeBigInt64LE(BigInt(expiresAt), 120); enrollment[128] = 253;
+    const account = (bytes: Buffer) => ({ owner: programAddress, executable: false,
+      data: [bytes.toString("base64"), "base64"] as const });
+    const base = { programAddress, wallet, identityDigestHex, allowance, expiresAt,
+      addresses: { config, enrollment: rawState.proposer, identity: rawState.approver, enrollmentBump: 253 },
+      observedSlot: 987n, enrollmentAccount: account(enrollment), identityAccount: account(identity) };
+
+    expect(validateFinalizedEnrollmentAccounts(base)).toEqual({ observedSlot: "987",
+      enrollment: rawState.proposer, identity: rawState.approver });
+    expect(validateFinalizedEnrollmentAccounts({ ...base, identityAccount: null })).toBeNull();
+    expect(validateFinalizedEnrollmentAccounts({ ...base,
+      enrollmentAccount: { ...base.enrollmentAccount, owner: creator } })).toBeNull();
+    expect(validateFinalizedEnrollmentAccounts({ ...base,
+      identityAccount: { ...base.identityAccount, executable: true } })).toBeNull();
+
+    for (const mutate of [
+      (bytes: Buffer) => { bytes[0] ^= 1; },
+      (bytes: Buffer) => { bytes[8] ^= 1; },
+      (bytes: Buffer) => { bytes[40] ^= 1; },
+      (bytes: Buffer) => { bytes[72] ^= 1; },
+      (bytes: Buffer) => { bytes.writeBigUInt64LE(99_999n, 104); },
+      (bytes: Buffer) => { bytes.writeBigUInt64LE(1n, 112); },
+      (bytes: Buffer) => { bytes.writeBigInt64LE(BigInt(expiresAt) + 1n, 120); },
+      (bytes: Buffer) => { bytes[128] = 252; },
+    ]) {
+      const changed = Buffer.from(enrollment); mutate(changed);
+      expect(validateFinalizedEnrollmentAccounts({ ...base, enrollmentAccount: account(changed) })).toBeNull();
+    }
+    const changedIdentity = Buffer.from(identity); changedIdentity[72] ^= 1;
+    expect(validateFinalizedEnrollmentAccounts({ ...base, identityAccount: account(changedIdentity) })).toBeNull();
+  });
+
+  it("completes each reviewer acceptance from terms state before resolution exists", () => {
+    const beforeResolution = { resolution: null, acceptanceBits: 1 } as const;
+    expect(beforeResolution.resolution).toBeNull();
+    expect(localBootstrapReviewerAcceptanceComplete(beforeResolution.acceptanceBits, 1)).toBe(true);
+    expect(localBootstrapReviewerAcceptanceComplete(beforeResolution.acceptanceBits, 2)).toBe(false);
+    expect(localBootstrapReviewerAcceptanceComplete(2, 1)).toBe(false);
+    expect(localBootstrapReviewerAcceptanceComplete(2, 2)).toBe(true);
+    expect(localBootstrapReviewerAcceptanceComplete(3, 1)).toBe(true);
+    expect(localBootstrapReviewerAcceptanceComplete(3, 2)).toBe(true);
+    expect(() => localBootstrapReviewerAcceptanceComplete(4, 1)).toThrow("Invalid reviewer acceptance bits");
   });
 
   it("entrypoint help performs no RPC, database or filesystem mutation", () => {
