@@ -9,6 +9,7 @@ import { useChainTransaction } from "./use-chain-transaction";
 import { loadChainMarket } from "@/lib/solana/market-view";
 import { prepareOrder } from "@/lib/solana/prepare-order";
 import { MarketResolutionNote } from "./market-resolution-note";
+import { ChainTradeTape } from "./chain-trade-tape";
 import { prepareCancelOrder } from "@/lib/solana/prepare-cancel";
 import { prepareEscrowDeposit, prepareEscrowWithdrawal } from "@/lib/solana/prepare-escrow";
 import { prepareResolutionClaim } from "@/lib/solana/prepare-resolution-claim";
@@ -160,6 +161,8 @@ function MarketAccount({ runtime, wallet, snapshot, marketId, onTitle }: WalletA
           {review && <section className={`${shared.panel} ${styles.review}`} aria-label="Transaction review"><h2 ref={reviewHeading} tabIndex={-1}>Review transaction</h2><dl className={shared.facts}>{review.facts.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}<div><dt>Network fee estimate</dt><dd>{Number(review.fee)/1e9} SOL</dd></div><div><dt>Account deposit estimate</dt><dd>{Number(review.rent)/1e9} SOL</dd></div></dl>{review.intent.kind === "order" && <p>Orders may fill partially or fail as the book changes; FOK orders must fill completely.</p>}<div className={shared.actions}><button className="button button-secondary" disabled={preparing || Boolean(tx.busy)} onClick={()=>setReview(null)}>Cancel review</button><button className="button button-primary" disabled={disabled} onClick={()=>void approve()}>Approve transaction</button></div></section>}
         </div>
       </div>
+      <ChainTradeTape marketId={marketId.toString()} payoutMilli={data.marketState.payoutMilli.toString()}
+        explorerCluster={runtime.cluster === "devnet" ? "devnet" : undefined} />
     </>}
     {tx.receipts.length > 0 && <section className={shared.panel}><h2>Saved transactions</h2><ul className={shared.receipts}>{tx.receipts.map(receipt=><li key={receipt.signature}><strong>{receipt.status === "expired" ? "Expired · historical outcome unknown" : receipt.status}</strong><code>{receipt.signature}</code></li>)}</ul><button className="button button-secondary" disabled={Boolean(tx.busy)||preparing} onClick={()=>void tx.recover()}>Check transaction status</button>{!tx.ready && !tx.busy && <p>Resolve pending receipts before signing another transaction.</p>}</section>}
   </div>;
