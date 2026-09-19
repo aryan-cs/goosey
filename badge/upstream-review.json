@@ -1,12 +1,11 @@
 {
-  "lastReviewedUpstreamRevision": "9821593d31aa1e0b3c92d4e62b9d845ca67eca95",
-  "reviewedAt": "2026-09-19T17:11:20Z",
-  "outcome": "No badge code change required",
+  "lastReviewedUpstreamRevision": "f97d1d7bcedfb96bcf1c937279a5eb939d78c905",
+  "reviewedAt": "2026-09-19T17:24:15.180472+00:00",
+  "outcome": "Badge 0.7.2 matches new-account welcome grant; existing wallets preserved",
   "reviewedChanges": [
-    "Web SVG/icon alignment",
-    "Wrapped status-message styling",
-    "Web auth-submit icon ordering",
-    "Web mobile trade-sheet spacing"
+    "New participant grant reduced to 1,000",
+    "SQLite verified backups and restore checks",
+    "Threaded web comments and reply pagination"
   ],
-  "integrationStatus": "No new database-history transport, badge authentication, or sync endpoint in reviewed commits. Hardware deferred while badge is unplugged."
+  "integrationStatus": "No badge transport/authentication endpoint added. USB opens but console is unresponsive; physical power cycle requested."
 }
