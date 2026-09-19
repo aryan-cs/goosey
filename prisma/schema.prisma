@@ -150,6 +150,73 @@ model SolanaCustodyIdentity {
   @@index([userId])
 }
 
+/// Durable application intent for one sponsored Solana operation. Deployment and
+/// request identity are immutable; workers mutate execution state only with a
+/// revision CAS and a hashed lease fence.
+model ChainCommand {
+  id                String                   @id @default(cuid())
+  cluster           String
+  genesisHash       String
+  programAddress    String
+  scope             String
+  scopeId           String
+  actorId           String
+  operation         String
+  idempotencyKey    String
+  requestHash       String
+  /// Canonical JSON whose SHA-256 is requestHash.
+  requestJson       String
+  status            String                   @default("ACCEPTED")
+  revision          Int                      @default(0)
+  leaseOwner        String?
+  leaseTokenHash    String?
+  leaseEpoch        Int                      @default(0)
+  leaseExpiresAt    DateTime?
+  attemptCount      Int                      @default(0)
+  lastErrorCode     String?
+  lastErrorMessage  String?
+  acceptedAt        DateTime                 @default(now())
+  preparedAt        DateTime?
+  signedAt          DateTime?
+  submittedAt       DateTime?
+  confirmedAt       DateTime?
+  finalizedAt       DateTime?
+  projectedAt       DateTime?
+  unknownSince      DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  signedWireJournal ChainCommandSignedWire[]
+
+  @@unique([genesisHash, programAddress, scope, scopeId, operation, idempotencyKey], map: "ChainCommand_scoped_idempotency_key")
+  @@index([status, leaseExpiresAt], map: "ChainCommand_dispatch_idx")
+  @@index([genesisHash, programAddress, status], map: "ChainCommand_deployment_status_idx")
+}
+
+/// Append-only exact signed transaction bytes and the metadata needed to prove
+/// which wire payload was submitted. Retries append; they never rewrite history.
+model ChainCommandSignedWire {
+  id                   String       @id @default(cuid())
+  commandId            String
+  sequence             Int
+  leaseEpoch           Int
+  commandRevision      Int
+  wireVersion          String
+  signedWireBase64     String
+  signedWireByteLength Int
+  signedWireSha256     String
+  transactionSignature String       @unique
+  recentBlockhash      String
+  lastValidBlockHeight BigInt?
+  durableNonceAddress  String?
+  feePayerAddress      String
+  signerAddressesJson  String
+  createdAt            DateTime     @default(now())
+  command              ChainCommand @relation(fields: [commandId], references: [id], onDelete: Restrict)
+
+  @@unique([commandId, sequence], map: "ChainCommandWire_command_sequence_key")
+  @@index([commandId, createdAt], map: "ChainCommandWire_command_created_idx")
+}
+
 /// Durable membership of a signature in one frozen ingestion window; retained after completion.
 model SolanaIngestionVisit {
   id                String   @id @default(cuid())

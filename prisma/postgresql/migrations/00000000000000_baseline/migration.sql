@@ -11,6 +11,7 @@ CREATE TABLE "User" (
     "bio" TEXT NOT NULL DEFAULT '',
     "profilePublic" BOOLEAN NOT NULL DEFAULT false,
     "leaderboardVisible" BOOLEAN NOT NULL DEFAULT false,
+    "notificationPreferences" TEXT NOT NULL DEFAULT '{}',
     "balanceMilli" BIGINT NOT NULL DEFAULT 0,
     "realizedPnlMilli" BIGINT NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -48,8 +49,153 @@ CREATE TABLE "Session" (
 );
 
 -- CreateTable
+CREATE TABLE "SolanaWalletLinkChallenge" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "sessionId" TEXT NOT NULL,
+    "purpose" TEXT NOT NULL DEFAULT 'LINK_WALLET',
+    "origin" TEXT NOT NULL,
+    "domain" TEXT NOT NULL,
+    "uri" TEXT NOT NULL,
+    "chainId" TEXT NOT NULL,
+    "genesisHash" TEXT NOT NULL,
+    "walletAddress" TEXT NOT NULL,
+    "nonceHash" TEXT NOT NULL,
+    "messageHash" TEXT NOT NULL,
+    "issuedAt" TIMESTAMPTZ(3) NOT NULL,
+    "expiresAt" TIMESTAMPTZ(3) NOT NULL,
+    "consumedAt" TIMESTAMPTZ(3),
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SolanaWalletLinkChallenge_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SolanaWalletLink" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "chainId" TEXT NOT NULL,
+    "genesisHash" TEXT NOT NULL,
+    "walletAddress" TEXT NOT NULL,
+    "verifiedAt" TIMESTAMPTZ(3) NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "SolanaWalletLink_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SolanaCustodyIdentity" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "chainId" TEXT NOT NULL,
+    "genesisHash" TEXT NOT NULL,
+    "walletAddress" TEXT NOT NULL,
+    "encryptionAlgorithm" TEXT NOT NULL DEFAULT 'AES-256-GCM',
+    "keyVersion" INTEGER NOT NULL DEFAULT 1,
+    "keyId" TEXT NOT NULL,
+    "encryptedSecretKey" TEXT NOT NULL,
+    "encryptionNonce" TEXT NOT NULL,
+    "encryptionAuthTag" TEXT NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "SolanaCustodyIdentity_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SolanaIngestionVisit" (
+    "id" TEXT NOT NULL,
+    "genesisHash" TEXT NOT NULL,
+    "programAddress" TEXT NOT NULL,
+    "scanHeadSignature" TEXT NOT NULL,
+    "signature" TEXT NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SolanaIngestionVisit_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SolanaIngestionCursor" (
+    "id" TEXT NOT NULL,
+    "genesisHash" TEXT NOT NULL,
+    "programAddress" TEXT NOT NULL,
+    "committedHeadSignature" TEXT,
+    "scanHeadSignature" TEXT,
+    "scanBeforeSignature" TEXT,
+    "coverageStartSignature" TEXT NOT NULL,
+    "backfillComplete" BOOLEAN NOT NULL DEFAULT false,
+    "revision" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "SolanaIngestionCursor_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SolanaCoverageRotation" (
+    "id" TEXT NOT NULL,
+    "genesisHash" TEXT NOT NULL,
+    "programAddress" TEXT NOT NULL,
+    "previousCoverageStartSignature" TEXT NOT NULL,
+    "previousCommittedHeadSignature" TEXT,
+    "previousScanHeadSignature" TEXT,
+    "previousScanBeforeSignature" TEXT,
+    "previousBackfillComplete" BOOLEAN NOT NULL,
+    "previousRevision" INTEGER NOT NULL,
+    "previousCursorCreatedAt" TIMESTAMPTZ(3) NOT NULL,
+    "previousCursorUpdatedAt" TIMESTAMPTZ(3) NOT NULL,
+    "previousCursorSha256" TEXT NOT NULL,
+    "newCoverageStartSignature" TEXT NOT NULL,
+    "newBoundarySlot" BIGINT NOT NULL,
+    "newBoundaryConfigurationSlot" BIGINT NOT NULL,
+    "newBoundaryEventKey" TEXT NOT NULL,
+    "newBoundaryWalletAddress" TEXT NOT NULL,
+    "newBoundaryEnrollmentAddress" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SolanaCoverageRotation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SolanaTransactionReceipt" (
+    "id" TEXT NOT NULL,
+    "genesisHash" TEXT NOT NULL,
+    "programAddress" TEXT NOT NULL,
+    "signature" TEXT NOT NULL,
+    "slot" BIGINT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "eventCount" INTEGER NOT NULL DEFAULT 0,
+    "decoderVersion" INTEGER NOT NULL DEFAULT 1,
+    "configurationSlot" BIGINT,
+    "lastError" TEXT,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(3) NOT NULL,
+
+    CONSTRAINT "SolanaTransactionReceipt_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SolanaProgramEvent" (
+    "eventKey" TEXT NOT NULL,
+    "receiptId" TEXT NOT NULL,
+    "logIndex" INTEGER NOT NULL,
+    "invocationDepth" INTEGER NOT NULL,
+    "kind" TEXT NOT NULL,
+    "payload" TEXT NOT NULL,
+    "schemaVersion" INTEGER NOT NULL DEFAULT 1,
+    "marketAddress" TEXT,
+    "walletAddress" TEXT,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SolanaProgramEvent_pkey" PRIMARY KEY ("eventKey")
+);
+
+-- CreateTable
 CREATE TABLE "Market" (
     "id" TEXT NOT NULL,
+    "executionBackend" TEXT NOT NULL DEFAULT 'DATABASE',
     "slug" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "shortTitle" TEXT NOT NULL,
@@ -82,11 +228,25 @@ CREATE TABLE "Market" (
     "acceptingOrders" BOOLEAN NOT NULL DEFAULT true,
     "createdById" TEXT NOT NULL,
     "eventId" TEXT,
-    "collateralAccountId" TEXT NOT NULL,
+    "collateralAccountId" TEXT,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Market_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SolanaMarketBinding" (
+    "id" TEXT NOT NULL,
+    "marketId" TEXT NOT NULL,
+    "cluster" TEXT NOT NULL,
+    "genesisHash" TEXT NOT NULL,
+    "programAddress" TEXT NOT NULL,
+    "marketAddress" TEXT NOT NULL,
+    "chainMarketId" TEXT NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SolanaMarketBinding_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -609,6 +769,57 @@ CREATE INDEX "Session_userId_idx" ON "Session"("userId");
 CREATE INDEX "Session_expiresAt_idx" ON "Session"("expiresAt");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "SolanaWalletLinkChallenge_nonceHash_key" ON "SolanaWalletLinkChallenge"("nonceHash");
+
+-- CreateIndex
+CREATE INDEX "SolanaWalletLinkChallenge_userId_sessionId_consumedAt_idx" ON "SolanaWalletLinkChallenge"("userId", "sessionId", "consumedAt");
+
+-- CreateIndex
+CREATE INDEX "SolanaWalletLinkChallenge_expiresAt_idx" ON "SolanaWalletLinkChallenge"("expiresAt");
+
+-- CreateIndex
+CREATE INDEX "SolanaWalletLink_userId_idx" ON "SolanaWalletLink"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaWalletLink_chainId_genesisHash_walletAddress_key" ON "SolanaWalletLink"("chainId", "genesisHash", "walletAddress");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaWalletLink_userId_chainId_genesisHash_key" ON "SolanaWalletLink"("userId", "chainId", "genesisHash");
+
+-- CreateIndex
+CREATE INDEX "SolanaCustodyIdentity_userId_idx" ON "SolanaCustodyIdentity"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaCustody_user_domain_key" ON "SolanaCustodyIdentity"("userId", "chainId", "genesisHash");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaCustody_domain_wallet_key" ON "SolanaCustodyIdentity"("chainId", "genesisHash", "walletAddress");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaVisit_domain_scan_signature_key" ON "SolanaIngestionVisit"("genesisHash", "programAddress", "scanHeadSignature", "signature");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaCursor_domain_key" ON "SolanaIngestionCursor"("genesisHash", "programAddress");
+
+-- CreateIndex
+CREATE INDEX "SolanaRotation_domain_created_idx" ON "SolanaCoverageRotation"("genesisHash", "programAddress", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaRotation_domain_revision_key" ON "SolanaCoverageRotation"("genesisHash", "programAddress", "previousRevision");
+
+-- CreateIndex
+CREATE INDEX "SolanaReceipt_domain_slot_idx" ON "SolanaTransactionReceipt"("genesisHash", "programAddress", "slot");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaReceipt_domain_signature_key" ON "SolanaTransactionReceipt"("genesisHash", "programAddress", "signature");
+
+-- CreateIndex
+CREATE INDEX "SolanaProgramEvent_marketAddress_receiptId_idx" ON "SolanaProgramEvent"("marketAddress", "receiptId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaProgramEvent_receiptId_logIndex_key" ON "SolanaProgramEvent"("receiptId", "logIndex");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Market_slug_key" ON "Market"("slug");
 
 -- CreateIndex
@@ -628,6 +839,18 @@ CREATE INDEX "Market_featured_status_idx" ON "Market"("featured", "status");
 
 -- CreateIndex
 CREATE INDEX "Market_volumeMilli_idx" ON "Market"("volumeMilli");
+
+-- CreateIndex
+CREATE INDEX "Market_executionBackend_status_closesAt_idx" ON "Market"("executionBackend", "status", "closesAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaMarketBinding_marketId_key" ON "SolanaMarketBinding"("marketId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaMarketBinding_domain_address_key" ON "SolanaMarketBinding"("genesisHash", "programAddress", "marketAddress");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolanaMarketBinding_domain_id_key" ON "SolanaMarketBinding"("genesisHash", "programAddress", "chainMarketId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "MarketEvent_slug_key" ON "MarketEvent"("slug");
@@ -882,6 +1105,18 @@ ALTER TABLE "AccountToken" ADD CONSTRAINT "AccountToken_userId_fkey" FOREIGN KEY
 ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "SolanaWalletLinkChallenge" ADD CONSTRAINT "SolanaWalletLinkChallenge_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SolanaWalletLink" ADD CONSTRAINT "SolanaWalletLink_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SolanaCustodyIdentity" ADD CONSTRAINT "SolanaCustodyIdentity_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SolanaProgramEvent" ADD CONSTRAINT "SolanaProgramEvent_receiptId_fkey" FOREIGN KEY ("receiptId") REFERENCES "SolanaTransactionReceipt"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Market" ADD CONSTRAINT "Market_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -889,6 +1124,9 @@ ALTER TABLE "Market" ADD CONSTRAINT "Market_eventId_fkey" FOREIGN KEY ("eventId"
 
 -- AddForeignKey
 ALTER TABLE "Market" ADD CONSTRAINT "Market_collateralAccountId_fkey" FOREIGN KEY ("collateralAccountId") REFERENCES "LedgerAccount"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SolanaMarketBinding" ADD CONSTRAINT "SolanaMarketBinding_marketId_fkey" FOREIGN KEY ("marketId") REFERENCES "Market"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MarketEvent" ADD CONSTRAINT "MarketEvent_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

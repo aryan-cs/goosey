@@ -68,7 +68,9 @@ describe("custody key envelope", () => {
       opened.fill(0);
       expect(() => openCustodySecretKey(sealed, { ...context, userId: "user-two" }, configuration))
         .toThrow(CustodyKeyDecryptionError);
-      expect(() => openCustodySecretKey({ ...sealed, encryptedSecretKey: `${sealed.encryptedSecretKey.slice(0, -1)}A` }, context, configuration))
+      const replacement = sealed.encryptedSecretKey[0] === "A" ? "B" : "A";
+      expect(() => openCustodySecretKey({ ...sealed,
+        encryptedSecretKey: `${replacement}${sealed.encryptedSecretKey.slice(1)}` }, context, configuration))
         .toThrow(CustodyKeyDecryptionError);
     } finally {
       generated.secretKey.fill(0);
@@ -172,4 +174,3 @@ describe("app-managed Solana custody identity service", () => {
       .toBe(identity.walletAddress);
   });
 });
-
