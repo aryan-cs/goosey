@@ -2,7 +2,7 @@
 
 Program ID: `CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q`.
 
-This is an executable currency/escrow foundation, **not yet the full prediction exchange**. Implemented: upgrade-authority bootstrap, classic SPL feather mint, unique authorized enrollment, capped PDA-issued claims, market vaults, 256 market-local seats, deposits and withdrawals. Matching, order receipts, oracle review, market lifecycle, and position redemption remain the next implementation stages in [the design](../docs/solana-program-design.md).
+This is an executable currency/escrow foundation with an integrated placement adapter, **not yet the full prediction exchange**. Runtime-verified: upgrade-authority bootstrap, classic SPL feather mint, unique authorized enrollment, capped PDA-issued claims, market vaults, 256 market-local seats, deposits and withdrawals. The source now also compiles bounded book setup and order placement with actual-seat reserves, fees and collateral accounting; actual placement execution tests remain pending. Cancellation/replacement, complete order receipts, oracle review, market lifecycle, and position redemption remain implementation stages in [the design](../docs/solana-program-design.md).
 
 No keypair is committed. The provided deployment key and newly generated local admin wallet are private ephemeral artifacts outside the repository. Do not run a deployment command against an implicit CLI default cluster or wallet.
 
@@ -25,6 +25,12 @@ GOOSEY_SOLANA_BIN_DIR=/path/to/solana/bin npm run test:chain:isolated
 ```
 
 The runner creates a fresh loopback validator with a private ledger and fresh local-only upgrade key, reserves a random port block, snapshots/hashes the loaded ELF, and executes the real suite. It never resets or adopts the shared validator, reads a personal CLI wallet, or uses public testnets. Its help documents an optional validator executable and artifact override. It stops only its own child processes on success, failure, interruption or timeout; mode-0700 temporary directories retain private local-test keys and diagnostic logs. Do not fund these keys on any public network.
+
+## Integrated book setup and placement (runtime verification pending)
+
+The canonical book PDA uses `["order_book", market_pubkey]` and occupies 69,720 bytes. `create_book()` creates a 10,240-byte draft; each `grow_book(expected_size: u32)` adds at most 10,240 bytes and funds real rent through the admin signer. Send each growth as a separate confirmed transaction, rereading size after ambiguous submission. `finalize_book()` initializes exact matcher storage and publishes `GOOSEYB1` only at the final size. A ready book cannot be reset or resized by these instructions. All three contexts require the configured admin, config, canonical market, book PDA and System Program.
+
+`place_order(PlaceOrderArgs)` uses wallet, config, market, seats, locator, vault and book accounts in that order. The wallet signs; market/seats/book are writable. Fields and explicit wire enum values are documented in `exchange.rs`. The program assigns owner, sequence, order ID, fee rate and lifetime notional; the client supplies none of those. Eight touches is the default; sixteen requires an appropriately measured transaction budget. Integrated CU is not yet measured, so standalone matcher measurements must not be treated as the full instruction's cost.
 
 Anchor 1.2.0's `CpiContext::new` takes the program **public key**. The mint-init macro references Token-2022 helpers, so the crate enables the corresponding compile-time features. Runtime accounts are explicitly classic `Program<Token>`/`Account<Mint>`/`Account<TokenAccount>`; this program does not accept Token-2022 mints. Bytemuck is pinned to 1.25.2 to satisfy the resolved SPL interfaces.
 

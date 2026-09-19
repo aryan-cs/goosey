@@ -6,7 +6,13 @@ use anchor_spl::{
 
 pub mod arithmetic;
 pub mod escrow;
+pub mod matching;
+pub mod exchange;
+#[path = "book-bootstrap.rs"]
+pub mod book_bootstrap;
 use escrow::*;
+use exchange::*;
+use book_bootstrap::*;
 
 declare_id!("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
 
@@ -16,6 +22,22 @@ pub const DEFAULT_PAYOUT_MILLI: u64 = 100_000;
 #[program]
 pub mod goosey_exchange {
     use super::*;
+
+    pub fn create_book(ctx: Context<CreateBook>) -> Result<()> {
+        book_bootstrap::create_book(ctx)
+    }
+
+    pub fn grow_book(ctx: Context<GrowBook>, expected_size: u32) -> Result<()> {
+        book_bootstrap::grow_book(ctx, expected_size)
+    }
+
+    pub fn finalize_book(ctx: Context<GrowBook>) -> Result<()> {
+        book_bootstrap::finalize_book(ctx)
+    }
+
+    pub fn place_order(ctx: Context<PlaceOrder>, args: PlaceOrderArgs) -> Result<()> {
+        exchange::place_order(ctx, args)
+    }
 
     pub fn create_market(ctx: Context<CreateMarket>, market_id: u64, payout_milli: u64, fee_bps: u16, closes_at: i64, resolves_at: i64) -> Result<()> {
         escrow::create_market(ctx, market_id, payout_milli, fee_bps, closes_at, resolves_at)

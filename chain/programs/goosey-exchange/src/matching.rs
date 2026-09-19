@@ -1,4 +1,4 @@
-//! Pure bounded binary-outcome CLOB engine. Not wired into the Anchor program.
+//! Bounded binary-outcome CLOB engine used by the Anchor placement adapter.
 //!
 //! Run standalone: `rustc --edition 2021 --test matching.rs -o <temporary-path>`.
 //! `Book` is the snapshot reference model. `runtime` is the persistent-storage
