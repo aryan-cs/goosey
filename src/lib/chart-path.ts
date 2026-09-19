@@ -1,8 +1,8 @@
 type PlotPoint = { x: number; y: number };
 
 /** A shape-preserving cubic curve through the observations, without new extrema. */
-export function smoothChartPath(points: readonly PlotPoint[]): string {
-  if (!points.length) return "";
+export function createChartCurve(points: readonly PlotPoint[]): { path: string; valueAt: (x: number) => number | null } {
+  if (!points.length) return { path: "", valueAt: () => null };
   const slopes = points.slice(1).map((point, i) => {
     const previous = points[i];
     return point.x > previous.x ? (point.y - previous.y) / (point.x - previous.x) : 0;
@@ -28,5 +28,27 @@ export function smoothChartPath(points: readonly PlotPoint[]): string {
       path += ` C ${previous.x + third} ${previous.y + tangents[i - 1] * third} ${point.x - third} ${point.y - tangents[i] * third} ${point.x} ${point.y}`;
     }
   }
-  return path;
+  function valueAt(x: number): number {
+    if (x < points[0].x) return points[0].y;
+    // Upper bound ensures coincident x coordinates select the later observation.
+    let left = 0, right = points.length;
+    while (left < right) {
+      const middle = (left + right) >>> 1;
+      if (points[middle].x <= x) left = middle + 1;
+      else right = middle;
+    }
+    if (left === points.length) return points.at(-1)!.y;
+    const i = Math.max(0, left - 1);
+    const start = points[i], end = points[i + 1];
+    const span = end.x - start.x;
+    if (span <= 0) return end.y;
+    const t = (x - start.x) / span, u = 1 - t;
+    return u ** 3 * start.y + 3 * u ** 2 * t * (start.y + tangents[i] * span / 3)
+      + 3 * u * t ** 2 * (end.y - tangents[i + 1] * span / 3) + t ** 3 * end.y;
+  }
+  return { path, valueAt };
+}
+
+export function smoothChartPath(points: readonly PlotPoint[]): string {
+  return createChartCurve(points).path;
 }
