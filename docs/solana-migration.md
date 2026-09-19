@@ -68,6 +68,8 @@ For devnet, use an HTTPS endpoint and the fixed devnet genesis identity; the cod
 
 ## Completion gates (pending until evidenced)
 
+Wallet preparation now also includes `prepareResolutionClaim`: it reads the target owner's finalized seat and resolution, derives the permissionless claim receipt from the actual seat index, rejects existing receipts, and produces an unsigned transaction with the payer as sole signer. It does not transfer proceeds to the payer; the program credits the target seat. Its 23 mocked-read tests establish preparation and rejection behavior, not actual RPC execution or browser approval. A concurrently executed claim may still invalidate a prepared transaction.
+
 1. Compiled real program with a reviewed instruction/account interface and checked integer arithmetic; no fake accounts standing in for executed lifecycle operations.
 2. Local-validator execution: initialization, enrollment, mint/transfer, market creation, deposit/withdrawal, matching, cancel/replace, expired/IOC/FOK/post-only orders, resolution, and feather redemption.
 3. Conservation and isolation: wallet + vault + fee balances reconcile with supply; positions remain collateralized; retries cannot duplicate grants/fills/redemptions; wrong mint/owner/market/network/signature and unauthorized instructions fail atomically.
