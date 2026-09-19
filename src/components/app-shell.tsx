@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SearchLauncher } from "./search-launcher";
 import { Suspense, type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, ChartNoAxesColumnIncreasing, ChevronDown, CircleHelp, Menu, Search, UserRound, Wallet, X } from "lucide-react";
+import { Bell, ChartNoAxesColumnIncreasing, ChevronDown, CircleHelp, Menu, Search, UserRound, X } from "lucide-react";
 import { FeatherIcon, GooseMark } from "./brand";
 import { MARKET_CATEGORIES } from "@/lib/market-categories";
 import { EmailVerificationGuard } from "./email-verification-guard";
@@ -162,7 +162,6 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
                 <Link className="balance-chip" href="/portfolio" aria-label={`Portfolio, ${balance ?? 0} feathers available`}>
                   <FeatherIcon /> <span>{balance ?? 0}</span>
                 </Link>
-                <Link className="icon-button" href="/wallet" aria-label="Solana wallet" title="Wallet" aria-current={isCurrentPath(pathname, "/wallet") ? "page" : undefined}><Wallet size={19} /></Link>
                 <Link className="icon-button notification-trigger" href="/notifications" aria-label={`${notificationCount} unread notification${notificationCount === 1 ? "" : "s"}`}><Bell size={19} />{notificationCount > 0 && <span>{notificationCount > 9 ? "9+" : notificationCount}</span>}</Link>
                 <Link className="avatar-button" href="/settings/profile" aria-label="Settings"><UserRound size={18} /></Link>
               </>
@@ -196,7 +195,6 @@ export function AppShell({ children, balance, signedIn = false, verificationRequ
             <Link className="mobile-more-primary" href="/verify-email" onClick={() => setMoreOpen(false)}>Verify email</Link>
           </> : <>
             <Link href="/portfolio" aria-current={isCurrentPath(pathname, "/portfolio") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Portfolio</Link>
-            <Link href="/wallet" aria-current={isCurrentPath(pathname, "/wallet") ? "page" : undefined} onClick={() => setMoreOpen(false)}>Wallet</Link>
             <Link href="/watchlist" onClick={() => setMoreOpen(false)}>Watchlist</Link>
             <Link href="/notifications" onClick={() => setMoreOpen(false)}>Notifications{notificationCount > 0 ? ` (${notificationCount})` : ""}</Link>
             <Link href="/settings/profile" onClick={() => setMoreOpen(false)}>Account</Link>
@@ -218,7 +216,7 @@ export function Footer() {
       <div className="footer-inner">
         <div className="footer-brand">
           <GooseMark className="brand-mark" />
-          <div><strong>Goosey</strong><p>Predict Hack the North with play-money feathers.</p></div>
+          <div><strong>Goosey</strong><p>Play-money prediction markets with settlement infrastructure built on Solana.</p></div>
         </div>
         <div className="footer-links">
           <Link href="/markets"><ChartNoAxesColumnIncreasing size={16} /> Markets</Link>
@@ -228,7 +226,7 @@ export function Footer() {
           <Link href="/settings/privacy">Privacy</Link>
         </div>
         <div className="footer-bottom">
-          <p className="legal">Play-money only. Goosey is an independent community project and is not an official University of Waterloo or Hack the North service.</p>
+          <p className="legal">Play-money only. Your Goosey account never holds or sends cryptocurrency, and feathers cannot be redeemed for cash. Goosey is an independent community project and is not an official University of Waterloo or Hack the North service.</p>
           <a
             className="footer-issue-link"
             href="https://forms.gle/uJVou9X5Gfppeuk67"

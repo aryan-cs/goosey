@@ -19,7 +19,6 @@ import { loadTradeHistory, parseTradeHistoryCursor, type TradeHistoryCursor } fr
 import { ApiError } from "@/lib/market-service";
 import { TradeHistory } from "@/components/trade-history";
 import { authDestination, authPageHref } from "@/lib/auth-destination";
-import { SolanaPortfolio } from "@/components/solana-portfolio";
 import { PortfolioSwitcher } from "./portfolio-switcher";
 
 export const dynamic = "force-dynamic";
@@ -60,12 +59,11 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const totalValue = availableCash + reservedCash + positionValue;
 
   return <div className="page-shell portfolio-page">
-    <header className="page-header"><h1>Portfolio</h1><div className={styles.links}><Link className="section-link" href="/wallet">Wallet</Link><Link className="section-link" href="/watchlist">Watchlist</Link></div><LivePageRefresh showButton={false} /></header>
+    <header className="page-header"><h1>Portfolio</h1><div className={styles.links}><Link className="section-link" href="/watchlist">Watchlist</Link></div><LivePageRefresh showButton={false} /></header>
     <section className="metric-grid" aria-label="Account balance"><MetricCard label="Total value" value={<><FeatherIcon /> {formatFeathers(totalValue)}</>} /><MetricCard label="Available" value={<><FeatherIcon /> {formatFeathers(availableCash)}</>} detail={reservedCash > 0n ? `${formatFeathers(reservedCash)} reserved in orders` : undefined} /><MetricCard label="Estimated exit value" value={<><FeatherIcon /> {formatFeathers(positionValue)}</>} /><MetricCard label="Unrealized return" value={<><FeatherIcon /> {formatFeathers(unrealized)}</>} trend={cost > 0n ? Number(unrealized * 10_000n / cost) / 100 : undefined} /></section>
     <PortfolioSwitcher view={view}>
     {view === "orders" && <PortfolioActivity ordersOnly />}
     {view === "positions" && <>
-    <SolanaPortfolio />
     <section><SectionHeader title="Your positions" />{values.length ? <div className="position-list">{values.map(({ position }) => {
       const sideValues = valuations.get(position.id)!;
       const probability = sideValues.probabilityYesBps === null ? null : sideValues.probabilityYesBps / 100;
