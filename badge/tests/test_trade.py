@@ -38,3 +38,15 @@ account(5,'LINK');tick(50000);assert lua.eval('require("trade").pairing_challeng
 tick(86000);assert lua.eval('require("trade").pairing_challenge()') is None
 account(6);tick(88000);has('@badge_test')
 print('PASS reconnect, explicit link, stale QR expiry and session restoration')
+
+# Request IDs survive broken config writes and restart; never reuse a prior ID.
+lua.execute("badge.store.set_str=function() end")
+lua.execute('require("trade").open("htn-2026-mc-does-67","YES","Test")')
+press('A');has('Getting a live quote')
+first=int(g.files['appdata/request.txt'].split('\t')[1])
+assert int(g.files['appdata/request_sequence.txt'])==first
+g.on_exit();g.fresh();account(7);tick(90000)
+lua.execute('require("trade").open("htn-2026-mc-does-67","YES","Test")')
+press('A');has('Getting a live quote')
+assert int(g.files['appdata/request.txt'].split('\t')[1])>first
+print('PASS durable request sequence with unavailable config writes and restart')

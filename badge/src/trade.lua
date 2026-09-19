@@ -1,6 +1,7 @@
 -- USB account/trade state. No bearer key, password or local wallet is stored here.
 local T={name=nil,balance=nil,phase="account",message="Connect USB gateway",qty=1,action="BUY"}
 local accountState="UNKNOWN"
+local sequence=0
 local challenge,accountGen,lastRx,request,quoteId,bound,fee,deadline,started
 local function fields(s,tag,n)
   if type(s)~="string" or #s>600 then return nil end
@@ -25,7 +26,13 @@ function T.init()
   local a=fields(badge.fs.read("appdata/account.txt"),"GA1",7)
   accountGen=a and a[2];challenge=a and a[3]
   T.name=nil;T.balance=nil;lastRx=nil;accountState="UNKNOWN"
+  local savedSeq=badge.fs.read("appdata/request_sequence.txt")
+  sequence=savedSeq and (tonumber(savedSeq) or 999999999) or 0
+  sequence=math.max(sequence,tonumber(badge.store.get_str("usb_seq","0")) or 0)
+  local previous=fields(badge.fs.read("appdata/response.txt"),"GR1",10)
+  if previous then sequence=math.max(sequence,tonumber(previous[2]) or 0) end
   request=fields(badge.fs.read("appdata/request.txt"),"GQ1",11)
+  if request then sequence=math.max(sequence,tonumber(request[2]) or 0) end
   if request and request[4]=="TRADE" then T.phase="pending";T.message="Checking confirmed trade"
   else request=nil;T.phase="account";save("request.txt","") end
 end
@@ -40,11 +47,11 @@ function T.open(slug,side,title)
   T.phase=fresh() and "edit" or "account"
 end
 local function send(kind)
-  local seq=tonumber(badge.store.get_str("usb_seq","0")) or 0
+  local seq=sequence
   if seq>=999999999 then T.phase="result";T.message="Request counter exhausted";return end
   local id=tostring(seq+1)
-  badge.store.set_str("usb_seq",id)
-  if badge.store.get_str("usb_seq","")~=id then T.phase="result";T.message="Could not save request";return end
+  if not save("request_sequence.txt",id) then T.phase="result";T.message="Could not save request";return end
+  sequence=seq+1
   local r={"GQ1",id,challenge,kind,T.slug,T.side,T.action,tostring(T.qty),kind=="TRADE" and quoteId or "-",kind=="TRADE" and bound or "0","END"}
   local s=table.concat(r,"\t").."\n"
   if kind=="TRADE" then request=r;T.phase="pending" end
