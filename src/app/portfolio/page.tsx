@@ -23,7 +23,7 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const destination = authDestination(typeof historyCursor === "string"
     ? `/portfolio?historyCursor=${encodeURIComponent(historyCursor)}` : "/portfolio");
   const user = await getServerUser();
-  if (!user) return <div className="page-shell centered-state"><EmptyState title="Your feathers are waiting" description="Sign in to view positions, trade history, and portfolio value." action={<Link className="button button-primary" href={authPageHref("/login", destination)}>Sign in</Link>} /></div>;
+  if (!user) return <div className="page-shell centered-state"><EmptyState title="Your picks, all in one place" description="Sign in to see your picks, trades, and feathers." action={<Link className="button button-primary" href={authPageHref("/login", destination)}>Sign in</Link>} /></div>;
   if (requiresEmailVerification(user)) redirect(`/verify-email?next=${encodeURIComponent(destination)}`);
   let cursor: TradeHistoryCursor | undefined;
   let invalidCursor = false;
@@ -71,6 +71,6 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
       const unfilled = sideValues.unfilledYes + sideValues.unfilledNo;
       return <Fragment key={position.id}>{sides}{unfilled > 0 && <p className="muted-copy">{position.market.shortTitle}: {unfilled} contracts are not currently executable and contribute no sale proceeds to this estimate.</p>}{redeemable ? <RedemptionForm marketSlug={position.market.slug} marketVersion={position.market.version} maxQuantity={completeSets} payoutMilli={position.market.payoutMilli.toString()} /> : null}</Fragment>;
     })}</div> : <EmptyState title="No open positions" action={<Link className="button button-primary" href="/markets">Find a market</Link>} />}</section>
-    <section><SectionHeader eyebrow="Activity" title="Trade history" description="Your market-maker trades and order-book fills, newest first. Amounts exclude the separately shown fee; times are Eastern." /><TradeHistory history={history} olderPage={Boolean(cursor)} invalidCursor={invalidCursor} /></section>
+    <section><SectionHeader eyebrow="Activity" title="Trade history" description="Your trades, newest first. Fees are listed separately. All times are Eastern." /><TradeHistory history={history} olderPage={Boolean(cursor)} invalidCursor={invalidCursor} /></section>
   </div>;
 }

@@ -1,5 +1,13 @@
 import { BookOpen, Scale, ShieldCheck } from "lucide-react";
 
 export default function RulesPage() {
-  return <div className="page-shell reading-page"><header className="page-header"><h1>How Goosey works</h1><p>Feathers are play money. You cannot buy them, cash them out, or send them outside Goosey.</p></header><section><h2><BookOpen /> Every market needs a clear answer</h2><p>Each question has a deadline, a trusted source, and one exact way to settle YES or NO. We do not allow harmful, private, or easy-to-rig questions.</p></section><section><h2><Scale /> Prices and payouts</h2><p>Prices move as people trade. A winning contract pays 100 feathers. If a market is voided, each contract pays 50 feathers. Prices show what the crowd thinks, not what is guaranteed to happen.</p></section><section><h2><ShieldCheck /> Play fair</h2><p>Do not use multiple accounts, private organizer info, bots, or abusive comments. We may pause a market if something looks unfair.</p></section><section><h2>How a market is decided</h2><p>Trading stops at the listed close time. An admin checks the listed source and rules, then marks the result YES, NO, or VOID. Each payout happens once.</p></section></div>;
+  return <div className="page-shell reading-page">
+    <header className="page-header"><h1>How Goosey works 🪿</h1></header>
+    <section><h2><BookOpen /> Feathers, not dollars</h2><p>Your feathers are just for fun. You can&apos;t buy them, cash them out, or send them to anyone outside Goosey.</p></section>
+    <section><h2>Pick a side</h2><p>Think it&apos;ll happen? Bet YES. Think it won&apos;t? Bet NO. Every market has a deadline and rules for deciding who wins.</p></section>
+    <section><h2>Watch the odds move</h2><p>Prices change as people trade. They show what everyone thinks might happen, not what will happen.</p></section>
+    <section><h2><Scale /> Get your feathers</h2><p>If you&apos;re right, each winning contract pays 100 feathers. If a market gets cancelled, each contract pays 50.</p></section>
+    <section><h2><ShieldCheck /> Don&apos;t be a silly goose</h2><p>No bots, alt accounts, insider info, or being a jerk in the comments. Keep it fun and fair.</p></section>
+    <section><h2>Who actually wins?</h2><p>When trading closes, we check what happened and mark the market YES, NO, or VOID. Your feathers are paid out once the result is confirmed.</p></section>
+  </div>;
 }

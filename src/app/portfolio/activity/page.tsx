@@ -11,5 +11,5 @@ export default async function ActivityPage() {
   const user = await getServerUser();
   if (!user) redirect("/login?next=%2Fportfolio%2Factivity");
   if (requiresEmailVerification(user)) redirect("/verify-email?next=%2Fportfolio%2Factivity");
-  return <div className={`page-shell ${styles.page}`}><Link className="section-link" href="/portfolio">Back to portfolio</Link><header className="page-header"><span className="eyebrow">Your account</span><h1>Orders and fills</h1><p>Follow your orders from placement to execution.</p></header><PortfolioActivity /></div>;
+  return <div className={`page-shell ${styles.page}`}><Link className="section-link" href="/portfolio">Back to portfolio</Link><header className="page-header"><span className="eyebrow">Your account</span><h1>Orders and fills</h1><p>See what you bought, sold, and still have waiting.</p></header><PortfolioActivity /></div>;
 }

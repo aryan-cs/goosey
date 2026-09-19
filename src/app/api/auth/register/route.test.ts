@@ -12,7 +12,7 @@ vi.mock("@/lib/auth", () => ({
   registerUser: mocks.registerUser,
   setSessionCookie: mocks.setSessionCookie,
   WELCOME_GRANT_MILLI: 1_000_000n,
-  emailVerificationState: () => ({ required: true }),
+  emailVerificationState: () => ({ required: false }),
 }));
 vi.mock("@/lib/security", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/security")>(),
@@ -47,7 +47,7 @@ describe("POST /api/auth/register without invitations", () => {
     });
   });
 
-  it("registers without an access code and keeps verification and rate limits", async () => {
+  it("registers without an access code and grants feathers immediately and keeps rate limits", async () => {
     const response = await POST(request(signup));
 
     expect(response.status).toBe(201);
@@ -62,9 +62,9 @@ describe("POST /api/auth/register without invitations", () => {
     expect(mocks.setSessionCookie).toHaveBeenCalledWith(response, { token: "test-session" });
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toMatchObject({
-      balanceMilli: "0",
-      pendingWelcomeGrantMilli: "1000000",
-      emailVerification: { required: true },
+      balanceMilli: "1000000",
+      pendingWelcomeGrantMilli: "0",
+      emailVerification: { required: false },
     });
   });
 

@@ -137,7 +137,7 @@ function History({ kind, filter }: { kind: "orders" | "fills"; filter: OrderFilt
       </>}
     </li>)}</ol>
     {loading && <LoadingState rows={rows.length ? 1 : 3} label={`Loading ${kind}`} />}
-    {!loading && !error && !rows.length && <EmptyState title={kind === "orders" ? filter === "open" ? "No open orders" : filter === "closed" ? "No closed orders" : "No orders yet" : "No fills yet"} description={kind === "orders" ? "Orders matching this view will appear here." : "When one of your orders matches, you can see the price and fee here."} action={<Link className="button button-secondary" href="/markets">Explore markets</Link>} />}
+    {!loading && !error && !rows.length && <EmptyState title={kind === "orders" ? filter === "open" ? "No open orders" : filter === "closed" ? "No closed orders" : "No orders yet" : "No fills yet"} description={kind === "orders" ? "No orders in this view yet." : "Completed trades show up here with their price and fee."} action={<Link className="button button-secondary" href="/markets">Explore markets</Link>} />}
     <div className={styles.pagination}><span role="status">{rows.length ? `${rows.length} ${rows.length === 1 ? kind.slice(0, -1) : kind} shown` : ""}</span>{cursor && <button className="button button-secondary" disabled={loading} onClick={() => load(cursor)}>{loading ? "Loading…" : "Load more"}</button>}</div>
   </section>;
 }

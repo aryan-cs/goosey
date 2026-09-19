@@ -74,10 +74,10 @@ export function SessionManager() {
         if (activeMutation.current !== controller) return;
         controller.signal.throwIfAborted();
         setSessions(items);
-        setMessage("Session list refreshed. That session is no longer revocable.");
+        setMessage("List refreshed. That browser is already signed out.");
         return;
       }
-      if (!response.ok) throw new Error(body?.error?.message ?? "Session could not be revoked.");
+      if (!response.ok) throw new Error(body?.error?.message ?? "Could not sign out that browser.");
       setSessions((current) => current.filter((session) => session.current || (!payload.allOther && session.id !== payload.sessionId)));
       setMessage(payload.allOther ? "Other browsers have been signed out. This browser stays signed in." : "That browser has been signed out.");
     } catch (reason) {
@@ -96,14 +96,14 @@ export function SessionManager() {
   if (signedOut) return <p>Your session has ended. <Link href="/login?next=%2Fsettings%2Fsecurity">Sign in again</Link> to manage your browsers.</p>;
   return <div className="report-list" aria-busy={loading || busy !== null}>
     <div><button type="button" className="button button-ghost" disabled={loading || busy !== null} onClick={refresh}>Refresh browsers</button></div>
-    {error && <p className="form-error" role="alert">{error} Use Refresh browsers to check the current list, or retry revocation.</p>}
+    {error && <p className="form-error" role="alert">{error} Use Refresh browsers to check the current list, or try signing out again.</p>}
     {message && <p className="success-message" role="status">{message}</p>}
     {loading && <LoadingState rows={2} label="Loading signed-in browsers" />}
     {!loading && !error && !sessions.length && <p>No active browsers were returned. Refresh to check your account.</p>}
     {sessions.map((session) => <article className="report-item" key={session.id}>
       <header><strong>{session.current ? "This browser" : "Signed-in browser"}</strong><span>expires {new Date(session.expiresAt).toLocaleDateString("en-CA", { dateStyle: "medium" })}</span></header>
       <p>{session.userAgent ?? "Unknown browser"}</p>
-      <footer><span>Started {new Date(session.createdAt).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</span>{!session.current && <button type="button" className="button button-ghost" disabled={loading || busy !== null} onClick={() => void revoke({ sessionId: session.id })}>{busy === session.id ? "Revoking…" : "Revoke"}</button>}</footer>
+      <footer><span>Started {new Date(session.createdAt).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</span>{!session.current && <button type="button" className="button button-ghost" disabled={loading || busy !== null} onClick={() => void revoke({ sessionId: session.id })}>{busy === session.id ? "Signing out…" : "Sign out"}</button>}</footer>
     </article>)}
     {sessions.some((session) => !session.current) && <button type="button" className="button button-secondary" disabled={loading || busy !== null} onClick={() => void revoke({ allOther: true })}>{busy === "all" ? "Signing out…" : "Sign out every other browser"}</button>}
   </div>;

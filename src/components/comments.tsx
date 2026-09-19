@@ -203,7 +203,7 @@ function CommentSectionContent({ marketId, marketSlug, focusedCommentId, current
       </footer>}
       {replying && <form id={`reply-form-${comment.id}`} className={`comment-composer ${styles.replyComposer}`} onSubmit={(event) => void submit(event, true)}>
         <label htmlFor={`reply-body-${comment.id}`}>Reply to {comment.author.displayName}</label>
-        <textarea ref={replyInput} id={`reply-body-${comment.id}`} value={replyBody} maxLength={maxLength} rows={3} disabled={!canPost || sending} onChange={(event) => setReplyBody(event.target.value)} placeholder={canPost ? "Keep the conversation going…" : "Sign in to reply"} />
+        <textarea ref={replyInput} id={`reply-body-${comment.id}`} value={replyBody} maxLength={maxLength} rows={3} disabled={!canPost || sending} onChange={(event) => setReplyBody(event.target.value)} placeholder={canPost ? "Add a reply…" : "Sign in to reply"} />
         {canPost === false && <p><Link href={`/login?next=${encodeURIComponent(`${marketHref}?comment=${comment.id}#discussion-heading`)}`}>Sign in to reply</Link></p>}
         {replyError && <p className="form-error" role="alert">{replyError}</p>}
         <div><span>{replyBody.length}/{maxLength}</span><div className={styles.replyActions}>
@@ -229,7 +229,7 @@ function CommentSectionContent({ marketId, marketSlug, focusedCommentId, current
       {reportMessage && <p className="status-message" role="status">{reportMessage}</p>}
       {error && <p className="form-error" role="alert"><AlertCircle /><span>{error} <button onClick={retryLoad}>Retry</button></span></p>}
       <div className="comment-toolbar">{!focusedCommentId && <div className="segmented compact" role="group" aria-label="Sort comments"><button type="button" aria-pressed={sort === "top"} className={sort === "top" ? "active" : ""} onClick={() => { if (sort === "top") return; setLoading(true); setError(null); setSort("top"); }}>Most replies</button><button type="button" aria-pressed={sort === "newest"} className={sort === "newest" ? "active" : ""} onClick={() => { if (sort === "newest") return; setLoading(true); setError(null); setSort("newest"); }}>Newest</button></div>}<button type="button" className="button button-ghost" disabled={loading || sending} onClick={retryLoad}>Refresh discussion</button></div>
-      {loading ? <LoadingState rows={3} label="Loading comments" /> : comments.length === 0 ? <EmptyState title={focusedCommentId ? "Linked discussion unavailable" : "No comments yet"} description={focusedCommentId ? "The linked comment may no longer be available. View all discussion to continue." : "Share what you think and why."} /> : (
+      {loading ? <LoadingState rows={3} label="Loading comments" /> : comments.length === 0 ? <EmptyState title={focusedCommentId ? "Comment unavailable" : "No comments yet"} description={focusedCommentId ? "This comment may have been removed. You can still read the rest of the discussion." : "Share what you think and why."} /> : (
         <><div className="comment-list">{[...comments].sort((a, b) => sort === "top" ? (b.replyCount ?? 0) - (a.replyCount ?? 0) : Date.parse(b.createdAt) - Date.parse(a.createdAt)).map((comment) => (
           <article id={`comment-${comment.id}`} data-linked={comment.id === focusedCommentId || undefined} className="comment" key={comment.id}>
             <div className="comment-avatar" aria-hidden="true">{initials(comment.author.displayName)}</div>
