@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import styles from "./auth-registration.module.css";
 import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, UserRound } from "lucide-react";
@@ -52,15 +53,15 @@ export function AuthForm({ mode, endpoint, csrfToken, redirectTo = "/", onSucces
   }
 
   return (
-    <section className="auth-card" aria-labelledby="auth-heading">
+    <section className={`auth-card${register ? ` ${styles.registration}` : ""}`} aria-labelledby="auth-heading">
       <div className="auth-brand"><GooseMark /><span>Goosey</span></div>
       <span className="eyebrow">{register ? "Join Goosey" : "Welcome back"}</span>
       <h1 id="auth-heading">{register ? "Create your account" : "Pick up where you left off"}</h1>
       <p>{register ? "Start with 10,000 play-money feathers." : "Sign in to trade, comment, and check your picks."}</p>
       <form onSubmit={submit}>
-        {register && <><label><span>Username</span><div className="input-with-icon"><UserRound /><input autoComplete="username" name="username" required minLength={3} maxLength={24} pattern="[a-zA-Z0-9_]+" aria-describedby="username-hint" /></div><small id="username-hint" className="field-hint">Letters, numbers, and underscores only.</small></label><label><span>Display name</span><div className="input-with-icon"><UserRound /><input autoComplete="nickname" name="displayName" required minLength={2} maxLength={32} /></div></label></>}
-        <label><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" name="email" type="email" required /></div></label>
-        {register && <label><span>Invite code</span><div className="input-with-icon"><LockKeyhole /><input autoComplete="off" name="accessCode" required /></div><small className="field-hint">Enter the code from an organizer. Invite codes have limited uses.</small></label>}
+        {register && <><label className={styles.half}><span>Username</span><div className="input-with-icon"><UserRound /><input autoComplete="username" name="username" required minLength={3} maxLength={24} pattern="[a-zA-Z0-9_]+" aria-describedby="username-hint" /></div><small id="username-hint" className="field-hint">Letters, numbers, and underscores only.</small></label><label className={styles.half}><span>Display name</span><div className="input-with-icon"><UserRound /><input autoComplete="nickname" name="displayName" required minLength={2} maxLength={32} /></div></label></>}
+        <label className={register ? styles.half : undefined}><span>Email</span><div className="input-with-icon"><Mail /><input autoComplete="email" name="email" type="email" required /></div></label>
+        {register && <label className={styles.half}><span>Invite code</span><div className="input-with-icon"><LockKeyhole /><input autoComplete="off" name="accessCode" required /></div><small className="field-hint">Enter the code from an organizer. Invite codes have limited uses.</small></label>}
         <div className="auth-field"><div className="auth-field-heading"><label htmlFor="auth-password">Password</label>{!register && <Link href="/reset-password">Forgot password?</Link>}</div><div className="input-with-icon"><LockKeyhole /><input id="auth-password" autoComplete={register ? "new-password" : "current-password"} name="password" type={showPassword ? "text" : "password"} required minLength={register ? 12 : undefined} /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</button></div></div>
 
         {register ? <label className="checkbox-field"><input type="checkbox" name="acceptedCodeOfConduct" required /><span>I agree to the <Link href="/rules">community rules and code of conduct</Link>.</span></label> : null}
