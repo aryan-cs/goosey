@@ -15,7 +15,7 @@ import { computeQuote } from "../src/lib/trading";
 const MARKET_ID = "cmu8tqf120002gm6k0gw5vxgl";
 const MARKET_SLUG = "htn-2026-all-toronto-team-wins";
 const PUBLISHER_ID = "goosey-market-publisher-v1";
-const APPLY_CONFIRMATION = "2026-09-19-test1-through-test20-replay";
+const APPLY_CONFIRMATION = "2026-09-20-test-and-asdf-bot-replay";
 const EXPECTED_ACTIVE = new Map([
   ["test1", "cmu8wfl20000lic040xxx0dfm"],
   ["test11", "cmu8wrrxa000blb044szi94ys"],
@@ -28,8 +28,15 @@ const EXPECTED_ACTIVE = new Map([
   ["test18", "cmu91awly000sl404tp1v71mw"],
   ["test19", "cmu91b31b000wjp04ctis8wuk"],
   ["test20", "cmu91b8ri0017jp04v2peulaj"],
+  ["asdf11", "cmu8x1uqv0029kz048b1mx28n"],
+  ["asdf12", "cmu8x55c30000k104gs9krc7o"],
+  ["asdf13", "cmu8x6qu50002l304cegd4xe6"],
+  ["asdf14", "cmu8x71o4000dl304tyziwvhl"],
+  ["asdf15", "cmu8x7yqb0027k104zn2kxwxa"],
+  ["asdf16", "cmu91uay30000kx04jul0y5gf"],
+  ["asdf17", "cmu91xtsb0000l504ny7nc28q"],
 ]);
-const INCIDENT_NAMES = new Set(Array.from({ length: 20 }, (_, index) => `test${index + 1}`));
+const INCIDENT_NAMES = new Set(EXPECTED_ACTIVE.keys());
 
 type PositionState = {
   yesShares: number; noShares: number; netCostMilli: bigint;
@@ -130,7 +137,7 @@ export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
   if (duplicateNames.length) fail(`duplicate incident identities: ${duplicateNames.join(", ")}`);
   const targetIds = new Set(nameById.keys());
   const discoveredNames = new Set(nameById.values());
-  if (targetIds.size !== INCIDENT_NAMES.size || discoveredNames.size !== INCIDENT_NAMES.size || [...INCIDENT_NAMES].some(name => !discoveredNames.has(name))) fail("preview did not discover exactly one reviewed identity for each of test1 through test20");
+  if (targetIds.size !== INCIDENT_NAMES.size || discoveredNames.size !== INCIDENT_NAMES.size || [...INCIDENT_NAMES].some(name => !discoveredNames.has(name))) fail("preview did not discover exactly the reviewed test/asdf bot identities");
   if ([...targetIds].some(id => !input.users.some(user => user.id === id && user.role === "USER"))) fail("a reviewed incident identity is missing or is no longer an ordinary user");
 
   const journalByTrade = new Map<string, typeof input.journals[number]>();

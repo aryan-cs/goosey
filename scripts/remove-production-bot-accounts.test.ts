@@ -11,6 +11,10 @@ const active = [
   ["test16", "cmu918w5e0000l404j96rh1ls"], ["test17", "cmu91alg3000jjo044ffxfe0h"],
   ["test18", "cmu91awly000sl404tp1v71mw"], ["test19", "cmu91b31b000wjp04ctis8wuk"],
   ["test20", "cmu91b8ri0017jp04v2peulaj"],
+  ["asdf11", "cmu8x1uqv0029kz048b1mx28n"], ["asdf12", "cmu8x55c30000k104gs9krc7o"],
+  ["asdf13", "cmu8x6qu50002l304cegd4xe6"], ["asdf14", "cmu8x71o4000dl304tyziwvhl"],
+  ["asdf15", "cmu8x7yqb0027k104zn2kxwxa"], ["asdf16", "cmu91uay30000kx04jul0y5gf"],
+  ["asdf17", "cmu91xtsb0000l504ny7nc28q"],
 ] as const;
 
 function fixture() {
@@ -49,25 +53,9 @@ function fixture() {
     netCostMilli: quote.totalDebitMilli!, yesCostBasisMilli: userId === "legitimate" ? 0n : quote.totalDebitMilli!,
     noCostBasisMilli: userId === "legitimate" ? quote.totalDebitMilli! : 0n, realizedPnlMilli: 0n,
     reservedYesShares: 0, reservedNoShares: 0, createdAt: at[0], updatedAt: at[0] });
-  const removedAudits = Array.from({ length: 9 }, (_, index) => {
-    const number = index + 2;
-    return {
-      id: `audit-test${number}`,
-      actorUserId: "goosey-market-publisher-v1",
-      action: "TEST_ACCOUNT_REMOVED",
-      entityType: "USER",
-      entityId: `prior-test-${number}`,
-      metadata: JSON.stringify({ formerUsername: `test${number}` }),
-      createdAt: at[0],
-    };
-  });
-  for (let number = 2; number <= 10; number++) users.push({
-    ...users[0], id: `prior-test-${number}`, username: `deleted_prior_test_${number}`,
-    email: `deleted-${number}@invalid.example`, displayName: "Deleted test account", status: "DELETED",
-  });
   return {
     market: { ...market, yesShares: second.yesSharesAfter, noShares: second.noSharesAfter, volumeMilli: first.grossMilli + second.grossMilli, traderCount: 2, version: 2 },
-    users, audits: removedAudits, trades, journals: trades.map(journal),
+    users, audits: [], trades, journals: trades.map(journal),
     positions: [position(active[0][1], first), position("legitimate", second)],
     snapshots: [
       { id: "snapshot-opening", marketId: market.id, yesProbabilityBps: 5_000, createdAt: new Date("2026-09-19T19:59:00Z") },
