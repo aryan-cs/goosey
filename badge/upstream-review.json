@@ -1,11 +1,11 @@
 {
-  "lastReviewedUpstreamRevision": "181239f9a6d3d4ec766365f20c0b3e8efbfeb8e6",
-  "reviewedAt": "2026-09-19T23:43:35.962164+00:00",
-  "outcome": "Reviewed and host-verified teammate four-hour badge charts and durable request sequence; 13-market bundle saved",
+  "lastReviewedUpstreamRevision": "429e8489952c66c19e3a79691c715211060d8d95",
+  "reviewedAt": "2026-09-20T01:17:35.409849+00:00",
+  "outcome": "Verified teammate GS2 cards, GH2 history and cold-start changes with current 13-market production catalog",
   "reviewedChanges": [
-    "Four-hour selected-market history uses bounded separate detail mailbox and actual server history; catalog contains metadata only.",
-    "Reviewed persisted request sequence and restart protection, account/header spacing updates.",
-    "Core web Solana routes and sponsored command foundation do not establish authenticated wireless badge transport; no speculative account or wallet integration."
+    "Reviewed full-width title wrapping, compact cards, right-aligned status, exact history domains and coherent probability snapshots.",
+    "Authenticated native HTTPS snapshot endpoint is available but stock Lua still lacks HTTPS; do not treat it as wireless transport.",
+    "Public catalog now supports chain-backed markets; badge quote/trade integration is still database-only. Do not route chain orders through legacy badge quote endpoints or infer SQL balance as chain collateral. Managed signing work does not remove this integration boundary."
   ],
-  "integrationStatus": "Cloud/trade, snapshot (9), gateway (5), wireless (7), detail/market readers, legacy app and sync tests pass; Game Boy layout inspected. One serial badge remains connected. Native BLE memory blocker and lack of second-device proof unchanged; dirty wireless investigation files preserved. No hardware or production mutations."
+  "integrationStatus": "Snapshot (12), gateway (5), wireless (7), cloud/trade, GS1/GS2 reader, GH2 detail reader, legacy app and save/sync checks pass; host layout inspected. No serial badge connected. Native BLE headroom and real two-device authenticated transport remain unresolved. Dirty wireless edits preserved. No hardware, live orders, migrations or production data changes."
 }
