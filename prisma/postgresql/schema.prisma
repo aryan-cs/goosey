@@ -10,52 +10,53 @@ datasource db {
 }
 
 model User {
-  id                      String                       @id @default(cuid())
-  email                   String                       @unique
-  username                String                       @unique
-  displayName             String
-  passwordHash            String
-  emailVerifiedAt         DateTime?                    @db.Timestamptz(3)
-  role                    String                       @default("USER")
-  status                  String                       @default("ACTIVE")
-  bio                     String                       @default("")
-  profilePublic           Boolean                      @default(false)
-  leaderboardVisible      Boolean                      @default(false)
-  notificationPreferences String                       @default("{}")
-  balanceMilli            BigInt                       @default(0)
-  realizedPnlMilli        BigInt                       @default(0)
-  createdAt               DateTime                     @default(now()) @db.Timestamptz(3)
-  updatedAt               DateTime                     @updatedAt @db.Timestamptz(3)
-  lastActiveAt            DateTime                     @default(now()) @db.Timestamptz(3)
-  sessions                Session[]
-  accountTokens           AccountToken[]
-  createdMarkets          Market[]                     @relation("MarketCreator")
-  createdEvents           MarketEvent[]                @relation("MarketEventCreator")
-  eventCreationRequests   MarketEventCreationRequest[] @relation("MarketEventCreationActor")
-  positions               Position[]
-  trades                  Trade[]
-  journalEntries          JournalEntry[]               @relation("JournalActor")
-  comments                Comment[]
-  watchlist               WatchlistEntry[]
-  suggestions             MarketSuggestion[]           @relation("SuggestionAuthor")
-  reviewedSuggestions     MarketSuggestion[]           @relation("SuggestionReviewer")
-  resolutionProposals     MarketResolutionProposal[]   @relation("ResolutionProposer")
-  approvedResolutions     MarketResolutionProposal[]   @relation("ResolutionApprover")
-  approvedSettlementRuns  MarketSettlementRun[]        @relation("SettlementRunApprover")
-  createdInvites          RegistrationInvite[]         @relation("InviteCreator")
-  inviteClaim             RegistrationInviteClaim?
-  registrationDevices     RegistrationDevice[]
-  auditLogs               AuditLog[]                   @relation("AuditActor")
-  notifications           Notification[]
-  reportsMade             CommentReport[]              @relation("ReportAuthor")
-  reportsResolved         CommentReport[]              @relation("ReportResolver")
-  marketOrders            MarketOrder[]
-  orderEvents             OrderEvent[]
-  orderCommands           OrderCommand[]
-  orderReservations       OrderReservation[]
-  solanaWalletChallenges  SolanaWalletLinkChallenge[]
-  solanaWalletLinks       SolanaWalletLink[]
-  solanaCustodyIdentities SolanaCustodyIdentity[]
+  id                            String                         @id @default(cuid())
+  email                         String                         @unique
+  username                      String                         @unique
+  displayName                   String
+  passwordHash                  String
+  emailVerifiedAt               DateTime?                      @db.Timestamptz(3)
+  role                          String                         @default("USER")
+  status                        String                         @default("ACTIVE")
+  bio                           String                         @default("")
+  profilePublic                 Boolean                        @default(false)
+  leaderboardVisible            Boolean                        @default(false)
+  notificationPreferences       String                         @default("{}")
+  balanceMilli                  BigInt                         @default(0)
+  realizedPnlMilli              BigInt                         @default(0)
+  createdAt                     DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime                       @updatedAt @db.Timestamptz(3)
+  lastActiveAt                  DateTime                       @default(now()) @db.Timestamptz(3)
+  sessions                      Session[]
+  accountTokens                 AccountToken[]
+  createdMarkets                Market[]                       @relation("MarketCreator")
+  createdEvents                 MarketEvent[]                  @relation("MarketEventCreator")
+  eventCreationRequests         MarketEventCreationRequest[]   @relation("MarketEventCreationActor")
+  positions                     Position[]
+  trades                        Trade[]
+  journalEntries                JournalEntry[]                 @relation("JournalActor")
+  comments                      Comment[]
+  watchlist                     WatchlistEntry[]
+  suggestions                   MarketSuggestion[]             @relation("SuggestionAuthor")
+  reviewedSuggestions           MarketSuggestion[]             @relation("SuggestionReviewer")
+  resolutionProposals           MarketResolutionProposal[]     @relation("ResolutionProposer")
+  approvedResolutions           MarketResolutionProposal[]     @relation("ResolutionApprover")
+  approvedSettlementRuns        MarketSettlementRun[]          @relation("SettlementRunApprover")
+  createdInvites                RegistrationInvite[]           @relation("InviteCreator")
+  inviteClaim                   RegistrationInviteClaim?
+  registrationDevices           RegistrationDevice[]
+  auditLogs                     AuditLog[]                     @relation("AuditActor")
+  notifications                 Notification[]
+  reportsMade                   CommentReport[]                @relation("ReportAuthor")
+  reportsResolved               CommentReport[]                @relation("ReportResolver")
+  marketOrders                  MarketOrder[]
+  orderEvents                   OrderEvent[]
+  orderCommands                 OrderCommand[]
+  orderReservations             OrderReservation[]
+  solanaWalletChallenges        SolanaWalletLinkChallenge[]
+  solanaWalletLinks             SolanaWalletLink[]
+  solanaCustodyIdentities       SolanaCustodyIdentity[]
+  solanaProvisioningCheckpoints SolanaProvisioningCheckpoint[]
 
   @@index([role, status])
   @@index([balanceMilli])
@@ -153,42 +154,60 @@ model SolanaCustodyIdentity {
   @@index([userId])
 }
 
+/// Resumable server-side enrollment/claim checkpoint. Signed wire bytes are
+/// public transaction material, never custody secrets. revision is a CAS fence.
+model SolanaProvisioningCheckpoint {
+  id             String   @id @default(cuid())
+  userId         String
+  chainId        String
+  genesisHash    String
+  revision       Int      @default(0)
+  checkpointJson String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chainId, genesisHash], map: "SolanaProvisioningCheckpoint_scope_key")
+  @@index([userId], map: "SolanaProvisioningCheckpoint_user_idx")
+}
+
 /// Durable application intent for one sponsored Solana operation. Deployment and
 /// request identity are immutable; workers mutate execution state only with a
 /// revision CAS and a hashed lease fence.
 model ChainCommand {
-  id                String                   @id @default(cuid())
-  cluster           String
-  genesisHash       String
-  programAddress    String
-  scope             String
-  scopeId           String
-  actorId           String
-  operation         String
-  idempotencyKey    String
-  requestHash       String
+  id                    String                       @id @default(cuid())
+  cluster               String
+  genesisHash           String
+  programAddress        String
+  scope                 String
+  scopeId               String
+  actorId               String
+  operation             String
+  idempotencyKey        String
+  requestHash           String
   /// Canonical JSON whose SHA-256 is requestHash.
-  requestJson       String
-  status            String                   @default("ACCEPTED")
-  revision          Int                      @default(0)
-  leaseOwner        String?
-  leaseTokenHash    String?
-  leaseEpoch        Int                      @default(0)
-  leaseExpiresAt    DateTime?                @db.Timestamptz(3)
-  attemptCount      Int                      @default(0)
-  lastErrorCode     String?
-  lastErrorMessage  String?
-  acceptedAt        DateTime                 @default(now()) @db.Timestamptz(3)
-  preparedAt        DateTime?                @db.Timestamptz(3)
-  signedAt          DateTime?                @db.Timestamptz(3)
-  submittedAt       DateTime?                @db.Timestamptz(3)
-  confirmedAt       DateTime?                @db.Timestamptz(3)
-  finalizedAt       DateTime?                @db.Timestamptz(3)
-  projectedAt       DateTime?                @db.Timestamptz(3)
-  unknownSince      DateTime?                @db.Timestamptz(3)
-  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime                 @updatedAt @db.Timestamptz(3)
-  signedWireJournal ChainCommandSignedWire[]
+  requestJson           String
+  status                String                       @default("ACCEPTED")
+  revision              Int                          @default(0)
+  leaseOwner            String?
+  leaseTokenHash        String?
+  leaseEpoch            Int                          @default(0)
+  leaseExpiresAt        DateTime?                    @db.Timestamptz(3)
+  attemptCount          Int                          @default(0)
+  lastErrorCode         String?
+  lastErrorMessage      String?
+  acceptedAt            DateTime                     @default(now()) @db.Timestamptz(3)
+  preparedAt            DateTime?                    @db.Timestamptz(3)
+  signedAt              DateTime?                    @db.Timestamptz(3)
+  submittedAt           DateTime?                    @db.Timestamptz(3)
+  confirmedAt           DateTime?                    @db.Timestamptz(3)
+  finalizedAt           DateTime?                    @db.Timestamptz(3)
+  projectedAt           DateTime?                    @db.Timestamptz(3)
+  unknownSince          DateTime?                    @db.Timestamptz(3)
+  createdAt             DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                     @updatedAt @db.Timestamptz(3)
+  signedWireJournal     ChainCommandSignedWire[]
+  settlementAttestation MarketSettlementAttestation?
 
   @@unique([genesisHash, programAddress, scope, scopeId, operation, idempotencyKey], map: "ChainCommand_scoped_idempotency_key")
   @@index([status, leaseExpiresAt], map: "ChainCommand_dispatch_idx")
@@ -774,35 +793,56 @@ model MarketResolutionProposal {
 }
 
 model MarketSettlementRun {
-  id                     String                   @id @default(cuid())
-  marketId               String                   @unique
-  proposalId             String                   @unique
+  id                     String                       @id @default(cuid())
+  marketId               String                       @unique
+  proposalId             String                       @unique
   outcome                String
   reason                 String
   evidence               String
   approvedById           String
   approvalIdempotencyKey String
   approvalRequestHash    String
-  status                 String                   @default("READY")
+  status                 String                       @default("READY")
   cursorPositionId       String?
   totalPositions         Int
-  processedCount         Int                      @default(0)
-  totalPayoutMilli       BigInt                   @default(0)
-  batchCount             Int                      @default(0)
+  processedCount         Int                          @default(0)
+  totalPayoutMilli       BigInt                       @default(0)
+  batchCount             Int                          @default(0)
   claimToken             String?
-  leaseExpiresAt         DateTime?                @db.Timestamptz(3)
+  leaseExpiresAt         DateTime?                    @db.Timestamptz(3)
   lastError              String?
-  startedAt              DateTime?                @db.Timestamptz(3)
-  completedAt            DateTime?                @db.Timestamptz(3)
-  createdAt              DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt              DateTime                 @updatedAt @db.Timestamptz(3)
-  market                 Market                   @relation(fields: [marketId], references: [id], onDelete: Restrict)
-  proposal               MarketResolutionProposal @relation(fields: [proposalId], references: [id], onDelete: Restrict)
-  approvedBy             User                     @relation("SettlementRunApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  startedAt              DateTime?                    @db.Timestamptz(3)
+  completedAt            DateTime?                    @db.Timestamptz(3)
+  createdAt              DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                     @updatedAt @db.Timestamptz(3)
+  market                 Market                       @relation(fields: [marketId], references: [id], onDelete: Restrict)
+  proposal               MarketResolutionProposal     @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  approvedBy             User                         @relation("SettlementRunApprover", fields: [approvedById], references: [id], onDelete: Restrict)
   settlements            PositionSettlement[]
+  attestation            MarketSettlementAttestation?
 
   @@unique([approvedById, approvalIdempotencyKey])
   @@index([status, leaseExpiresAt, createdAt])
+}
+
+/// Immutable intent and finalized receipt for a non-financial Solana
+/// commitment to one completed database settlement. No user wallet, token
+/// account, or feather balance participates in this record.
+model MarketSettlementAttestation {
+  id              String              @id @default(cuid())
+  settlementRunId String              @unique
+  commandId       String              @unique
+  digest          String
+  marketDigest    String
+  signature       String?             @unique
+  slot            BigInt?
+  attestedAt      DateTime?           @db.Timestamptz(3)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+  settlementRun   MarketSettlementRun @relation(fields: [settlementRunId], references: [id], onDelete: Restrict)
+  command         ChainCommand        @relation(fields: [commandId], references: [id], onDelete: Restrict)
+
+  @@index([attestedAt, createdAt])
 }
 
 model WorkerState {

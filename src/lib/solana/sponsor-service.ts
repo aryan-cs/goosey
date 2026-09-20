@@ -38,3 +38,22 @@ export async function loadSolanaSponsorSigner(
     secret.fill(0);
   }
 }
+
+/** Loads the distinct authority that authorizes free feather enrollment. */
+export async function loadSolanaEnrollmentAuthoritySigner(
+  env: Record<string, string | undefined> = process.env,
+): Promise<TransactionPartialSigner> {
+  const expected = env.GOOSEY_SOLANA_ENROLLMENT_AUTHORITY_ADDRESS;
+  if (!expected) throw new SolanaSponsorConfigurationError("The Solana enrollment authority is not configured.");
+  const expectedAddress = address(expected);
+  const secret = canonicalSecret(env.GOOSEY_SOLANA_ENROLLMENT_AUTHORITY_SECRET_KEY);
+  try {
+    const signer = await createKeyPairSignerFromBytes(secret);
+    if (signer.address !== expectedAddress) {
+      throw new SolanaSponsorConfigurationError("The Solana enrollment authority address does not match its secret.");
+    }
+    return signer;
+  } finally {
+    secret.fill(0);
+  }
+}

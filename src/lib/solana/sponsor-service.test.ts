@@ -2,7 +2,7 @@ import { generateKeyPairSync } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { loadSolanaSponsorSigner, SolanaSponsorConfigurationError } from "./sponsor-service";
+import { loadSolanaEnrollmentAuthoritySigner, loadSolanaSponsorSigner, SolanaSponsorConfigurationError } from "./sponsor-service";
 
 function secretKeyBytes() {
   const jwk = generateKeyPairSync("ed25519").privateKey.export({ format: "jwk" });
@@ -39,5 +39,9 @@ describe("Solana sponsor configuration", () => {
     } finally {
       secret.fill(0);
     }
+  });
+
+  it("keeps enrollment authority configuration separate from sponsorship", async () => {
+    await expect(loadSolanaEnrollmentAuthoritySigner({})).rejects.toThrow(/enrollment authority/);
   });
 });

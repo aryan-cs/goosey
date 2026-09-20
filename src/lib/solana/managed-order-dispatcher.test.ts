@@ -53,6 +53,8 @@ describe("managed order dispatcher", () => {
       signature: signed.signature, signedWireBase64: signed.signedWireBase64, lastValidBlockHeight: 99n }; });
     const result = await dispatchManagedOrderCommand("cmd_12345678", { store, env: runtime, owner: "worker",
       now: () => new Date("2026-09-20T00:00:01Z"), loadParticipant: vi.fn(async () => createNoopSigner(PARTICIPANT)),
+      ensureProvisioned: vi.fn(async () => ({ status: "ready" as const, operation: null, walletAddress: PARTICIPANT,
+        chainId: "solana:localnet" as const, genesisHash: GENESIS, finalizedSlot: 1n })),
       loadSponsor: vi.fn(async () => createNoopSigner(SPONSOR)), prepare: vi.fn(async () => ({ signed,
         market: SPONSOR, book: SPONSOR, expectedNonce: 0n, observedSlot: 1n, bookRevision: 1n })), submit,
       track: vi.fn(async () => ({ status: "finalized" as const, signature: signed.signature })) });
