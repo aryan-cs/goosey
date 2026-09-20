@@ -38,10 +38,11 @@ has no HTTP client or Socials email API. Wireless relay support is not included.
 The gateway checks requests every two seconds, accounts every ten seconds and
 public markets every thirty seconds. The catalog carries a bounded sample of each
 market's real four-hour history for list sparklines. Opening a market requests its
-real four-hour history separately, bounded to 32 observations and refreshed every
+real one-hour history separately, bounded to 32 observations and refreshed every
 thirty seconds.
 Confirmations take priority over chart downloads. Data is private appdata, excluded
-from native sharing; no history is fabricated. More
+from native sharing; no history is fabricated. Probability and feather amounts
+use the same nearest-whole display rules as the website. More
 than 16 open markets fails visibly rather than silently truncating the catalog.
 All displayed dates/times are UTC. Polling is used because there is no supported
 badge event stream. The old `usb_market_sync.py` remains a public-only option.

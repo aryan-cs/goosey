@@ -4,15 +4,10 @@ import { FormEvent, useRef, useState } from "react";
 import { CheckCircle2, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/client-api";
+import { formatFeathers } from "@/lib/feather-format";
 
 function requestId(): string {
   return crypto.randomUUID();
-}
-
-function formatMilli(value: bigint): string {
-  const whole = value / 1_000n;
-  const fraction = (value % 1_000n).toString().padStart(3, "0");
-  return `${whole}.${fraction}`;
 }
 
 export function RedemptionForm({
@@ -91,7 +86,7 @@ export function RedemptionForm({
         />
       </label>
       <p className="muted-copy">
-        Guaranteed payout: {formatMilli(payout)} feathers. You can cash out one matching YES and NO contract together.
+        Guaranteed payout: {formatFeathers(payout)} feathers. You can cash out one matching YES and NO contract together.
       </p>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       <button className="button button-secondary" disabled={state === "submitting"} type="submit">

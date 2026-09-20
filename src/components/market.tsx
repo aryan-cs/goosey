@@ -8,6 +8,7 @@ import { ArrowDownRight, ArrowUpRight, Bookmark, Clock3, MessageCircle, Trending
 import { FeatherIcon } from "./brand";
 import { MarketStatusLabel } from "./market-status";
 import { WatchlistButton } from "./watchlist-button";
+import { probabilityFractionLabel, probabilityMovementPoints } from "@/lib/probability-format";
 
 export type MarketStatus = "scheduled" | "open" | "live" | "paused" | "closed" | "resolving" | "resolved" | "void";
 
@@ -35,7 +36,7 @@ export interface MarketSummary {
 
 function formatProbability(value: number | null) {
   if (value === null) return "No price";
-  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
+  return probabilityFractionLabel(Math.max(0, Math.min(1, value)));
 }
 
 function MiniSparkline({ values = [] }: { values?: ProbabilityPoint[] }) {
@@ -46,11 +47,11 @@ function MiniSparkline({ values = [] }: { values?: ProbabilityPoint[] }) {
 
 function ProbabilityMovement({ change }: { change?: number }) {
   if (change === undefined || !Number.isFinite(change)) return null;
-  const magnitude = Number(Math.abs(change).toFixed(2));
-  const amount = change !== 0 && magnitude === 0 ? "<0.01" : String(magnitude);
-  const direction = change > 0 ? "up" : change < 0 ? "down" : "flat";
-  return <small className={`movement-${direction}`} title="Change since the previous recorded price" aria-label={`Last change: ${amount} percentage points${change === 0 ? ", unchanged" : change > 0 ? " up" : " down"}`}>
-    {change > 0 ? <ArrowUpRight aria-hidden="true" /> : change < 0 ? <ArrowDownRight aria-hidden="true" /> : null}
+  const rounded = probabilityMovementPoints(0, Math.round(change * 100));
+  const amount = String(Math.abs(rounded));
+  const direction = rounded > 0 ? "up" : rounded < 0 ? "down" : "flat";
+  return <small className={`movement-${direction}`} title="Change since the previous recorded price" aria-label={`Last change: ${amount} percentage points${rounded === 0 ? ", unchanged" : rounded > 0 ? " up" : " down"}`}>
+    {rounded > 0 ? <ArrowUpRight aria-hidden="true" /> : rounded < 0 ? <ArrowDownRight aria-hidden="true" /> : null}
     <span>{amount} pts</span><span className="movement-period">last change</span>
   </small>;
 }

@@ -36,19 +36,20 @@ export function withHeldPriceEndpoint(points: readonly ChartPoint[], now: number
   return [...series, { timestamp: now, probability: latest.probability, held: true }];
 }
 
-/** Keep small moves readable, with an explicitly labeled probability domain. */
+/** Keep compact, unlabeled trend sparklines readable without changing values. */
 export function chartDomain(points: readonly ChartPoint[]): [number, number] {
   const normalized = normalizeChartPoints(points);
   if (!normalized.length) return [0, 1];
-  let low = 1;
-  let high = 0;
+  let lowBps = 10_000;
+  let highBps = 0;
   for (const point of normalized) {
-    low = Math.min(low, point.probability);
-    high = Math.max(high, point.probability);
+    const bps = Math.round(point.probability * 10_000);
+    lowBps = Math.min(lowBps, bps);
+    highBps = Math.max(highBps, bps);
   }
-  const span = Math.min(1, Math.max(0.1, high - low + 0.04));
-  const start = Math.max(0, Math.min(1 - span, (low + high - span) / 2));
-  return [start, Math.min(1, start + span)];
+  const spanBps = Math.min(10_000, Math.max(1_000, highBps - lowBps + 400));
+  const startBps = Math.max(0, Math.min(10_000 - spanBps, Math.floor((lowBps + highBps - spanBps) / 2)));
+  return [startBps / 10_000, (startBps + spanBps) / 10_000];
 }
 
 /** Returns an index into sorted, normalized observations; earlier wins exact ties. */

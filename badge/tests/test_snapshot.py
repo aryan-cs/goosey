@@ -27,8 +27,8 @@ class SnapshotTest(unittest.TestCase):
 
     def test_database_values_and_real_bounded_history(self):
         m = self.fetch()['markets'][0]
-        self.assertEqual(m['probability'], 51.23)
-        self.assertEqual(m['history'], [[50,1789855200000],[51.23,1789858800000]])
+        self.assertEqual(m['probabilityBps'], 5123)
+        self.assertEqual(m['history'], [[5000,1789855200000],[5123,1789858800000]])
         self.assertEqual(m['changeBps'], 123)
         self.assertEqual(m['category'], 'Hack the North')
         self.assertEqual(m['shortTitle'], 'Is it happening?')
@@ -53,22 +53,58 @@ class SnapshotTest(unittest.TestCase):
         self.assertLessEqual(sum(len(m['history']) for m in result['markets']),96)
         self.assertTrue(all(m['history'][0][1] == 1789848000000 and m['history'][-1][1] == 1789858800000 for m in result['markets']))
 
-    def test_selected_market_gets_real_four_hour_history(self):
-        payload={'range':'4H','rangeStart':'2026-09-19T18:00:00.000Z','snapshots':[
-            {'createdAt':'2026-09-19T17:00:00.000Z','yesProbabilityBps':5000},
-            {'createdAt':'2026-09-19T20:00:00.000Z','yesProbabilityBps':6123},
+    def test_selected_market_gets_coherent_one_hour_history(self):
+        payload={'range':'1H','rangeStart':'2026-09-19T19:00:00.000Z',
+                 'asOf':'2026-09-19T20:00:00.000Z','currentProbabilityYesBps':6123,
+                 'sampledFrom':41,'downsampled':True,'source':'PROBABILITY','snapshots':[
+            # The point immediately before the range is the held-price baseline.
+            {'createdAt':'2026-09-19T18:59:00.000Z','yesProbabilityBps':5000},
+            {'createdAt':'2026-09-19T19:45:00.000Z','yesProbabilityBps':6123},
         ]}
         with patch.object(module,'urlopen',return_value=BytesIO(json.dumps(payload).encode())) as get:
             detail=module.fetch_market_history('https://getgoosey.vercel.app','market-one')
-        self.assertIn('/history?range=4H&limit=32',get.call_args.args[0])
-        self.assertEqual(detail['rangeEnd']-detail['rangeStart'],14_400_000)
-        self.assertEqual(detail['history'],[[50,1789837200000],[61.23,1789848000000]])
-        self.assertIn('\tmarket-one\t',module.detail_mailbox_frame(detail).decode())
+        self.assertIn('/history?range=1H&limit=32',get.call_args.args[0])
+        self.assertEqual(detail['rangeEnd']-detail['rangeStart'],3_600_000)
+        self.assertEqual(detail['history'],[[5000,1789844340000],[6123,1789847100000]])
+        self.assertEqual(detail['currentProbabilityBps'],6123)
+        self.assertEqual(detail['sampledFrom'],41)
+        self.assertTrue(detail['downsampled'])
+        self.assertEqual(detail['source'],'PROBABILITY')
+        frame=module.detail_mailbox_frame(detail).decode()
+        self.assertTrue(frame.startswith('GH2\t'))
+        self.assertIn('\tmarket-one\t',frame)
+        self.assertIn('\t2\t41\t1\t6123\tPROBABILITY\n',frame)
+        self.assertIn('H\t1789847100000\t6123\n',frame)
 
     def test_selected_history_rejects_wrong_range(self):
-        payload={'range':'1D','rangeStart':'2026-09-19T18:00:00.000Z','snapshots':[]}
+        payload={'range':'4H','rangeStart':'2026-09-19T19:00:00.000Z',
+                 'asOf':'2026-09-19T20:00:00.000Z','currentProbabilityYesBps':5000,
+                 'sampledFrom':0,'downsampled':False,'source':'PROBABILITY','snapshots':[]}
         with patch.object(module,'urlopen',return_value=BytesIO(json.dumps(payload).encode())):
             with self.assertRaises(ValueError): module.fetch_market_history('https://getgoosey.vercel.app','market-one')
+
+    def test_selected_history_rejects_incoherent_or_invalid_metadata(self):
+        base={'range':'1H','rangeStart':'2026-09-19T19:00:00.000Z',
+              'asOf':'2026-09-19T20:00:00.000Z','currentProbabilityYesBps':5050,
+              'sampledFrom':1,'downsampled':False,'source':'PROBABILITY',
+              'snapshots':[{'createdAt':'2026-09-19T19:30:00.000Z','yesProbabilityBps':5050}]}
+        cases=(
+            {'asOf':'2026-09-19T20:00:00.001Z'},
+            {'currentProbabilityYesBps':True},
+            {'currentProbabilityYesBps':10001},
+            {'sampledFrom':0},
+            {'sampledFrom':True},
+            {'downsampled':'false'},
+            {'source':'SMOOTHED'},
+        )
+        for change in cases:
+            with self.subTest(change=change), patch.object(module,'urlopen',return_value=BytesIO(json.dumps({**base,**change}).encode())):
+                with self.assertRaises(ValueError): module.fetch_market_history('https://getgoosey.vercel.app','market-one')
+
+    def test_mailbox_keeps_half_percent_basis_points_exact(self):
+        snapshot=self.fetch(probabilityYesBps=5050)
+        frame=module.mailbox_frame({**snapshot,'generation':'123'}).decode()
+        self.assertIn('\t5050\t',frame)
 
     def test_bad_probability_and_volume(self):
         for data in ({'probabilityYesBps': 10001}, {'probabilityYesBps': True}, {'volumeMilli': '-1'}):

@@ -9,6 +9,7 @@ import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, RotateCcw } from "
 import { apiFetch } from "@/lib/client-api";
 import { MAX_TRADE_QUANTITY, validTradeQuantity } from "@/lib/trade-quantity";
 import { formatFeathers } from "@/lib/feather-format";
+import { complementaryWholePercents, probabilityBpsToWholePercent, probabilityFractionLabel, probabilityFractionToBps } from "@/lib/probability-format";
 
 type Outcome = "YES" | "NO";
 type Action = "BUY" | "SELL";
@@ -91,10 +92,11 @@ export function TradeTicket({
   const previewUrl = previewEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/preview`;
   const tradeUrl = tradeEndpoint ?? `/api/markets/${encodeURIComponent(marketId)}/trades`;
   const currentProbability = outcome === "YES" ? yesProbability : noProbability;
+  const displayedProbability = complementaryWholePercents(probabilityFractionToBps(yesProbability));
   const quantityValid = validTradeQuantity(quantity);
   const milli = (value: number | string | bigint | undefined) => BigInt(value ?? 0);
   const featherText = (value: number | string | bigint | undefined) => {
-    return formatFeathers(milli(value), 2);
+    return formatFeathers(milli(value));
   };
   const quotedTotal = quote ? (action === "BUY" ? milli(quote.totalDebitMilli ?? milli(quote.grossMilli) + milli(quote.feeMilli)) : milli(quote.netCreditMilli ?? milli(quote.grossMilli) - milli(quote.feeMilli))) : 0n;
   const previewTotal = preview ? (action === "BUY" ? milli(preview.totalDebitMilli ?? milli(preview.grossMilli) + milli(preview.feeMilli)) : milli(preview.netCreditMilli ?? milli(preview.grossMilli) - milli(preview.feeMilli))) : 0n;
@@ -187,8 +189,8 @@ export function TradeTicket({
       ) : <>
         <div className="segmented" aria-label="Trade action">{(["BUY", "SELL"] as Action[]).map((value) => <button aria-pressed={action === value} className={action === value ? "active" : ""} onClick={() => edit({ action: value })} key={value}>{value === "BUY" ? "Buy" : "Sell"}</button>)}</div>
         {!outcomeLabel && <div className="side-grid" aria-label="Contract side">
-          <button className={outcome === "YES" ? "yes selected" : "yes"} aria-pressed={outcome === "YES"} onClick={() => edit({ outcome: "YES" })}><span>Yes</span><strong>{Math.round(yesProbability * 100)}%</strong></button>
-          <button className={outcome === "NO" ? "no selected" : "no"} aria-pressed={outcome === "NO"} onClick={() => edit({ outcome: "NO" })}><span>No</span><strong>{Math.round(noProbability * 100)}%</strong></button>
+          <button className={outcome === "YES" ? "yes selected" : "yes"} aria-pressed={outcome === "YES"} onClick={() => edit({ outcome: "YES" })}><span>Yes</span><strong>{displayedProbability.yes}%</strong></button>
+          <button className={outcome === "NO" ? "no selected" : "no"} aria-pressed={outcome === "NO"} onClick={() => edit({ outcome: "NO" })}><span>No</span><strong>{displayedProbability.no}%</strong></button>
         </div>}
         <div className={styles.quantityGroup}><label className="field-label" htmlFor="trade-quantity">Contracts</label>
         <div className="quantity-input"><input id="trade-quantity" inputMode="numeric" min={1} max={MAX_TRADE_QUANTITY} step={1} type="number" value={quantity} aria-invalid={!quantityValid} aria-describedby={!quantityValid ? "trade-quantity-error" : undefined} disabled={state !== "editing"} onChange={(event) => { setQuantity(event.currentTarget.valueAsNumber || 0); setPreview(null); setPreviewError(null); setError(null); }} /><span>contracts</span></div>
@@ -198,7 +200,7 @@ export function TradeTicket({
         <dl className="trade-breakdown">
           {quote ? <>
             <div><dt>Average price</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.averagePriceMilli)}</dd></div>
-            <div><dt>Forecast after trade</dt><dd>{Math.round(quote.probabilityYesAfterBps / 100)}% {outcomeLabel ?? "Yes"}</dd></div>
+            <div><dt>Forecast after trade</dt><dd>{probabilityBpsToWholePercent(quote.probabilityYesAfterBps)}% {outcomeLabel ?? "Yes"}</dd></div>
             <div><dt>Fee</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quote.feeMilli)}</dd></div>
             {action === "BUY" ? <div className={styles.moneySummary}>
               <div className={styles.primaryAmount}><dt>You pay now</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div>
@@ -206,7 +208,7 @@ export function TradeTicket({
               <div><dt>Profit if correct</dt><dd><FeatherIcon width={15} height={15} /> {featherText(potentialProfitMilli)}</dd></div>
             </div> : <div className={`${styles.primaryAmount} trade-total`}><dt>You receive now</dt><dd><FeatherIcon width={15} height={15} /> {featherText(quotedTotal)}</dd></div>}
           </> : preview ? <>
-            <div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div>
+            <div><dt>Current forecast</dt><dd>{probabilityFractionLabel(currentProbability)}</dd></div>
             <div><dt>Average price</dt><dd><FeatherIcon width={15} height={15} /> {featherText(preview.averagePriceMilli)}</dd></div>
             <div><dt>Fee</dt><dd><FeatherIcon width={15} height={15} /> {featherText(preview.feeMilli)}</dd></div>
             {action === "BUY" ? <div className={styles.moneySummary}>
@@ -215,7 +217,7 @@ export function TradeTicket({
               <div><dt>Potential profit</dt><dd><FeatherIcon width={15} height={15} /> {featherText(previewProfitMilli)}</dd></div>
             </div> : <div className={styles.primaryAmount}><dt>Current proceeds</dt><dd><FeatherIcon width={15} height={15} /> {featherText(previewTotal)}</dd></div>}
             {balanceMilli !== undefined && <div><dt>Available</dt><dd><FeatherIcon width={15} height={15} /> {featherText(balanceMilli)}</dd></div>}
-          </> : <><div><dt>Current forecast</dt><dd>{Math.round(currentProbability * 100)}%</dd></div><div className={styles.calculating}><dt>Current price</dt><dd>{previewing ? "Calculating…" : "—"}</dd></div></>}
+          </> : <><div><dt>Current forecast</dt><dd>{probabilityFractionLabel(currentProbability)}</dd></div><div className={styles.calculating}><dt>Current price</dt><dd>{previewing ? "Calculating…" : "—"}</dd></div></>}
         </dl>
         {state === "editing" && preview && <p className={styles.estimateNote}>Live preview based on the current market. Review to lock an exact price for 30 seconds.</p>}
         {state === "editing" && previewError && <p className="form-error" role="alert"><AlertCircle /> {previewError}</p>}

@@ -14,11 +14,26 @@ local function save(path,s)
   return badge.fs.read("appdata/"..path)==s
 end
 local function money(s)
-  local n=tonumber(s) or 0
-  return string.format("%d.%03d",math.floor(n/1000),n%1000)
+  if type(s)~="string" or not s:match("^%d+$") then return "0" end
+  s=s:gsub("^0+","");if s=="" then s="0" end
+  local whole,fraction
+  if #s<=3 then whole="0";fraction=string.rep("0",3-#s)..s
+  else whole=s:sub(1,#s-3);fraction=s:sub(-3) end
+  if fraction>="500" then
+    local carry,out=1,""
+    for i=#whole,1,-1 do
+      local digit=tonumber(whole:sub(i,i))+carry
+      if digit>=10 then digit=digit-10;carry=1 else carry=0 end
+      out=tostring(digit)..out
+    end
+    whole=(carry==1 and "1" or "")..out
+  end
+  local grouped=""
+  while #whole>3 do grouped=","..whole:sub(-3)..grouped;whole=whole:sub(1,-4) end
+  return whole..grouped
 end
 local function balanceMoney(s)
-  return string.format("%.2f",(tonumber(s) or 0)/1000)
+  return money(s)
 end
 local function fresh()
   return T.name and lastRx and badge.sys.ms()-lastRx<35000

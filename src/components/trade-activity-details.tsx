@@ -12,6 +12,6 @@ export function TradeActivityDetails({ trade }: {
     <strong className={trade.side === "YES" ? styles.positive : trade.side === "NO" ? styles.negative : styles.option}>{trade.side}</strong>{" "}
     {trade.quantity === 1 ? "share" : "shares"}</span>
     </span>
-    <span className={styles.volume}><span className={styles.amount} title="Total trade volume, excluding fees"><FeatherIcon />{formatFeathers(trade.amountMilli, 3)}<span className="sr-only"> feathers</span></span>{" "}<span>total volume</span></span>
+    <span className={styles.volume}><span className={styles.amount} title="Total trade volume, excluding fees"><FeatherIcon />{formatFeathers(trade.amountMilli)}<span className="sr-only"> feathers</span></span>{" "}<span>total volume</span></span>
   </span>;
 }

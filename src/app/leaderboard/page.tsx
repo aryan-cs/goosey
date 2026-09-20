@@ -28,7 +28,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
         <h2 id="your-ranking-heading">Your ranking</h2>
         <p className={styles.rank}>#{viewer.rank.toLocaleString()} <span>of {total.toLocaleString()}</span></p>
         <p className={styles.username}>@{viewer.username}</p>
-        <dl><div><dt>Total balance</dt><dd>{formatFeathers(viewer.equityMilli, 2)} feathers</dd></div><div><dt>Available</dt><dd>{formatFeathers(viewer.cashMilli, 2)} feathers</dd></div></dl>
+        <dl><div><dt>Total balance</dt><dd>{formatFeathers(viewer.equityMilli)} feathers</dd></div><div><dt>Available</dt><dd>{formatFeathers(viewer.cashMilli)} feathers</dd></div></dl>
       </Link>
       <LeaderboardSearch />
     </aside>}

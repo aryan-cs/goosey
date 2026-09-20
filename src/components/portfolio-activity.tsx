@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/client-api";
 import { EmptyState, ErrorState, LoadingState } from "./states";
 import styles from "./portfolio-activity.module.css";
 import { OrderAmendment } from "./order-amendment";
+import { formatFeathers } from "@/lib/feather-format";
 
 type Activity = {
   orderId: string; fillId?: string; market: { slug: string; title: string; payoutMilli: string };
@@ -19,11 +20,7 @@ type Activity = {
 };
 
 function feathers(value: string = "0") {
-  const amount = BigInt(value);
-  const negative = amount < 0n;
-  const absolute = negative ? -amount : amount;
-  const fraction = (absolute % 1000n).toString().padStart(3, "0").replace(/0+$/, "");
-  return `${negative ? "−" : ""}${(absolute / 1000n).toLocaleString("en-CA")}${fraction ? `.${fraction}` : ""} feathers`;
+  return `${formatFeathers(BigInt(value))} feathers`;
 }
 
 function readable(value: string) { return value.toLowerCase().replaceAll("_", " "); }

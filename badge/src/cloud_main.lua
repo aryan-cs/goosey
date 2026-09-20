@@ -8,6 +8,11 @@ local labels,header,status,stamp,mark,chart,track,dot,midline,listCharts
 local lastRead,lastRx,lastGC=0,nil,0
 local detail,detailGeneration
 local initialized=false
+local function wholePercent(bps) return math.floor((bps+50)/100) end
+local function wholePoints(delta)
+  local rounded=math.floor((math.abs(delta)+50)/100)
+  return delta<0 and -rounded or rounded
+end
 local function wrap(s,limit)
   local line,out="",""
   for word in s:gmatch("%S+") do
@@ -48,10 +53,10 @@ local function drawListChart(slot,item,y)
   local line=listCharts[slot]
   local h=item.history or {}
   if #h<2 then return end
-  local low,high=100,0
+  local low,high=10000,0
   for j=1,#h do low=math.min(low,h[j][1]);high=math.max(high,h[j][1]) end
-  local span=math.min(100,math.max(10,high-low+4))
-  local domainLow=math.max(0,math.min(100-span,(low+high-span)/2))
+  local span=math.min(10000,math.max(1000,high-low+400))
+  local domainLow=math.max(0,math.min(10000-span,math.floor((low+high-span)/2)))
   local domainHigh=domainLow+span
   local first=cloud.rangeStart or h[1][2]
   local last=cloud.rangeEnd or h[#h][2]
@@ -78,7 +83,7 @@ local function refreshDetail()
   if not m then return false end
   local data=badge.fs.read("appdata/detail_history.txt")
   if type(data)~="string" then return false end
-  local generation=data:match("^GH1\t(%d+)\t")
+  local generation=data:match("^GH2\t(%d+)\t")
   if not generation or generation==detailGeneration then return false end
   local nextDetail=readDetailFrame(data)
   if not nextDetail or nextDetail.slug~=m.slug then return false end
@@ -142,7 +147,7 @@ local function render()
         local y=40+row*65
         local base=row*2
         text(base+1,wrapCard(item.shortTitle or item.title),15,y+10,160,14)
-        text(base+2,string.format("%.0f%%",item.probability),244,y+18,66,22,"right")
+        text(base+2,tostring(wholePercent(item.probabilityBps)).."%",244,y+18,66,22,"right")
         drawListChart(row+1,item,y)
         if selected==i then focus(5,y-4,310,61) end
       end
@@ -152,26 +157,26 @@ local function render()
     local titleLines=detailTitle:find("\n",1,true) and 2 or 1
     text(1,detailTitle,10,36,300,16)
     local h=detail and detail.slug==m.slug and detail.history or {}
-    local change=#h>1 and h[#h][1]-h[1][1] or nil
-    local changeText=change and string.format("%+.0f pts | Past 4 Hours",change)
-      or not detail and "Loading 4H History..."
-      or #h==1 and "1 Price | Past 4 Hours" or "No History | Past 4 Hours"
-    text(3,changeText,10,36+titleLines*18,190,14,"left",change and (change<0 and C.down or C.up) or C.muted)
-    text(2,string.format("%.0f%%",m.probability),212,100,98,24,"right")
+    local currentBps=detail and detail.currentProbabilityBps or m.probabilityBps
+    local movement=#h>1 and wholePoints(h[#h][1]-h[1][1]) or nil
+    local period=detail and detail.downsampled and "Sampled 1H" or "Past 1 Hour"
+    local changeText=movement and string.format("%+d pts | %s",movement,period)
+      or not detail and "Loading 1H History..."
+      or #h==1 and "1 Price | "..period or "No History | "..period
+    text(3,changeText,10,36+titleLines*18,190,14,"left",movement and (movement<0 and C.down or C.up) or C.muted)
+    text(2,tostring(wholePercent(currentBps)).."%",212,100,98,24,"right")
     text(7,"Vol "..m.volume,212,139,98,14,"right")
     track:hidden(false);midline:hidden(false)
-    local low,high=100,0
-    for j=1,#h do low=math.min(low,h[j][1]);high=math.max(high,h[j][1]) end
-    local domainSpan=math.min(100,math.max(10,high-low+4))
-    local domainLow=math.max(0,math.min(100-domainSpan,(low+high-domainSpan)/2))
-    local domainHigh=domainLow+domainSpan
-    text(4,string.format("%.0f%%",domainHigh),7,85,36,14,"right")
-    text(5,string.format("%.0f%%",(domainHigh+domainLow)/2),7,128,36,14,"right")
-    text(6,string.format("%.0f%%",domainLow),7,168,36,14,"right")
+    local domainLow,domainHigh,domainSpan=0,10000,10000
+    text(4,tostring(wholePercent(domainHigh)).."%",7,85,36,14,"right")
+    text(5,tostring(wholePercent(math.floor((domainHigh+domainLow)/2))).."%",7,128,36,14,"right")
+    text(6,tostring(wholePercent(domainLow)).."%",7,168,36,14,"right")
     local pts={}
     for j=1,#h do
       local x=math.max(0,math.min(1,(h[j][2]-detail.startAt)/(detail.endAt-detail.startAt)))
-      pts[#pts+1]={math.floor(x*132),math.floor((domainHigh-h[j][1])/domainSpan*88)}
+      local px,py=math.floor(x*132),math.floor((domainHigh-h[j][1])/domainSpan*88)
+      if #pts>0 then pts[#pts+1]={px,pts[#pts][2]} end
+      pts[#pts+1]={px,py}
     end
     if #pts>0 and pts[#pts][1]<132 then pts[#pts+1]={132,pts[#pts][2]} end
     chart:set_pos(52,90);chart:style({line_color=C.text,line_width=2})
@@ -182,8 +187,9 @@ local function render()
     text(8,"["..state.."]",10,186,90,14,"left",m.status=="OPEN" and C.up or C.muted)
     stamp:set_pos(100,186);stamp:set_size(210,17);stamp:set_text("Closes "..m.closes)
     focus(side==1 and 7 or 164,207,149,28)
-    text(9,string.format("YES  %.0f%%",m.probability),18,212,132,16)
-    text(10,string.format("NO  %.0f%%",100-m.probability),176,212,132,16)
+    local yes=wholePercent(currentBps)
+    text(9,"YES  "..yes.."%",18,212,132,16)
+    text(10,"NO  "..(100-yes).."%",176,212,132,16)
   elseif page=="settings" then
     local options={"Return to Markets","Account Info"}
     for i=1,2 do text(i,options[i],18,54+(i-1)*46,285,18) end

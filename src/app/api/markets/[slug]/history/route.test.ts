@@ -82,7 +82,16 @@ describe("market history", () => {
     const response = await GET(request("?range=ALL"), context());
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ snapshots: [], trades: [], sampledFrom: 0, source: "EXECUTIONS", rangeStart: null });
+    await expect(response.json()).resolves.toMatchObject({
+      asOf: NOW.toISOString(),
+      snapshots: [],
+      currentProbabilityYesBps: null,
+      trades: [],
+      sampledFrom: 0,
+      downsampled: false,
+      source: "EXECUTIONS",
+      rangeStart: null,
+    });
     expect(mocks.runSerializableTransaction).toHaveBeenCalledOnce();
     expect(mocks.market).toHaveBeenCalledWith({
       where: { slug: "book" },
@@ -106,6 +115,12 @@ describe("market history", () => {
       ["random-z", 3001],
       ["random-a", 7000],
     ]);
+    expect(body).toMatchObject({
+      asOf: NOW.toISOString(),
+      currentProbabilityYesBps: 7000,
+      source: "EXECUTIONS",
+      downsampled: false,
+    });
     expect(mocks.fills).toHaveBeenCalledWith({
       where: { marketId: "book" },
       orderBy: [{ createdAt: "asc" }, { tradeSequence: "asc" }, { id: "asc" }],
@@ -121,7 +136,9 @@ describe("market history", () => {
     const body = await response.json();
 
     expect(body.rangeStart).toBe(since.toISOString());
+    expect(body.asOf).toBe(NOW.toISOString());
     expect(body.snapshots[0].yesProbabilityBps).toBe(4000);
+    expect(body.currentProbabilityYesBps).toBe(4000);
     expect(mocks.fills).toHaveBeenCalledWith(expect.objectContaining({ where: { marketId: "book", createdAt: { gte: since } } }));
     expect(mocks.priorFill).toHaveBeenCalledWith({
       where: { marketId: "book", createdAt: { lt: since } },
@@ -144,6 +161,12 @@ describe("market history", () => {
     const body = await response.json();
 
     expect(body.snapshots.map((row: { id: string }) => row.id)).toEqual(["snapshot-prior", "snapshot-current"]);
+    expect(body).toMatchObject({
+      asOf: NOW.toISOString(),
+      currentProbabilityYesBps: 5500,
+      source: "PROBABILITY",
+      downsampled: false,
+    });
     expect(body.trades[0]).toMatchObject({ id: "trade", amountMilli: "10000", feeMilli: "100" });
     expect(mocks.snapshots).toHaveBeenCalledWith(expect.objectContaining({ where: { marketId: "lmsr", createdAt: { gte: since } } }));
     expect(mocks.priorSnapshot).toHaveBeenCalledWith(expect.objectContaining({ where: { marketId: "lmsr", createdAt: { lt: since } } }));

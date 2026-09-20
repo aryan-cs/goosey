@@ -34,7 +34,8 @@ export async function GET(
     const { slug } = paramsSchema.parse(await context.params);
     const query = parseQuery(request.nextUrl.searchParams);
     const duration = { ...CHART_RANGE_DURATION, "1D": 86_400_000, "1W": 604_800_000, "1M": 2_592_000_000 } as const;
-    const since = query.range === "ALL" ? undefined : new Date(Date.now() - duration[query.range]);
+    const asOf = new Date();
+    const since = query.range === "ALL" ? undefined : new Date(asOf.getTime() - duration[query.range]);
     const payload = await runSerializableTransaction(prisma, async (tx) => {
       const market = await tx.market.findUnique({ where: { slug }, select: { id: true, status: true, pricingModel: true, payoutMilli: true } });
       if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
@@ -49,7 +50,7 @@ export async function GET(
         ]);
         const observations = (priorFill ? [priorFill, ...fills] : fills).map((fill) => ({ id: fill.id, timestamp: fill.createdAt, probabilityYesBps: Number(impliedProbabilityBps(fill.canonicalYesPriceMilli, market.payoutMilli)) }));
         const snapshots = boundedPriceHistory(observations, query.limit).map((point) => ({ id: point.id, marketId: market.id, yesProbabilityBps: point.probabilityYesBps, createdAt: point.timestamp }));
-        return { snapshots, trades: [], range: query.range, rangeStart: since ?? null, sampledFrom: observations.length, downsampled: observations.length > snapshots.length, source: "EXECUTIONS" };
+        return { asOf, snapshots, currentProbabilityYesBps: snapshots.at(-1)?.yesProbabilityBps ?? null, trades: [], range: query.range, rangeStart: since ?? null, sampledFrom: observations.length, downsampled: observations.length > snapshots.length, source: "EXECUTIONS" };
       }
 
       const [rawSnapshots, priorSnapshot, trades] = await Promise.all([
@@ -88,7 +89,7 @@ export async function GET(
         yesProbabilityBps: snapshot.probabilityYesBps,
         createdAt: snapshot.createdAt,
       }));
-      return { snapshots, trades, range: query.range, rangeStart: since ?? null, sampledFrom: sourceSnapshots.length, downsampled: sourceSnapshots.length > snapshots.length };
+      return { asOf, snapshots, currentProbabilityYesBps: snapshots.at(-1)?.yesProbabilityBps ?? null, trades, range: query.range, rangeStart: since ?? null, sampledFrom: sourceSnapshots.length, downsampled: sourceSnapshots.length > snapshots.length, source: "PROBABILITY" };
     });
     return NextResponse.json(jsonSafe(payload), { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

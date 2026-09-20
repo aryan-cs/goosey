@@ -12,7 +12,7 @@ export function HomeActivity({ trades, now = new Date() }: { trades: PublicTrade
     <span className={styles.user} title={`@${trade.user.username}`}>@{trade.user.username}</span>
     <div className={styles.trade}>
       <span><strong className={trade.action === "BUY" ? styles.yes : styles.no}>{trade.action === "BUY" ? "Bought" : "Sold"}</strong>{" "}{trade.quantity.toLocaleString("en-CA")}{" "}<strong className={trade.side === "YES" ? styles.yes : trade.side === "NO" ? styles.no : undefined}>{trade.side}</strong>{" "}{trade.quantity === 1 ? "share" : "shares"}</span>
-      <span className={styles.amount} title="Total trade volume, excluding fees"><FeatherIcon />{formatFeathers(trade.amountMilli, 3)}<span className="sr-only"> feathers total volume</span></span>
+      <span className={styles.amount} title="Total trade volume, excluding fees"><FeatherIcon />{formatFeathers(trade.amountMilli)}<span className="sr-only"> feathers total volume</span></span>
     </div>
   </li>)}</ul>;
 }

@@ -83,7 +83,7 @@ describe("trade ticket quote summary", () => {
     expect(breakdownValue(html, "You pay now")).toBe("194");
     expect(breakdownValue(html, "Total return if correct")).toBe("300");
     expect(breakdownValue(html, "Profit if correct")).toBe("106");
-    expect(breakdownValue(html, "Fee")).toBe("2.5");
+    expect(breakdownValue(html, "Fee")).toBe("3");
     expect(html).toContain("Buy 3 YES");
   });
 

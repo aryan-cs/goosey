@@ -6,11 +6,12 @@ import rangeStyles from "./chart-range.module.css";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CHART_RANGES, CHART_RANGE_DURATION, type ChartRange, chartDomain, withHeldPriceEndpoint, normalizeChartPoints, selectChartRange, type ChartPoint } from "@/lib/chart-series";
 import { createChartCurve } from "@/lib/chart-path";
+import { probabilityFractionLabel, probabilityFractionToBps, probabilityMovementPoints } from "@/lib/probability-format";
 
-type ChartInspection = { timestamp: number; probability: number; opening?: boolean; held?: boolean; interpolated?: boolean };
+type ChartInspection = { timestamp: number; probability: number; opening?: boolean; held?: boolean };
 
 export function probabilityLabel(value: number) {
-  return `${Math.round(value * 100)}%`;
+  return probabilityFractionLabel(value);
 }
 
 function dateLabel(timestamp: number) {
@@ -22,10 +23,12 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
   onInspect?: (point: ChartInspection | null) => void;
 }) {
   const series = useMemo(() => normalizeChartPoints(points), [points]);
-  const [inspectedTime, setInspectedTime] = useState<number | null>(null);
+  const inspectionToken = useMemo(() => ({ endAt, series }), [endAt, series]);
+  const [inspection, setInspection] = useState<{ time: number | null; token: object }>(() => ({ time: null, token: inspectionToken }));
+  const inspectedTime = inspection.token === inspectionToken ? inspection.time : null;
   const interaction = useRef<"pointer" | "keyboard">("pointer");
   const gradient = useId().replace(/:/g, "");
-  const [low, high] = chartDomain(series);
+  const [low, high] = compact ? chartDomain(series) : [0, 1];
   const firstTime = startAt ?? series[0]?.timestamp ?? 0;
   const lastTime = Math.max(endAt ?? series.at(-1)?.timestamp ?? firstTime, firstTime + 1);
   const inspectionStart = Math.max(firstTime, series[0]?.timestamp ?? firstTime);
@@ -47,12 +50,12 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
     const held = lastObservation && timestamp > lastObservation.timestamp;
     const opening = previous?.opening && (!next || next.opening || previous.probability === next.probability);
     return { timestamp, probability: Math.max(0, Math.min(1, low + (100 - (geometry.valueAt(x(timestamp)) ?? 50)) / 100 * (high - low))),
-      ...(held ? { held: true } : opening ? { opening: true } : { interpolated: true }) };
+      ...(held ? { held: true } : opening ? { opening: true } : {}) };
   }
   const selected = series.length ? sample(selectedTime) : undefined;
   function inspect(timestamp: number | null) {
     const time = timestamp === null ? null : clampTime(timestamp);
-    setInspectedTime(time);
+    setInspection({ time, token: inspectionToken });
     onInspect?.(time === null ? null : sample(time));
   }
   function pointer(clientX: number, bounds: DOMRect) {
@@ -65,7 +68,7 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
   const path = geometry.path + ` H 100`;
   const selectedX = x(selected.timestamp);
   return <div className={`probability-plot ${compact ? "compact-plot" : "full-plot"} ${positive ? "positive" : "negative"}`}>
-    <div className="probability-plot-surface" role="slider" tabIndex={0} aria-label={`${label} history`} aria-valuemin={inspectionStart} aria-valuemax={lastTime} aria-valuenow={selectedTime} aria-valuetext={`${probabilityLabel(selected.probability)} on ${dateLabel(selected.timestamp)}${selected.held ? ", held price" : selected.opening ? ", opening price" : selected.interpolated ? ", interpolated" : ""}`} data-inspecting={inspectedTime !== null}
+    <div className="probability-plot-surface" role="slider" tabIndex={0} aria-label={`${label} history`} aria-valuemin={inspectionStart} aria-valuemax={lastTime} aria-valuenow={selectedTime} aria-valuetext={`${probabilityLabel(selected.probability)} on ${dateLabel(selected.timestamp)}${selected.held ? ", held price" : selected.opening ? ", opening price" : ""}`} data-inspecting={inspectedTime !== null}
       onPointerMove={(event) => { if (event.pointerType !== "touch" || event.buttons) { interaction.current = "pointer"; pointer(event.clientX, event.currentTarget.getBoundingClientRect()); } }}
       onPointerDown={(event) => { interaction.current = "pointer"; if (event.pointerType === "touch") event.currentTarget.setPointerCapture(event.pointerId); pointer(event.clientX, event.currentTarget.getBoundingClientRect()); }}
       onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); if (event.pointerType !== "mouse") inspect(null); }}
@@ -102,13 +105,14 @@ export function ProbabilityChart({ points, label = "YES probability", height = 3
   const [inspected, setInspected] = useState<ChartInspection | null>(null);
   // The first client render must use the same domain as the server render.
   // After hydration, advance the domain even when there are no new observations.
-  const [revision, setRevision] = useState(0);
   const [clock, setClock] = useState(() => asOf ?? Math.max(0, ...normalizeChartPoints(points).map(point => point.timestamp)));
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     const advance = () => {
-      if (document.visibilityState === "visible") { setClock(Date.now()); setInspected(null); setRevision(value => value + 1); }
+      if (document.visibilityState !== "visible") return;
+      setInspected(null);
+      if (marketSlug) setRetry(value => value + 1);
     };
-    advance();
     const timer = window.setInterval(advance, 10 * 60 * 1000);
     document.addEventListener("visibilitychange", advance);
     window.addEventListener("focus", advance);
@@ -117,21 +121,21 @@ export function ProbabilityChart({ points, label = "YES probability", height = 3
       document.removeEventListener("visibilitychange", advance);
       window.removeEventListener("focus", advance);
     };
-  }, []);
+  }, [marketSlug]);
   const [history, setHistory] = useState<{ range: string; slug: string; points: ChartPoint[] } | null>(null);
   const [historyError, setHistoryError] = useState(false);
-  const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!marketSlug) return;
     const controller = new AbortController();
     fetch(`/api/markets/${encodeURIComponent(marketSlug)}/history?range=${range}&limit=2000`, { signal: controller.signal, cache: "no-store" })
       .then(async response => {
         if (!response.ok) throw new Error("History unavailable");
-        const body = await response.json() as { snapshots: { createdAt: string; yesProbabilityBps: number }[] };
+        const body = await response.json() as { asOf: string; snapshots: { createdAt: string; yesProbabilityBps: number }[] };
         setHistory({ range, slug: marketSlug, points: body.snapshots.map(point => ({ timestamp: point.createdAt, probability: point.yesProbabilityBps / 10000 })) });
-        setClock(Date.now());
+        const serverTime = Date.parse(body.asOf);
+        if (!Number.isFinite(serverTime)) throw new Error("History timestamp unavailable");
+        setClock(serverTime);
         setInspected(null);
-        setRevision(value => value + 1);
         setHistoryError(false);
       }).catch(error => { if (error.name !== "AbortError") setHistoryError(true); });
     return () => controller.abort();
@@ -141,14 +145,14 @@ export function ProbabilityChart({ points, label = "YES probability", height = 3
   const series = useMemo(() => withHeldPriceEndpoint(selectChartRange(withOpeningBaseline(observations, openingBaseline, now), range, now), now), [observations, openingBaseline, range, now]);
   const latest = series.at(-1);
   const selected: ChartInspection | undefined = inspected ?? latest;
-  const change = latest && series[0] ? (latest.probability - series[0].probability) * 100 : null;
+  const change = latest && series[0] ? probabilityMovementPoints(probabilityFractionToBps(series[0].probability), probabilityFractionToBps(latest.probability)) : null;
   const duration = range === "ALL" ? null : CHART_RANGE_DURATION[range];
   return <figure className={`probability-chart ${styles.chart}`} style={{ minHeight: height }}>
     {historyError && <p className="chart-history-error" role="status">Full history could not load. <button type="button" onClick={() => setRetry(value => value + 1)}>Try again</button></p>}
-    <figcaption><div><span className="eyebrow">{selected?.held && inspected ? "Held price" : selected?.opening ? "Opening price" : selected?.interpolated && executionPrices ? "Interpolated price" : executionPrices ? inspected ? "Historical execution" : "Last execution" : inspected ? "Historical probability" : "Current forecast"}</span><strong>{selected ? probabilityLabel(selected.probability) : "N/A"}</strong><small className="chart-inspected-time" style={{ visibility: inspected ? "visible" : "hidden" }}>{dateLabel(selected?.timestamp ?? now)}</small></div>
-      <span style={{ visibility: change === null ? "hidden" : "visible" }} className={`chart-change ${change !== null && change < 0 ? "movement-down" : change !== null && change > 0 ? "movement-up" : ""}`}>{change !== null && change > 0 ? "+" : ""}{Number((change ?? 0).toFixed(2))} pts <small>in this period</small></span>
+    <figcaption><div><span className="eyebrow">{selected?.held && inspected ? "Held price" : selected?.opening ? "Opening price" : executionPrices ? inspected ? "Historical execution" : "Last execution" : inspected ? "Historical probability" : "Current forecast"}</span><strong>{selected ? probabilityLabel(selected.probability) : "N/A"}</strong><small className="chart-inspected-time" style={{ visibility: inspected ? "visible" : "hidden" }}>{dateLabel(selected?.timestamp ?? now)}</small></div>
+      <span style={{ visibility: change === null ? "hidden" : "visible" }} className={`chart-change ${change !== null && change < 0 ? "movement-down" : change !== null && change > 0 ? "movement-up" : ""}`}>{change !== null && change > 0 ? "+" : ""}{change ?? 0} pts <small>in this period</small></span>
     </figcaption>
-    <ProbabilityPlot key={`${range}-${revision}`} points={series} label={label} emptyLabel={executionPrices ? "No executions yet" : "No probability history yet"} startAt={duration === null ? undefined : now - duration} endAt={now} onInspect={setInspected} />
+    <ProbabilityPlot points={series} label={label} emptyLabel={executionPrices ? "No executions yet" : "No probability history yet"} startAt={duration === null ? undefined : now - duration} endAt={now} onInspect={setInspected} />
     <div className="probability-chart-footer"><div className={`range-tabs ${rangeStyles.ranges}`} aria-label="Chart range">{CHART_RANGES.map(value => <button key={value} type="button" aria-pressed={value === range} className={value === range ? "active" : ""} onClick={() => { setInspected(null); setRange(value); }}>{value}</button>)}</div></div>
   </figure>;
 }

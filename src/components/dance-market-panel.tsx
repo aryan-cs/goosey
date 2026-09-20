@@ -7,6 +7,7 @@ import { MarketActivityRefresh } from "./market-activity-refresh";
 import { TradeTicket } from "./trade-ticket";
 import { MarketResolutionNote } from "./market-resolution-note";
 import styles from "./dance-market-panel.module.css";
+import { probabilityBpsToWholePercent } from "@/lib/probability-format";
 
 export interface DanceMarketOption {
   id: string;
@@ -74,7 +75,7 @@ export function DanceMarketPanel({ title, independent = false, markets, signedIn
               <div className={styles.actions}>
                 {(["BUY", "SELL"] as const).map(action => <button key={action} type="button" className={`button ${action === "BUY" ? styles.buy : styles.sell}`} aria-label={`${action === "BUY" ? "Buy" : "Sell"} ${market.label}`} aria-pressed={active && selection.action === action} onClick={() => choose(market.slug, action)} disabled={!tradable || market.probabilityYesBps === null}>
                   <span>{action === "BUY" ? "Buy" : "Sell"}</span>
-                  <strong>{market.probabilityYesBps === null || market.status === "VOID" ? "—" : `${Math.round(market.probabilityYesBps / 100)}%`}</strong>
+                  <strong>{market.probabilityYesBps === null || market.status === "VOID" ? "—" : `${probabilityBpsToWholePercent(market.probabilityYesBps)}%`}</strong>
                 </button>)}
               </div>
             </article>;

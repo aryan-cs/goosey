@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from "@playwright/test";
 
-const chartSlug = process.env.GOOSEY_CHART_TEST_SLUG ?? "gallery-150-projects";
+const chartSlug = process.env.GOOSEY_CHART_TEST_SLUG ?? "htn-2026-mc-does-67";
 
 test("probability inspection matches persisted history and resets cleanly", async ({ page, request, isMobile }) => {
   const slug = chartSlug;
@@ -20,10 +20,9 @@ test("probability inspection matches persisted history and resets cleanly", asyn
   await slider.focus();
   await slider.press("Home");
   await expect(tooltip).toBeVisible();
-  await expect(page.getByText("Historical probability", { exact: true })).toBeVisible();
   await slider.press("End");
   const last = snapshots.at(-1)!;
-  const label = `${Math.round(last.yesProbabilityBps / 100)}%`;
+  const label = `${Math.floor((last.yesProbabilityBps + 50) / 100)}%`;
   await expect(tooltip.locator("b")).toHaveText(label);
   await expect(page.locator(".probability-chart figcaption .eyebrow")).toHaveText("Held price");
   const heldTimestamp = await tooltip.locator("time").getAttribute("datetime");
@@ -76,7 +75,7 @@ test("card sparklines expose real values to keyboard users in dark mode", async 
   await slider.focus();
   await slider.press("End");
   await expect(tooltip).toBeVisible();
-  await expect(tooltip.locator("b")).toHaveText(/^\d+(\.\d{1,2})?%$/);
+  await expect(tooltip.locator("b")).toHaveText(/^\d+%$/);
   await expect(tooltip.locator("time")).toHaveAttribute("datetime", /T/);
   await slider.press("Tab");
   await expect(tooltip).toBeHidden();
@@ -152,7 +151,6 @@ test("a completed real history request clears both headline and plot inspection"
     await slider.focus();
     await slider.press("Home");
     await expect(tooltip).toBeVisible();
-    await expect(figure.locator("figcaption .eyebrow")).toHaveText("Historical probability");
     release();
     await expect(slider).toHaveAttribute("data-inspecting", "false");
     await expect(tooltip).toBeHidden();
@@ -233,17 +231,22 @@ test("inspection and range changes keep the chart and controls in place", async 
   }
 });
 
-test("held price advances ten minutes without creating another observation", async ({ page, request }) => {
+test("held price advances from server time without creating another observation", async ({ page, request }) => {
   const slug = chartSlug;
   const historyUrl = `/api/markets/${slug}/history?range=ALL&limit=2000`;
   const response = await request.get(historyUrl);
   expect(response.ok()).toBeTruthy();
-  const before = await response.json() as { snapshots: { createdAt: string; yesProbabilityBps: number }[] };
+  const before = await response.json() as { asOf: string; snapshots: { createdAt: string; yesProbabilityBps: number }[] };
   const last = before.snapshots.at(-1);
   expect(last).toBeDefined();
-  // Control only browser time; keep every price and timestamp from persisted history.
-  const now = Math.max(Date.now() + 120_000, Date.parse(last!.createdAt) + 74 * 60_000);
-  await page.clock.install({ time: now });
+  let serverAsOf = Math.max(Date.parse(before.asOf), Date.parse(last!.createdAt) + 74 * 60_000);
+  await page.route(`**/api/markets/${slug}/history?**`, async route => {
+    const upstream = await route.fetch();
+    const body = await upstream.json();
+    await route.fulfill({ response: upstream, json: { ...body, asOf: new Date(serverAsOf).toISOString() } });
+  });
+  // Deliberately wrong client wall clock: the chart domain must follow API asOf.
+  await page.clock.install({ time: serverAsOf + 7 * 86_400_000 });
   const loaded = page.waitForResponse(response => response.url().includes(`/api/markets/${slug}/history?`) && new URL(response.url()).searchParams.get("range") === "1H");
   await page.goto(`/markets/${slug}`);
   await loaded;
@@ -254,19 +257,21 @@ test("held price advances ten minutes without creating another observation", asy
   await slider.press("End");
   await expect(figure.locator("figcaption .eyebrow")).toHaveText("Held price");
   const firstHeldTime = Date.parse((await tooltip.locator("time").getAttribute("datetime"))!);
-  expect(firstHeldTime).toBeGreaterThanOrEqual(now);
-  const price = `${Math.round(last!.yesProbabilityBps / 100)}%`;
+  expect(firstHeldTime).toBe(serverAsOf);
+  const price = `${Math.floor((last!.yesProbabilityBps + 50) / 100)}%`;
   await expect(tooltip.locator("b")).toHaveText(price);
   await page.evaluate(() => document.fonts.ready);
   const original = await chartGeometry(figure);
+  serverAsOf += 10 * 60_000;
+  const refreshed = page.waitForResponse(response => response.url().includes(`/api/markets/${slug}/history?`) && new URL(response.url()).searchParams.get("range") === "1H");
   await page.clock.fastForward(10 * 60_000);
+  await refreshed;
   await expect(slider).toHaveAttribute("data-inspecting", "false");
   await slider.focus();
   await slider.press("End");
   const advancedTime = Date.parse((await tooltip.locator("time").getAttribute("datetime"))!);
-  expect(advancedTime - firstHeldTime).toBeGreaterThanOrEqual(10 * 60_000 - 1_000);
+  expect(advancedTime - firstHeldTime).toBe(10 * 60_000);
   await expect(tooltip.locator("b")).toHaveText(price);
-  await expect(figure.locator("figcaption .eyebrow")).toHaveText("Held price");
   expect(await chartGeometry(figure)).toEqual(original);
   await slider.press("ArrowLeft");
   expect(Math.abs(Date.parse((await tooltip.locator("time").getAttribute("datetime"))!) - (advancedTime - 600_000))).toBeLessThan(1000);
@@ -275,6 +280,7 @@ test("held price advances ten minutes without creating another observation", asy
   expect(afterResponse.ok()).toBeTruthy();
   const after = await afterResponse.json() as typeof before;
   expect(after.snapshots).toEqual(before.snapshots);
+  await page.unrouteAll({ behavior: "wait" });
 });
 
 
@@ -309,4 +315,52 @@ test("scrubbing a sparse history follows pointer time rather than observation ti
   expect(Date.parse((await tooltip.locator("time").getAttribute("datetime"))!)).toBe(timestamps.at(-1)! - 600_000);
   await slider.press("Escape");
   await expect(tooltip).toBeHidden();
+});
+
+test("sparse history holds the last committed probability and uses server asOf", async ({ page, isMobile }) => {
+  const asOf = Date.parse("2026-09-19T20:00:00.000Z");
+  const rangeStart = asOf - 3_600_000;
+  const snapshots = [
+    { id: "prior", marketId: "market", createdAt: new Date(rangeStart - 600_000).toISOString(), yesProbabilityBps: 5_000 },
+    { id: "first", marketId: "market", createdAt: new Date(rangeStart + 15 * 60_000).toISOString(), yesProbabilityBps: 5_123 },
+    { id: "second", marketId: "market", createdAt: new Date(rangeStart + 45 * 60_000).toISOString(), yesProbabilityBps: 4_876 },
+  ];
+  await page.route(`**/api/markets/${chartSlug}/history?**`, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      asOf: new Date(asOf).toISOString(),
+      range: "1H",
+      rangeStart: new Date(rangeStart).toISOString(),
+      snapshots,
+      currentProbabilityYesBps: 4_876,
+      sampledFrom: snapshots.length,
+      downsampled: false,
+      source: "PROBABILITY",
+      trades: [],
+    }),
+  }));
+  // A client clock a week ahead must not move the chart beyond the server watermark.
+  await page.clock.install({ time: asOf + 7 * 86_400_000 });
+  const loaded = page.waitForResponse(response => response.url().includes(`/api/markets/${chartSlug}/history?`) && new URL(response.url()).searchParams.get("range") === "1H");
+  await page.goto(`/markets/${chartSlug}`);
+  await loaded;
+
+  const figure = page.locator(".probability-chart");
+  const slider = figure.getByRole("slider");
+  const tooltip = figure.getByRole("tooltip", { includeHidden: true });
+  await expect(slider).toHaveAttribute("aria-valuemin", String(rangeStart));
+  await expect(slider).toHaveAttribute("aria-valuemax", String(asOf));
+  await expect(figure.locator(".probability-tick")).toHaveText(["100%", "50%", "0%"]);
+  await expect(figure.locator(".probability-line").first()).toHaveAttribute("d", / H .* V /);
+  await expect(figure.locator(".probability-line").first()).not.toHaveAttribute("d", / C /);
+
+  const box = (await slider.boundingBox())!;
+  for (const [ratio, expected] of [[0.10, "50%"], [0.40, "51%"], [0.90, "49%"]] as const) {
+    const clientX = box.x + box.width * ratio;
+    if (isMobile) await slider.dispatchEvent("pointermove", { clientX, pointerType: "touch", buttons: 1 });
+    else await page.mouse.move(clientX, box.y + box.height / 2);
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip.locator("b")).toHaveText(expected);
+  }
 });

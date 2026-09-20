@@ -45,13 +45,13 @@ local function readCloudFrame(data,incremental)
     totalPoints=totalPoints+n;if totalPoints>96 then return nil end
     if not ({OPEN=true,PAUSED=true,CLOSED=true,RESOLVED=true,VOID=true})[status] then return nil end
     seen[row[2]]=true
-    local market={slug=row[2],title=row[3],shortTitle=shortTitle,category=category,probability=bps/100,changeBps=change,volume=volume,closes=closes,status=status,acceptingOrders=accepting,history={}}
+    local market={slug=row[2],title=row[3],shortTitle=shortTitle,category=category,probabilityBps=bps,changeBps=change,volume=volume,closes=closes,status=status,acceptingOrders=accepting,history={}}
     for j=1,n do
       local point=nextRow()
       if not point or #point~=3 or point[1]~="H" then return nil end
       local t,p=tonumber(point[2]),tonumber(point[3])
       if not t or t%1~=0 or t<0 or t>9999999999999 or not p or p%1~=0 or p<0 or p>10000 or (j>1 and t<market.history[j-1][2]) then return nil end
-      market.history[j]={p/100,t}
+      market.history[j]={p,t}
     end
     result.markets[i]=market
     return false

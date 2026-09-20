@@ -118,17 +118,17 @@ def fetch_snapshot(origin, now=None):
             point_time = timestamp(point.get('timestamp', ''))
             if all_history and point_time < all_history[-1][1]:
                 raise ValueError('Unordered market history')
-            all_history.append([point_bps / 100, point_time])
+            all_history.append([point_bps, point_time])
             if range_start <= point_time <= range_end:
-                history.append([point_bps / 100, point_time])
+                history.append([point_bps, point_time])
         history = _bounded_history(history, point_limit)
         previous = None
         if all_history:
-            previous = all_history[-2][0] if len(all_history) > 1 and round(all_history[-1][0] * 100) == bps else all_history[-1][0]
-        change_bps = None if previous is None else bps - round(previous * 100)
+            previous = all_history[-2][0] if len(all_history) > 1 and all_history[-1][0] == bps else all_history[-1][0]
+        change_bps = None if previous is None else bps - previous
         whole_volume = (int(volume) + 500) // 1000
         result.append(dict(slug=slug, title=title, shortTitle=short_title, category=category,
-                           probability=bps / 100, changeBps=change_bps,
+                           probabilityBps=bps, changeBps=change_bps,
                            history=history, volume=f'{whole_volume:,}', acceptingOrders=accepting,
                            closes=datetime.fromisoformat(market['closesAt'].replace('Z', '+00:00')).strftime('%m/%d %H:%M UTC'),
                            status=market['status']))
@@ -140,11 +140,13 @@ def fetch_market_history(origin, slug, limit=32):
     origin = validated_origin(origin)
     if not re.fullmatch(r'[a-z0-9-]{1,120}', slug) or not 1 <= limit <= 32:
         raise ValueError('Invalid detail history request')
-    payload = public_json(origin, '/api/markets/' + quote(slug, safe='') + f'/history?range=4H&limit={limit}')
-    if payload.get('range') != '4H' or not isinstance(payload.get('rangeStart'), str):
-        raise ValueError('History response is missing its four-hour range')
+    payload = public_json(origin, '/api/markets/' + quote(slug, safe='') + f'/history?range=1H&limit={limit}')
+    if payload.get('range') != '1H' or not isinstance(payload.get('rangeStart'), str) or not isinstance(payload.get('asOf'), str):
+        raise ValueError('History response is missing its one-hour range')
     start = timestamp(payload['rangeStart'])
-    end = start + 14_400_000
+    end = timestamp(payload['asOf'])
+    if end - start != 3_600_000:
+        raise ValueError('History response has an inconsistent time range')
     history = payload.get('snapshots')
     if not isinstance(history, list) or len(history) > limit:
         raise ValueError('History exceeds requested bound')
@@ -154,14 +156,28 @@ def fetch_market_history(origin, slug, limit=32):
         t = timestamp(point.get('createdAt', ''))
         if isinstance(p, bool) or not isinstance(p, int) or not 0 <= p <= 10000 or t > end or (points and t < points[-1][1]):
             raise ValueError('Invalid or unordered history')
-        points.append([p / 100, t])
-    return dict(generation=str(time.time_ns()), slug=slug, rangeStart=start, rangeEnd=end, history=points)
+        points.append([p, t])
+    sampled_from = payload.get('sampledFrom')
+    downsampled = payload.get('downsampled')
+    current = payload.get('currentProbabilityYesBps')
+    source = payload.get('source')
+    if isinstance(sampled_from, bool) or not isinstance(sampled_from, int) or sampled_from < len(points) or not isinstance(downsampled, bool):
+        raise ValueError('History response has invalid sampling metadata')
+    if current is not None and (isinstance(current, bool) or not isinstance(current, int) or not 0 <= current <= 10000):
+        raise ValueError('History response has an invalid current probability')
+    if source not in ('PROBABILITY', 'EXECUTIONS'):
+        raise ValueError('History response has an invalid source')
+    return dict(generation=str(time.time_ns()), slug=slug, rangeStart=start, rangeEnd=end,
+                currentProbabilityBps=current, sampledFrom=sampled_from,
+                downsampled=downsampled, source=source, history=points)
 
 
 def detail_mailbox_frame(detail):
     generation = detail['generation']
-    lines = [['GH1', generation, detail['slug'], str(detail['rangeStart']), str(detail['rangeEnd']), str(len(detail['history']))]]
-    lines.extend(['H', str(t), str(round(p * 100))] for p, t in detail['history'])
+    lines = [['GH2', generation, detail['slug'], str(detail['rangeStart']), str(detail['rangeEnd']),
+              str(len(detail['history'])), str(detail['sampledFrom']), '1' if detail['downsampled'] else '0',
+              '-' if detail['currentProbabilityBps'] is None else str(detail['currentProbabilityBps']), detail['source']]]
+    lines.extend(['H', str(t), str(p)] for p, t in detail['history'])
     lines.append(['END', generation])
     data = ('\n'.join('\t'.join(row) for row in lines) + '\n').encode()
     if len(data) > 6000:
@@ -173,10 +189,10 @@ def mailbox_frame(snapshot):
     generation = snapshot.get('generation', str(time.time_ns()))
     lines = [['GS2', generation, snapshot['capturedAt'], str(snapshot['rangeStart']), str(snapshot['rangeEnd']), str(len(snapshot['markets']))]]
     for m in snapshot['markets']:
-        lines.append(['M', m['slug'], m['title'], m['shortTitle'], m['category'], str(round(m['probability'] * 100)),
+        lines.append(['M', m['slug'], m['title'], m['shortTitle'], m['category'], str(m['probabilityBps']),
                       '-' if m['changeBps'] is None else str(m['changeBps']), m['volume'], m['closes'], m['status'],
                       '1' if m['acceptingOrders'] else '0', str(len(m['history']))])
-        lines.extend(['H', str(t), str(round(p * 100))] for p, t in m['history'])
+        lines.extend(['H', str(t), str(p)] for p, t in m['history'])
     lines.append(['END', generation])
     for row in lines:
         for field in row:

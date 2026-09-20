@@ -17,10 +17,10 @@ account(1);g.fresh();has('Reconnecting...');assert 'Waiting for connection' not 
 reconnecting=next(w for w in g.widgets.values() if w.text=='Reconnecting...')
 assert reconnecting.y==110 and reconnecting.styles['text_align']=='center'
 assert lua.eval('require("trade").pairing_challenge()') is None;snapshot('trade-link')
-account(2);tick(2000);has('Account Linked');has('@badge_test');has('1000.00 feathers');has('A: Continue   B: Markets');assert 'Balance ' not in g.visible();snapshot('trade-account-linked')
+account(2);tick(2000);has('Account Linked');has('@badge_test');has('1,000 feathers');has('A: Continue   B: Markets');assert 'Balance ' not in g.visible();snapshot('trade-account-linked')
 press('A','A','A');has('BUY YES');has('Review Trade');press('UP');has('x2');snapshot('trade-amount')
 press('A');has('Getting a live quote');assert '\tQUOTE\t' in g.files['appdata/request.txt']
-response('QUOTE');tick(4000);has('Pay 50.001');has('Confirm Trade');snapshot('trade-review')
+response('QUOTE');tick(4000);has('Pay 50');has('Confirm Trade');snapshot('trade-review')
 press('A');has('Trade Submitted');assert '\tTRADE\t' in g.files['appdata/request.txt']
 saved=g.files['appdata/request.txt'];press('A','A','B','START');assert g.files['appdata/request.txt']==saved
 # Reopening never drops a confirmed order; cached account is not trusted fresh.
@@ -53,3 +53,22 @@ lua.execute('require("trade").open("htn-2026-mc-does-67","YES","Test")')
 press('A');has('Getting a live quote')
 assert int(g.files['appdata/request.txt'].split('\t')[1])>first
 print('PASS durable request sequence with unavailable config writes and restart')
+
+# User-visible milli-feather values round half-up to whole feathers without
+# passing through Lua's floating-point number representation.
+g.on_exit();g.fresh()
+for generation,value,expected in (
+    (20,'0','0'),
+    (21,'499','0'),
+    (22,'500','1'),
+    (23,'1499','1'),
+    (24,'1500','2'),
+    (25,'999499','999'),
+    (26,'999500','1,000'),
+    (27,'9007199254740993499','9,007,199,254,740,993'),
+    (28,'9007199254740993500','9,007,199,254,740,994'),
+):
+    g.files['appdata/account.txt']=f'GA1\t{generation}\t{challenge}\tREADY\tbadge_test\t{value}\tEND\n'
+    tick(g.clock+2000)
+    has(expected+' feathers')
+print('PASS badge whole-feather display rounding, ties, grouping and large integer precision')

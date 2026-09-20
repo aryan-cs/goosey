@@ -39,7 +39,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
-        <AppShell signedIn={Boolean(user)} verificationRequired={verificationRequired} balance={user && !verificationRequired ? formatFeathers(user.balanceMilli, 2) : null} notificationCount={notificationCount}>
+        <AppShell signedIn={Boolean(user)} verificationRequired={verificationRequired} balance={user && !verificationRequired ? formatFeathers(user.balanceMilli) : null} notificationCount={notificationCount}>
           {children}
         </AppShell>
       </body>

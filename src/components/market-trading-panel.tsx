@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, X } from "lucide-react";
 import { TradeTicket, type TradeTicketProps } from "./trade-ticket";
+import { complementaryWholePercents, probabilityFractionToBps } from "@/lib/probability-format";
 
 type Outcome = "YES" | "NO";
 type TradeEntryDetail = { outcome: Outcome; trigger: HTMLElement };
@@ -30,8 +31,9 @@ export function MarketTradingPanel(props: TradeTicketProps) {
   const closeButton = useRef<HTMLButtonElement>(null);
   const ticketShell = useRef<HTMLDivElement>(null);
   const triggerButton = useRef<HTMLElement | null>(null);
-  const yesPercent = Math.round(props.yesProbability * 100);
-  const noPercent = Math.round((props.noProbability ?? 1 - props.yesProbability) * 100);
+  const displayedProbability = complementaryWholePercents(probabilityFractionToBps(props.yesProbability));
+  const yesPercent = displayedProbability.yes;
+  const noPercent = displayedProbability.no;
 
   useEffect(() => {
     if (!open) return;
