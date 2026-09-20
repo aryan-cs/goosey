@@ -155,7 +155,7 @@ local function render()
       end
     end
   elseif page=="detail" then
-    local detailTitle=wrapCard(m.title,34)
+    local detailTitle=wrapCard(m.title,38)
     local titleLines=detailTitle:find("\n",1,true) and 2 or 1
     text(1,detailTitle,10,36,300,16)
     local h=detail and detail.slug==m.slug and detail.history or {}
