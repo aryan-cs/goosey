@@ -29,14 +29,14 @@ const payload = { marketSlug: "chain-market", clientOrderId: "client-order-123",
 
 function request() {
   return new NextRequest("http://localhost/api/v1/orders", { method: "POST",
-    headers: { "content-type": "application/json", origin: "http://localhost", "idempotency-key": "request-key-123456" },
+    headers: { "content-type": "application/json", origin: "http://localhost", "idempotency-key": "client-order-123" },
     body: JSON.stringify(payload) });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireUser.mockResolvedValue({ id: "user_12345678" });
-  mocks.parseIdempotencyKey.mockReturnValue("request-key-123456");
+  mocks.parseIdempotencyKey.mockReturnValue("client-order-123");
   mocks.after.mockImplementation((callback: () => unknown) => callback());
   mocks.dispatchManagedOrderCommand.mockResolvedValue({ status: "SUBMITTED" });
 });
@@ -51,7 +51,7 @@ describe("POST /api/v1/orders managed settlement", () => {
     expect(await response.json()).toMatchObject({ accepted: true, pending: true,
       command: { id: "cmd_123", status: "ACCEPTED" } });
     expect(mocks.acceptManagedOrder).toHaveBeenCalledWith({ userId: "user_12345678",
-      marketSlug: "chain-market", idempotencyKey: "request-key-123456",
+      marketSlug: "chain-market", idempotencyKey: "client-order-123",
       request: expect.objectContaining({ limitPriceMilli: "450", quantity: 2 }) });
     expect(mocks.placeOrder).not.toHaveBeenCalled();
     expect(mocks.dispatchManagedOrderCommand).toHaveBeenCalledWith("cmd_123");

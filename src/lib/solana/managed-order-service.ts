@@ -48,6 +48,9 @@ export async function acceptManagedOrder(input: Readonly<{
   request: unknown;
 }>, dependencies: Dependencies = {}): Promise<ManagedOrderAcceptance> {
   const request = managedOrderRequestSchema.parse(input.request);
+  if (request.clientOrderId !== input.idempotencyKey) {
+    throw new ApiError(409, "ORDER_IDEMPOTENCY_MISMATCH", "Order request identifiers do not match.");
+  }
   const database = dependencies.database ?? db;
   const env = dependencies.env ?? process.env;
   const runtime = resolveSolanaRuntime(env);

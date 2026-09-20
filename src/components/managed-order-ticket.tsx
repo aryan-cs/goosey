@@ -68,9 +68,12 @@ export function ManagedOrderTicket({ marketSlug, payoutMilli, feeBps, signedIn, 
       return;
     }
     if (!entry.valid) { setError(entry.message); return; }
-    attempt.current ??= { key: requestId(), body: JSON.stringify({ marketSlug, clientOrderId: requestId(),
-      outcome, action, limitPriceMilli: entry.priceMilli.toString(), quantity, timeInForce, postOnly: false,
-      selfTradePrevention: "CANCEL_AGGRESSOR", expiresAt: null, cancelOnPause: true, reduceOnly: false }) };
+    if (!attempt.current) {
+      const key = requestId();
+      attempt.current = { key, body: JSON.stringify({ marketSlug, clientOrderId: key,
+        outcome, action, limitPriceMilli: entry.priceMilli.toString(), quantity, timeInForce, postOnly: false,
+        selfTradePrevention: "CANCEL_AGGRESSOR", expiresAt: null, cancelOnPause: true, reduceOnly: false }) };
+    }
     setBusy(true); setError(null); setMessage("Preparing your order…");
     try {
       const response = await apiFetch("/api/v1/orders", { method: "POST", credentials: "same-origin",

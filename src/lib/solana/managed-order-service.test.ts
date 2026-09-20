@@ -50,7 +50,7 @@ describe("managed order acceptance", () => {
       chainId: "solana:localnet" as const, genesisHash: runtime.GOOSEY_SOLANA_GENESIS_HASH,
       walletAddress: address("11111111111111111111111111111111"), createdAt: new Date() }));
     const result = await acceptManagedOrder({ userId: "user_12345678", marketSlug: "market-one",
-      idempotencyKey: "request-key-123456", request: request() }, {
+      idempotencyKey: "client-order-123", request: request() }, {
       database: db, env: runtime, ensureIdentity, provider: "postgresql",
     });
     expect(result).toMatchObject({ accepted: true, pending: true, command: { id: "cmd_12345678", status: "ACCEPTED" } });
@@ -60,7 +60,7 @@ describe("managed order acceptance", () => {
   it("rejects unbound or mismatched deployments before custody creation", async () => {
     const ensureIdentity = vi.fn();
     await expect(acceptManagedOrder({ userId: "user_12345678", marketSlug: "market-one",
-      idempotencyKey: "request-key-123456", request: request() }, {
+      idempotencyKey: "client-order-123", request: request() }, {
       database: database({ solanaBinding: null }), env: runtime, ensureIdentity,
     })).rejects.toMatchObject({ code: "MARKET_BACKEND_MISMATCH" });
     expect(ensureIdentity).not.toHaveBeenCalled();
@@ -73,10 +73,21 @@ describe("managed order acceptance", () => {
     const db = database();
     const ensureIdentity = vi.fn();
     await expect(acceptManagedOrder({ userId: "user_12345678", marketSlug: "market-one",
-      idempotencyKey: "request-key-123456", request: { ...request(), ...patch } }, {
+      idempotencyKey: "client-order-123", request: { ...request(), ...patch } }, {
       database: db, env: runtime, ensureIdentity, provider: "postgresql",
     })).rejects.toThrow();
     expect(ensureIdentity).not.toHaveBeenCalled();
     expect((db as never as { chainCommand: { create: ReturnType<typeof vi.fn> } }).chainCommand.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects mismatched HTTP and client idempotency identifiers before database work", async () => {
+    const db = database();
+    const ensureIdentity = vi.fn();
+    await expect(acceptManagedOrder({ userId: "user_12345678", marketSlug: "market-one",
+      idempotencyKey: "different-request-key", request: request() }, {
+      database: db, env: runtime, ensureIdentity, provider: "postgresql",
+    })).rejects.toMatchObject({ code: "ORDER_IDEMPOTENCY_MISMATCH" });
+    expect((db as never as { market: { findUnique: ReturnType<typeof vi.fn> } }).market.findUnique).not.toHaveBeenCalled();
+    expect(ensureIdentity).not.toHaveBeenCalled();
   });
 });
