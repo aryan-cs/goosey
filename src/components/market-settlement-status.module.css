@@ -1,0 +1,44 @@
+.status {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px 14px;
+  color: var(--ink-secondary);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.status > svg {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--feather-700);
+  stroke-width: 1.8;
+}
+
+.status strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.status p {
+  margin: 2px 0 0;
+}
+
+.recorded {
+  background: var(--yes-soft);
+}
+
+.pending > svg {
+  color: var(--warning);
+}
+
+@media (forced-colors: active) {
+  .status {
+    border: 1px solid CanvasText;
+  }
+}

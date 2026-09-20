@@ -24,6 +24,7 @@ import { ShareButton } from "@/components/share-button";
 import { getServerUser } from "@/lib/server-session";
 import { OrderBookPanel } from "@/components/order-book-panel";
 import { MarketResolutionNote } from "@/components/market-resolution-note";
+import { MarketSettlementStatus } from "@/components/market-settlement-status";
 import { UnifiedSolanaMarketDetail } from "@/components/unified-solana-market-detail";
 import { unifiedMarketReadRepository } from "@/lib/unified-market-repository";
 
@@ -59,6 +60,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
       priceHistory: { orderBy: { createdAt: "desc" }, take: 500 },
       orderFills: { orderBy: { tradeSequence: "desc" }, take: 500, select: { id: true, canonicalYesPriceMilli: true, quantity: true, createdAt: true, takerOrder: { select: { user: { select: { username: true, profilePublic: true } } } } } },
       trades: { orderBy: { createdAt: "desc" }, take: 15, include: { user: { select: { id: true, username: true, profilePublic: true } } } },
+      settlementRun: { select: { attestation: { select: { signature: true, slot: true } } } },
     },
     });
     if (!market || (market.status === "DRAFT" && user?.role !== "ADMIN")) return null;
@@ -66,7 +68,17 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
       tx.trade.findFirst({ where: { marketId: market.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { createdAt: true, priceBeforeBps: true } }),
       tx.marketPriceSnapshot.findFirst({ where: { marketId: market.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { createdAt: true, yesProbabilityBps: true } }),
     ]);
-    return { market, firstTrade, firstSnapshot, mark: (await loadMarketMarks(tx, [market])).get(market.id)! };
+    const settlementReceipt = market.settlementRun?.attestation;
+    return {
+      market,
+      firstTrade,
+      firstSnapshot,
+      mark: (await loadMarketMarks(tx, [market])).get(market.id)!,
+      settlementAttestation: settlementReceipt?.signature && settlementReceipt.slot !== null ? {
+        signature: settlementReceipt.signature,
+        slot: settlementReceipt.slot.toString(),
+      } : null,
+    };
   });
   if (!data) {
     if (slug === DANCE_MARKET_GROUP.legacyMarketSlug && await db.marketEvent.findUnique({ where: { slug: DANCE_MARKET_GROUP.slug }, select: { id: true } })) redirect(`/events/${DANCE_MARKET_GROUP.slug}`);
@@ -99,6 +111,8 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
           <div><span className="eyebrow">{market.category}</span><h1>{market.title}</h1><div className="market-meta"><MarketStatusLabel status={open ? "open" : market.status === "OPEN" ? "closed" : market.status} /><span><CalendarClock /> Closes {market.closesAt.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</span><span><FeatherIcon /> {formatFeathers(market.volumeMilli)} volume</span></div></div>
           <div className="market-header-actions"><WatchlistButton marketId={market.id} signedIn={Boolean(user)} icon={<Bookmark />} /><ShareButton title={market.title} icon={<Share2 />} /></div>
         </header>
+
+        <MarketSettlementStatus status={market.status} attestation={data.settlementAttestation} />
 
         <ProbabilityChart openingBaseline={orderBookMarket || openingBps === null ? undefined : {
           probability: openingBps / 10_000,

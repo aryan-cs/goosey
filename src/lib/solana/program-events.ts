@@ -18,6 +18,10 @@ const schemas = {
     bookRevision: "u64", remaining: "u64", chainNotional: "u64", releasedCash: "u64", releasedYes: "u64", releasedNo: "u64" },
   ResolutionClaimed: { market: "address", seatIndex: "u32", wallet: "address", payoutMilli: "u64" },
   ResolutionFinalized: { market: "address", residualMilli: "u64" },
+  DatabaseSettlementAttestationConfigured: { config: "address", authority: "address", databaseDomain: "hex32" },
+  DatabaseSettlementAttested: { attestation: "address", authority: "address", databaseMarketDigest: "hex32",
+    settlementDigest: "hex32", outcome: "databaseOutcome", totalPositions: "u64", totalPayoutMilli: "u64",
+    resolvedAt: "i64", replayed: "bool" },
 } as const;
 type Name = keyof typeof schemas;
 type Value<T> = T extends "address" ? Address : T extends "bool" ? boolean : T extends "hex32" ? string : T extends "optionU64" ? bigint | null : bigint;
@@ -54,7 +58,8 @@ function decode(name: Name, bytes: Uint8Array): GooseyProgramEvent {
     else if (type === "u32") event[field] = BigInt(view.getUint32(take(4), true));
     else if (type === "optionU64") { const tag = byte(); if (tag > 1) throw new Error(`Invalid ${name} option`); event[field] = tag === 0 ? null : u64(); }
     else {
-      const n = byte(), max = type === "disposition" ? 7 : type === "cancelReason" || type === "environment" ? 2 : 1;
+      const n = byte(), max = type === "disposition" ? 7
+        : type === "cancelReason" || type === "environment" || type === "databaseOutcome" ? 2 : 1;
       if (n > max || (type === "environment" && n === 0)) throw new Error(`Invalid ${name}.${field} tag`);
       event[field] = type === "bool" ? n === 1 : BigInt(n);
     }

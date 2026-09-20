@@ -2,9 +2,11 @@ type CycleFailures = {
   orderExpirationFailures: number;
   marketCloseFailures: number;
   failedRuns: number;
+  failedAttestations: number;
 };
 
 /** One-shot invocations must fail for every persisted operation failure. */
 export function settlementWorkerCycleFailed(result: CycleFailures): boolean {
-  return result.orderExpirationFailures > 0 || result.marketCloseFailures > 0 || result.failedRuns > 0;
+  return result.orderExpirationFailures > 0 || result.marketCloseFailures > 0
+    || result.failedRuns > 0 || result.failedAttestations > 0;
 }

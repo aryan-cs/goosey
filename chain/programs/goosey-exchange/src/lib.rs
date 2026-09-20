@@ -11,6 +11,7 @@ pub mod exchange;
 pub mod cancellation;
 pub mod resolution;
 pub mod market_terms;
+pub mod database_settlement;
 #[path = "book-bootstrap.rs"]
 pub mod book_bootstrap;
 use escrow::*;
@@ -18,6 +19,7 @@ use exchange::*;
 use cancellation::*;
 use resolution::*;
 use market_terms::*;
+use database_settlement::*;
 use book_bootstrap::*;
 
 declare_id!("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q");
@@ -28,6 +30,36 @@ pub const DEFAULT_PAYOUT_MILLI: u64 = 100_000;
 #[program]
 pub mod goosey_exchange {
     use super::*;
+
+    pub fn initialize_database_settlement_attestation_config(
+        ctx: Context<InitializeDatabaseSettlementAttestationConfig>,
+        authority: Pubkey,
+        database_domain: [u8; 32],
+    ) -> Result<()> {
+        database_settlement::initialize_database_settlement_attestation_config(
+            ctx, authority, database_domain,
+        )
+    }
+
+    pub fn attest_database_settlement(
+        ctx: Context<AttestDatabaseSettlement>,
+        database_market_digest: [u8; 32],
+        settlement_digest: [u8; 32],
+        outcome: DatabaseSettlementOutcome,
+        total_positions: u64,
+        total_payout_milli: u64,
+        resolved_at: i64,
+    ) -> Result<()> {
+        database_settlement::attest_database_settlement(
+            ctx,
+            database_market_digest,
+            settlement_digest,
+            outcome,
+            total_positions,
+            total_payout_milli,
+            resolved_at,
+        )
+    }
 
     pub fn initialize_market_terms(ctx: Context<InitializeMarketTerms>, version: u8,
         digest: [u8; 32], manifest_len: u32) -> Result<()> {

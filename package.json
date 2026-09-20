@@ -47,6 +47,7 @@
     "accounts:cleanup-bots": "tsx scripts/remove-production-bot-accounts.ts",
     "worker:settlement": "tsx scripts/settlement-worker.ts",
     "worker:settlement:continuous": "tsx scripts/settlement-worker.ts --continuous",
+    "chain:backfill:settlements": "tsx scripts/backfill-solana-settlement-attestations.ts",
     "test:worker": "vitest run src/lib/worker-health.test.ts src/lib/settlement-worker-service.test.ts src/app/api/ready/route.test.ts",
     "test:sqlite-startup": "vitest run src/lib/sqlite-startup.test.ts",
     "pretest:postgres": "npm run db:generate:postgres",

@@ -106,6 +106,7 @@ function clientFixture() {
     count: vi.fn().mockResolvedValue(0),
     findFirst: vi.fn().mockResolvedValue(null),
   };
+  const chainCommand = { findMany: vi.fn().mockResolvedValue([]) };
   const healthyTx = {
     market: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
@@ -119,6 +120,7 @@ function clientFixture() {
       user: { findFirst: vi.fn().mockResolvedValue({ id: "system_user" }) },
       market,
       marketSettlementRun,
+      chainCommand,
       $transaction: transaction,
     },
     workerState,
@@ -130,6 +132,33 @@ describe("settlement worker cycle", () => {
   beforeEach(() => {
     drain.mockReset().mockResolvedValue({ canceledOrders: 0, canceledQuantity: 0 });
     expire.mockReset().mockResolvedValue({ expired: 0, failures: [] });
+  });
+
+  it("dispatches enabled settlement attestations and reports finalized projection", async () => {
+    const previous = process.env.GOOSEY_SOLANA_SETTLEMENT_ATTESTATION_ENABLED;
+    process.env.GOOSEY_SOLANA_SETTLEMENT_ATTESTATION_ENABLED = "true";
+    try {
+      const fixture = clientFixture();
+      fixture.client.market.findMany.mockResolvedValue([]);
+      fixture.client.marketSettlementRun.findMany.mockResolvedValue([]);
+      fixture.client.chainCommand.findMany.mockResolvedValue([{ id: "attestation_command" }]);
+      const dispatchAttestation = vi.fn().mockResolvedValue({ status: "PROJECTED" });
+      const result = await runSettlementWorkerCycle({
+        instanceId: "worker_123",
+        client: fixture.client as never,
+        dispatchAttestation: dispatchAttestation as never,
+      });
+      expect(dispatchAttestation).toHaveBeenCalledWith("attestation_command", { database: fixture.client });
+      expect(result).toMatchObject({
+        attemptedAttestations: 1,
+        completedAttestations: 1,
+        pendingAttestations: 0,
+        failedAttestations: 0,
+      });
+    } finally {
+      if (previous === undefined) delete process.env.GOOSEY_SOLANA_SETTLEMENT_ATTESTATION_ENABLED;
+      else process.env.GOOSEY_SOLANA_SETTLEMENT_ATTESTATION_ENABLED = previous;
+    }
   });
 
   it("isolates one failed market and still closes later markets and processes approved runs", async () => {

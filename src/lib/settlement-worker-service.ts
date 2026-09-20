@@ -9,6 +9,11 @@ import { ApiError } from "@/lib/market-service";
 import { drainMarketOrderBook, expireOrders } from "@/lib/order-exchange";
 import { processSettlementRun } from "@/lib/settlement-service";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
+import { dispatchSettlementAttestationCommand } from "@/lib/solana/settlement-attestation-dispatcher";
+import {
+  SETTLEMENT_ATTESTATION_OPERATION,
+  settlementAttestationEnabled,
+} from "@/lib/solana/settlement-attestation";
 import {
   DEFAULT_WORKER_READINESS_POLICY,
   readWorkerReadiness,
@@ -21,6 +26,7 @@ const RUN_BATCH_SIZE = 100;
 const MAX_PERSISTED_ERROR_LENGTH = 512;
 
 type ProcessRun = typeof processSettlementRun;
+type DispatchAttestation = typeof dispatchSettlementAttestationCommand;
 
 export type SettlementWorkerCycleResult = {
   expiredOrders: number;
@@ -31,6 +37,10 @@ export type SettlementWorkerCycleResult = {
   completedRuns: number;
   busyRuns: number;
   failedRuns: number;
+  attemptedAttestations: number;
+  completedAttestations: number;
+  pendingAttestations: number;
+  failedAttestations: number;
   backlog: {
     expiredMarketCount: number;
     oldestExpiredMarketAt: Date | null;
@@ -47,6 +57,46 @@ export function sanitizedWorkerError(error: unknown): string {
   else if (prismaErrorCode(error)) label = `PRISMA_${prismaErrorCode(error)}`;
   else if (error instanceof Error && /^[A-Za-z][A-Za-z0-9_.-]{0,80}$/.test(error.name)) label = error.name;
   return label.slice(0, MAX_PERSISTED_ERROR_LENGTH);
+}
+
+async function processSettlementAttestations(input: {
+  client: PrismaClient;
+  instanceId: string;
+  dispatchAttestation: DispatchAttestation;
+  shouldStop?: () => boolean;
+}): Promise<{ attempted: number; completed: number; pending: number; failures: string[] }> {
+  if (input.shouldStop?.() || !settlementAttestationEnabled()) {
+    return { attempted: 0, completed: 0, pending: 0, failures: [] };
+  }
+  const commands = await input.client.chainCommand.findMany({
+    where: {
+      operation: SETTLEMENT_ATTESTATION_OPERATION,
+      status: { notIn: ["PROJECTED", "FAILED_TERMINAL"] },
+    },
+    orderBy: [{ acceptedAt: "asc" }, { id: "asc" }],
+    take: RUN_BATCH_SIZE,
+    select: { id: true },
+  });
+  let attempted = 0;
+  let completed = 0;
+  let pending = 0;
+  const failures: string[] = [];
+  for (const command of commands) {
+    if (input.shouldStop?.()) break;
+    try {
+      await heartbeatSettlementWorker(input.instanceId, input.client);
+      if (input.shouldStop?.()) break;
+      attempted += 1;
+      const result = await input.dispatchAttestation(command.id, { database: input.client });
+      if (result.status === "PROJECTED") completed += 1;
+      else if (result.status === "FAILED_TERMINAL") {
+        failures.push(`SETTLEMENT_ATTESTATION:${command.id}:FAILED_TERMINAL`.slice(0, MAX_PERSISTED_ERROR_LENGTH));
+      } else pending += 1;
+    } catch (error) {
+      failures.push(`SETTLEMENT_ATTESTATION:${command.id}:${sanitizedWorkerError(error)}`.slice(0, MAX_PERSISTED_ERROR_LENGTH));
+    }
+  }
+  return { attempted, completed, pending, failures };
 }
 
 export class SettlementWorkerAlreadyActiveError extends Error {
@@ -223,11 +273,13 @@ export async function runSettlementWorkerCycle(input: {
   instanceId: string;
   client?: PrismaClient;
   processRun?: ProcessRun;
+  dispatchAttestation?: DispatchAttestation;
   now?: Date;
   shouldStop?: () => boolean;
 }): Promise<SettlementWorkerCycleResult> {
   const client = input.client ?? db;
   const processRun = input.processRun ?? processSettlementRun;
+  const dispatchAttestation = input.dispatchAttestation ?? dispatchSettlementAttestationCommand;
   const shouldStop = input.shouldStop ?? (() => false);
   const startedAt = input.now ?? new Date();
   await requireWorkerOwnership(client, input.instanceId, {
@@ -249,9 +301,11 @@ export async function runSettlementWorkerCycle(input: {
       : await closeExpiredMarkets({ client, actorUserId, instanceId: input.instanceId, now: startedAt, shouldStop });
     const runs = actorUserId === null || shouldStop() ? { attempted: 0, completed: 0, busy: 0, failures: [] }
       : await processAvailableRuns({ client, actorUserId, instanceId: input.instanceId, processRun, shouldStop });
+    const attestations = shouldStop() ? { attempted: 0, completed: 0, pending: 0, failures: [] }
+      : await processSettlementAttestations({ client, instanceId: input.instanceId, dispatchAttestation, shouldStop });
     const expirationFailures = expirations.failures.map(({ orderId, error }) =>
       `ORDER_EXPIRATION:${orderId}:${sanitizedWorkerError(error)}`.slice(0, MAX_PERSISTED_ERROR_LENGTH));
-    const failures = [...expirationFailures, ...closures.failures, ...runs.failures];
+    const failures = [...expirationFailures, ...closures.failures, ...runs.failures, ...attestations.failures];
     const finishedAt = new Date();
     if (failures.length === 0 && shouldStop()) {
       // Preserve prior health history: an interrupted cycle is neither a full
@@ -294,6 +348,10 @@ export async function runSettlementWorkerCycle(input: {
       completedRuns: runs.completed,
       busyRuns: runs.busy,
       failedRuns: runs.failures.length,
+      attemptedAttestations: attestations.attempted,
+      completedAttestations: attestations.completed,
+      pendingAttestations: attestations.pending,
+      failedAttestations: attestations.failures.length,
       backlog: readiness.backlog,
     };
   } catch (error) {

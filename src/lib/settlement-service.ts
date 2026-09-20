@@ -8,6 +8,12 @@ import { ApiError, consumeRateLimit, prisma } from "@/lib/market-service";
 import { jsonStringify } from "@/lib/serializers";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
 import { formatFeathers } from "@/lib/view-models";
+import { resolveSolanaRuntime } from "@/lib/solana/runtime";
+import {
+  createSettlementAttestationIntent,
+  resolveSettlementDatabaseDomain,
+  settlementAttestationEnabled,
+} from "@/lib/solana/settlement-attestation";
 
 const MAX_BATCH_SIZE = 100;
 const DEFAULT_LEASE_MS = 30_000;
@@ -367,6 +373,8 @@ export async function processClaimedBatch(input: {
 async function finalizeClaimedRun(input: { actorUserId: string; runId: string; claimToken: string }) {
   const operationAt = new Date();
   const extendedLeaseAt = new Date(operationAt.getTime() + 120_000);
+  const attestationRuntime = settlementAttestationEnabled() ? resolveSolanaRuntime() : null;
+  const attestationDatabaseDomain = attestationRuntime ? resolveSettlementDatabaseDomain() : null;
   return runSerializableTransaction(prisma, async (tx) => {
     await requireActiveSettlementOperator(tx, input.actorUserId);
     const run = await tx.marketSettlementRun.findUnique({
@@ -397,7 +405,7 @@ async function finalizeClaimedRun(input: { actorUserId: string; runId: string; c
       throw new ApiError(409, "SETTLEMENT_CLAIM_LOST", "The settlement finalizer could not renew its lease.");
     }
 
-    const [activePositionCount, settlementCount, payout, liveOrders, liveReservations, reservedPositions] = await Promise.all([
+    const [activePositionCount, settlementCount, payout, liveOrders, liveReservations, reservedPositions, settlementRows] = await Promise.all([
       tx.position.count({
         where: {
           marketId: run.marketId,
@@ -429,6 +437,11 @@ async function finalizeClaimedRun(input: { actorUserId: string; runId: string; c
             where: { marketId: run.marketId, OR: [{ reservedYesShares: { gt: 0 } }, { reservedNoShares: { gt: 0 } }] },
           })
         : Promise.resolve(0),
+      tx.positionSettlement.findMany({
+        where: { settlementRunId: run.id },
+        orderBy: { id: "asc" },
+        select: { id: true, userId: true, payoutMilli: true, journalEntryId: true },
+      }),
     ]);
     const totalPayoutMilli = payout._sum.payoutMilli ?? 0n;
     if (
@@ -513,6 +526,30 @@ async function finalizeClaimedRun(input: { actorUserId: string; runId: string; c
         },
       }),
     ]);
+    if (attestationRuntime) {
+      if (run.outcome !== "YES" && run.outcome !== "NO" && run.outcome !== "VOID") {
+        throw new ApiError(409, "INVALID_SETTLEMENT_OUTCOME", "The settlement outcome cannot be attested.");
+      }
+      await createSettlementAttestationIntent(tx, {
+        runtime: attestationRuntime,
+        databaseDomainHex: attestationDatabaseDomain!,
+        actorUserId: input.actorUserId,
+        marketId: run.marketId,
+        settlementRunId: run.id,
+        proposalId: run.proposalId,
+        outcome: run.outcome,
+        approvalRequestHash: run.approvalRequestHash,
+        reason: run.reason,
+        evidence: run.evidence,
+        totalPositions: run.totalPositions,
+        processedCount: run.processedCount,
+        settlementCount,
+        totalPayoutMilli,
+        collateralReturnMilli,
+        resolvedAt,
+        settlements: settlementRows,
+      });
+    }
     const completedWrite = await tx.marketSettlementRun.updateMany({
       where: {
         id: run.id,
