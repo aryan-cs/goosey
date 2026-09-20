@@ -9,6 +9,7 @@ import { acceptManagedOrder } from "@/lib/solana/managed-order-service";
 import { dispatchManagedOrderCommand } from "@/lib/solana/managed-order-dispatcher";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const placeSchema = z
   .object({

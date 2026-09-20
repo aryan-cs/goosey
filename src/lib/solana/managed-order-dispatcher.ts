@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import { createSolanaRpc } from "@solana/kit";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
@@ -12,6 +13,7 @@ import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 import { loadSolanaSponsorSigner } from "@/lib/solana/sponsor-service";
 import { prepareSponsoredOrder } from "@/lib/solana/sponsored-order";
 import { submitSponsoredTransaction } from "@/lib/solana/sponsored-submission";
+import { trackTransactionStatus, type TransactionStatusResult } from "@/lib/solana/transaction-status";
 
 const envelopeSchema = z.object({
   version: z.literal(1),
@@ -36,6 +38,8 @@ type Dependencies = Readonly<{
   loadSponsor?: typeof loadSolanaSponsorSigner;
   prepare?: typeof prepareSponsoredOrder;
   submit?: typeof submitSponsoredTransaction;
+  track?: (input: Readonly<{ signature: string; lastValidBlockHeight: bigint; signal?: AbortSignal }>) => Promise<TransactionStatusResult>;
+  signal?: AbortSignal;
 }>;
 
 function expiresAtSeconds(value: string | null | undefined): bigint | undefined {
@@ -141,10 +145,33 @@ export async function dispatchManagedOrderCommand(
       ...fence(),
       to: submission.status === "submitted" ? "SUBMITTED" : "UNKNOWN",
     });
+    if (submission.status === "submitted") {
+      const tracked = await (dependencies.track ?? (value => trackTransactionStatus(
+        createSolanaRpc(runtime.rpcUrl),
+        { ...value, commitment: "finalized", timeoutMs: 45_000 },
+      )))({ signature: submission.signature, lastValidBlockHeight: submission.lastValidBlockHeight,
+        signal: dependencies.signal });
+      if (tracked.status === "finalized") {
+        command = await store.transition(commandId, {
+          expectedRevision: command.state.revision, ...fence(), to: "FINALIZED",
+        });
+      } else if (tracked.status === "failed") {
+        command = await store.transition(commandId, {
+          expectedRevision: command.state.revision, ...fence(), to: "FAILED_TERMINAL",
+          errorCode: "ONCHAIN_ORDER_REJECTED",
+          errorMessage: "The finalized settlement program rejected this order.",
+        });
+      } else {
+        command = await store.transition(commandId, {
+          expectedRevision: command.state.revision, ...fence(), to: "UNKNOWN",
+        });
+      }
+    }
     return store.publicStatus(commandId);
   } catch (error) {
     // UNKNOWN has deliberately released its lease and must only be reconciled.
-    if (command.state.status === "UNKNOWN") throw error;
+    if (command.state.status === "UNKNOWN" || command.state.status === "FAILED_TERMINAL"
+      || command.state.status === "PROJECTED") throw error;
     try {
       const failed = await store.transition(commandId, {
         expectedRevision: command.state.revision,
