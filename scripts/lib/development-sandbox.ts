@@ -76,7 +76,7 @@ export function sandboxEnvironment(database: string, secret: string, port = 8082
     POSTGRES_DATABASE_URL: "",
     POSTGRES_DIRECT_DATABASE_URL: "",
     GOOSEY_DEVELOPMENT_SANDBOX: "1",
-    STARTING_FEATHERS: "100000",
+    STARTING_FEATHERS: "1000",
     SESSION_COOKIE_NAME: "goosey_sandbox_session",
     APP_URL: origin,
     NEXT_PUBLIC_APP_URL: origin,

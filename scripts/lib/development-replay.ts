@@ -105,7 +105,10 @@ export async function replayDevelopmentData(input: { scenarios: DevelopmentScena
       const side = difference >= 0 ? "YES" : "NO";
       const quantity = Math.max(1, Math.min(40, Math.min(point.maxQuantity, Math.abs(difference))));
       const opposite = side === "YES" ? "NO" : "YES";
-      const sellPosition = tradeIndex % 4 === 0 ? await db.position.findFirst({ where: { marketId, userId: { in: participants.map(p => p.id) }, ...(opposite === "YES" ? { yesShares: { gte: quantity } } : { noShares: { gte: quantity } }) }, orderBy: { createdAt: "asc" } }) : null;
+      // Prefer an actual sale of the opposite outcome whenever one can produce
+      // the planned price move. This recycles participant capital across a
+      // months-long replay instead of requiring ever-larger synthetic grants.
+      const sellPosition = await db.position.findFirst({ where: { marketId, userId: { in: participants.map(p => p.id) }, ...(opposite === "YES" ? { yesShares: { gte: quantity } } : { noShares: { gte: quantity } }) }, orderBy: { updatedAt: "asc" } });
       const userId = sellPosition?.userId ?? participants[point.participantIndex].id;
       await atHistoricalTime(point.at, () => executeParticipantTrade({ marketId, userId, side: sellPosition ? opposite : side, action: sellPosition ? "SELL" : "BUY", quantity, key: `simulation-trade-${scenario.slug}-${tradeIndex}` }));
       tradeCount++;

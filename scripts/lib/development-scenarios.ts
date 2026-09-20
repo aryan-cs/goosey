@@ -1,4 +1,5 @@
 /** Fictional development scenarios. This module plans trades; it never inserts chart data. */
+import { DEVELOPMENT_PARTICIPANTS } from "./development-profiles";
 export type DevelopmentMarketStatus = "OPEN" | "PAUSED" | "CLOSED" | "RESOLVED" | "VOID" | "DRAFT";
 export type DevelopmentOutcome = "YES" | "NO" | "VOID";
 
@@ -214,8 +215,11 @@ function tradeIntents(definition: Definition, openedAt: Date, closesAt: Date, as
     return {
       at: new Date(at),
       targetProbability: Math.round(Math.min(.97, Math.max(.03, probability)) * 10_000) / 10_000,
-      participantIndex: Math.floor(random() * 24),
-      maxQuantity: 2 + Math.floor(random() * 19),
+      participantIndex: Math.floor(random() * DEVELOPMENT_PARTICIPANTS.length),
+      // A one-contract cadence lets 100 independently funded participants build
+      // long histories from the same 1,000-feather starting grant. The dense
+      // replay still moves LMSR prices through the planned trajectory.
+      maxQuantity: 1,
     };
   });
 }

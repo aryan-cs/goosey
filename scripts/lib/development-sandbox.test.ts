@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { acquireSandboxLock, assertDevelopmentOnly, ensureSandboxPaths, readSandboxManifest, sandboxEnvironment, sandboxPaths } from "./development-sandbox";
 import { buildDevelopmentScenarios } from "./development-scenarios";
+import { DEVELOPMENT_PARTICIPANTS } from "./development-profiles";
 
 const directories: string[] = [];
 afterEach(async () => { await Promise.all(directories.splice(0).map(directory => rm(directory, { recursive: true, force: true }))); });
@@ -47,6 +48,7 @@ describe("development sandbox isolation", () => {
     expect(env.DATABASE_URL).toBe("file:/project/output/development-sandbox/team/data.sqlite?connection_limit=1");
     expect(env.DATABASE_PROVIDER).toBe("sqlite");
     expect(env.POSTGRES_DATABASE_URL).toBe("");
+    expect(env.STARTING_FEATHERS).toBe("1000");
     expect(env.SMTP_HOST).toBe("");
     expect(env.SESSION_COOKIE_NAME).toBe("goosey_sandbox_session");
   });
@@ -71,7 +73,7 @@ describe("historical development scenarios", () => {
         expect(intent.at < market.closesAt && intent.at <= asOf).toBe(true);
         expect(intent.targetProbability).toBeGreaterThan(0);
         expect(intent.targetProbability).toBeLessThan(1);
-        expect(intent.participantIndex).toBeLessThan(24);
+        expect(intent.participantIndex).toBeLessThan(DEVELOPMENT_PARTICIPANTS.length);
         prior = intent.at.getTime();
       }
       if (market.finalStatus === "OPEN") {
