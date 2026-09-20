@@ -13,14 +13,19 @@ describe("PublicProfileDashboard", () => {
       recentTrades: [],
       balanceSeries: [{ timestamp: "2026-08-01T00:00:00.000Z", value: 1000 }, { timestamp: "2026-09-01T00:00:00.000Z", value: 734.5 }],
       volumeSeries: [{ timestamp: "2026-09-01T00:00:00.000Z", value: 900 }],
+      asOf: "2026-09-01T01:00:00.000Z",
     }));
 
     expect(html).toContain("@test20");
     expect(html).toContain('href="/users/test20"');
     expect(html).toContain("Portfolio value");
     expect(html).toContain("Available balance");
+    expect(html).toContain('aria-label="Inspect available balance history"');
+    expect(html).toContain('aria-label="Chart metric"');
+    expect(html).toContain('aria-label="Chart range"');
     expect(html).toContain("Will Goosey ship?");
     expect(html).toContain('href="/markets/demo?outcome=YES"');
+    expect(html).not.toContain(">Orders<");
     expect(html).not.toContain("email");
   });
 });

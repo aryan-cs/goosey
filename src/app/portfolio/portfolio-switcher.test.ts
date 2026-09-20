@@ -13,15 +13,14 @@ const render = (view: PortfolioView) => renderToStaticMarkup(React.createElement
 describe("PortfolioSwitcher", () => {
   it.each([
     ["positions", "/portfolio?view=positions"],
-    ["orders", "/portfolio?view=orders"],
     ["history", "/portfolio?view=history"],
   ] as const)("marks only %s active and keeps every view directly linkable", (active, href) => {
     const html = render(active);
 
     expect(html).toContain('aria-label="Portfolio views"');
     expect(html).toContain('href="/portfolio?view=positions"');
-    expect(html).toContain('href="/portfolio?view=orders"');
     expect(html).toContain('href="/portfolio?view=history"');
+    expect(html).not.toContain('href="/portfolio?view=orders"');
     const escapedHref = href.replace(/[?]/g, "\\?");
     expect(html).toMatch(new RegExp(`<a(?=[^>]*href="${escapedHref}")(?=[^>]*aria-current="page")[^>]*>`));
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
@@ -29,13 +28,9 @@ describe("PortfolioSwitcher", () => {
   });
 
   it("maps ordered view changes to consistent animation directions", () => {
-    expect(portfolioViewDirection("positions", "orders")).toBe(1);
     expect(portfolioViewDirection("positions", "history")).toBe(1);
-    expect(portfolioViewDirection("orders", "history")).toBe(1);
-    expect(portfolioViewDirection("history", "orders")).toBe(-1);
     expect(portfolioViewDirection("history", "positions")).toBe(-1);
-    expect(portfolioViewDirection("orders", "positions")).toBe(-1);
-    for (const view of ["positions", "orders", "history"] as const) {
+    for (const view of ["positions", "history"] as const) {
       expect(portfolioViewDirection(view, view)).toBe(0);
     }
   });

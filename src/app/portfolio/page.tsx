@@ -1,6 +1,5 @@
 import { Fragment } from "react";
 import { LivePageRefresh } from "@/components/live-page-refresh";
-import { PortfolioActivity } from "@/components/portfolio-activity";
 import styles from "./portfolio.module.css";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -25,7 +24,8 @@ export const dynamic = "force-dynamic";
 
 export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ historyCursor?: string | string[]; view?: string | string[] }> }) {
   const { historyCursor, view: requestedView } = await searchParams;
-  const view = requestedView === "orders" ? "orders" : requestedView === "history" || historyCursor !== undefined ? "history" : "positions";
+  if (requestedView === "orders") redirect("/portfolio/activity");
+  const view = requestedView === "history" || historyCursor !== undefined ? "history" : "positions";
   const destination = authDestination(typeof historyCursor === "string"
     ? `/portfolio?view=history&historyCursor=${encodeURIComponent(historyCursor)}` : `/portfolio?view=${view}`);
   const user = await getServerUser();
@@ -59,10 +59,9 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const totalValue = availableCash + reservedCash + positionValue;
 
   return <div className="page-shell portfolio-page">
-    <header className="page-header"><h1>Portfolio</h1><div className={styles.links}><Link className="section-link" href="/watchlist">Watchlist</Link></div><LivePageRefresh showButton={false} /></header>
+    <header className="page-header"><h1>Portfolio</h1><div className={styles.links}><Link className="section-link" href="/watchlist">Watchlist</Link><Link className="section-link" href="/portfolio/activity">Orders &amp; fills</Link></div><LivePageRefresh showButton={false} /></header>
     <section className="metric-grid" aria-label="Account balance"><MetricCard label="Total value" value={<><FeatherIcon /> {formatFeathers(totalValue)}</>} /><MetricCard label="Available" value={<><FeatherIcon /> {formatFeathers(availableCash)}</>} detail={reservedCash > 0n ? `${formatFeathers(reservedCash)} reserved in orders` : undefined} /><MetricCard label="Estimated exit value" value={<><FeatherIcon /> {formatFeathers(positionValue)}</>} /><MetricCard label="Unrealized return" value={<><FeatherIcon /> {formatFeathers(unrealized)}</>} trend={cost > 0n ? Number(unrealized * 10_000n / cost) / 100 : undefined} /></section>
     <PortfolioSwitcher view={view}>
-    {view === "orders" && <PortfolioActivity ordersOnly />}
     {view === "positions" && <>
     <section><SectionHeader title="Your positions" />{values.length ? <div className="position-list">{values.map(({ position }) => {
       const sideValues = valuations.get(position.id)!;

@@ -4,11 +4,10 @@ import Link from "next/link";
 import { useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import styles from "./portfolio.module.css";
 
-export type PortfolioView = "positions" | "orders" | "history";
+export type PortfolioView = "positions" | "history";
 
 const views: Array<{ id: PortfolioView; label: string }> = [
   { id: "positions", label: "Positions" },
-  { id: "orders", label: "Orders" },
   { id: "history", label: "History" },
 ];
 

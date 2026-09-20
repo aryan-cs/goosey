@@ -108,6 +108,10 @@ describe("legacy server page SQL query boundaries (mocked reads)", () => {
     } }));
     expect(state.valuations).toHaveBeenCalledWith(state, []);
   });
+  it("redirects the retired portfolio orders view to dedicated order management", async () => {
+    await expect(PortfolioPage({ searchParams: Promise.resolve({ view: "orders" }) })).rejects.toThrow("NEXT_REDIRECT:/portfolio/activity");
+    expect(state.position.findMany).not.toHaveBeenCalled();
+  });
   it("filters a public trading profile to active users and published database markets", async () => {
     await UserProfilePage({ params: Promise.resolve({ username: "PROFILE" }) });
     const query = state.user.findFirst.mock.calls[0][0];

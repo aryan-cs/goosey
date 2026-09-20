@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { expect, test, type APIRequestContext, type Locator } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
+import { formatFeathers } from "../../src/lib/feather-format";
 
 function isolatedDatabaseOnly(baseURL: string | undefined) {
   if (process.env.DATABASE_URL !== "file:./browser-e2e.db"
@@ -17,9 +18,7 @@ function fact(card: Locator, label: string) {
 }
 
 function feathers(value: string) {
-  const amount = BigInt(value);
-  const fraction = (amount % 1000n).toString().padStart(3, "0").replace(/0+$/, "");
-  return `${(amount / 1000n).toLocaleString("en-CA")}${fraction ? `.${fraction}` : ""} feathers`;
+  return `${formatFeathers(BigInt(value))} feathers`;
 }
 
 test("private activity shows real NO prices, fills, pagination, recovery and empty states", async ({ page, playwright, baseURL }, testInfo) => {
@@ -91,16 +90,16 @@ test("private activity shows real NO prices, fills, pagination, recovery and emp
     await page.screenshot({ path: `output/playwright/portfolio-activity/positions-${testInfo.project.name}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const views = page.getByRole("navigation", { name: "Portfolio views" });
+    await expect(views.getByRole("link", { name: "Orders", exact: true })).toHaveCount(0);
     await views.getByRole("link", { name: "History", exact: true }).click();
     await expect(page.getByRole("list", { name: "Trade history" })).toContainText("Bought 1 contract");
-    await views.getByRole("link", { name: "Orders", exact: true }).click();
-    await expect(page.getByLabel("Order status")).toHaveValue("open");
+    await page.getByRole("link", { name: "Orders & fills", exact: true }).click();
+    await expect(page).toHaveURL(/\/portfolio\/activity$/);
+    await expect(page.getByLabel("Order status")).toHaveValue("all");
     await expect(page.getByRole("region", { name: "Order history" }).getByRole("listitem")).toHaveCount(20);
     await place(page.request, "NO", "12000");
     await expect(page.getByRole("region", { name: "Order history" }).getByRole("listitem").first()).toContainText("12 feathers", { timeout: 25_000 });
     await page.screenshot({ path: `output/playwright/portfolio-activity/open-orders-${testInfo.project.name}.png`, fullPage: false });
-    // Existing deep links keep the detailed orders/fills view.
-    await page.goto("/portfolio/activity");
     const orders = page.getByRole("region", { name: "Order history" });
     await expect(orders.getByRole("listitem")).toHaveCount(20);
     const cards = orders.getByRole("listitem");

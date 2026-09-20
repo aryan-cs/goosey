@@ -37,5 +37,6 @@ export default async function UserProfilePage({ params }: { params: Promise<{ us
     recentTrades={profile.recentTrades.map((trade) => ({ id: trade.id, marketSlug: trade.market.slug, marketTitle: trade.market.shortTitle, side: trade.side, action: trade.action, quantity: trade.quantity, amount: formatFeathers(trade.amountMilli, 2), fee: formatFeathers(trade.feeMilli, 2), createdAt: trade.createdAt.toISOString(), source: trade.source }))}
     balanceSeries={profile.balanceSeries}
     volumeSeries={profile.volumeSeries}
+    asOf={new Date().toISOString()}
   /></main>;
 }

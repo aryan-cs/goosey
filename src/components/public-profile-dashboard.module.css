@@ -24,25 +24,41 @@
 .chartHeading span { color: var(--ink-muted); font-size: 12px; font-weight: 600; }
 .chartHeading strong { font: 650 30px/1.05 var(--font-display); letter-spacing: -.035em; }
 .chartHeading small { font-size: 12px; font-weight: 600; }
-.chartKinds, .rangeTabs, .filters { display: inline-flex; padding: 3px; background: var(--surface-muted); border-radius: 999px; }
-.chartKinds button, .rangeTabs button, .filters button { padding: 7px 11px; color: var(--ink-muted); background: transparent; border: 0; border-radius: 999px; font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; }
-.chartKinds button[aria-pressed="true"], .rangeTabs button[aria-pressed="true"], .filters button[aria-pressed="true"] { color: var(--ink); background: var(--surface-raised); box-shadow: var(--shadow-sm); }
+.segmented { --segment-count: 2; --segment-index: 0; position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr)); min-width: 176px; padding: 3px; background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: 999px; }
+.segmentIndicator { position: absolute; z-index: 0; inset: 3px auto 3px 3px; width: calc((100% - 6px) / var(--segment-count)); border-radius: inherit; background: var(--surface-raised); box-shadow: var(--shadow-sm); transform: translateX(calc(var(--segment-index) * 100%)); transition: transform 320ms var(--ease-emphasized); pointer-events: none; }
+.segmented button, .filters button { position: relative; z-index: 1; min-height: 34px; padding: 7px 11px; color: var(--ink-muted); background: transparent; border: 0; border-radius: 999px; font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; transition: color var(--motion-fast) var(--ease-standard); }
+.segmented button[aria-pressed="true"], .filters button[aria-pressed="true"] { color: var(--ink); }
+.filters { display: inline-flex; padding: 3px; background: var(--surface-muted); border-radius: 999px; }
+.filters button[aria-pressed="true"] { background: var(--surface-raised); box-shadow: var(--shadow-sm); }
 .chart { position: relative; height: 260px; margin-top: 22px; padding-left: 46px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 64px, var(--border-subtle) 65px); }
 .chart svg { display: block; width: 100%; height: 100%; overflow: visible; color: var(--yes); }
+.chartPlot { position: relative; height: 100%; outline: none; cursor: crosshair; touch-action: pan-y; }
+.chartPlot:focus-visible { border-radius: 8px; box-shadow: 0 0 0 2px var(--yes); }
 .line { fill: none; stroke: currentColor; stroke-width: 3; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
 .area { color: var(--yes); }
+.crosshair { position: absolute; z-index: 2; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--ink) 52%, transparent); pointer-events: none; }
+.chartDot { position: absolute; z-index: 3; width: 10px; height: 10px; border: 2px solid var(--surface-raised); border-radius: 50%; background: var(--yes); box-shadow: 0 0 0 1px var(--yes); transform: translate(-50%, -50%); pointer-events: none; }
+.chartTooltip { position: absolute; z-index: 4; top: 10px; display: grid; gap: 2px; width: max-content; max-width: min(220px, 85%); padding: 9px 11px; color: var(--ink); background: var(--surface-overlay, var(--surface-raised)); border: 1px solid var(--border-subtle); border-radius: 10px; box-shadow: var(--shadow-md); transform: translateX(-50%); pointer-events: none; }
+.chartTooltip strong { display: flex; align-items: center; gap: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.chartTooltip strong svg { flex: none; width: 14px; height: 14px; }
+.chartTooltip span, .chartTooltip small { color: var(--ink-muted); font-size: 10px; white-space: nowrap; }
 .axis { position: absolute; inset: 0 auto 0 0; display: flex; flex-direction: column; justify-content: space-between; width: 42px; padding: 2px 0 10px; color: var(--ink-muted); font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
 .chartEmpty { height: 260px; display: grid; place-items: center; align-content: center; gap: 8px; color: var(--ink-muted); }
 .chartEmpty svg { width: 28px; }
-.rangeTabs { display: flex; width: max-content; margin: 8px 0 0 auto; }
+.rangeTabs { width: min(100%, 260px); margin: 8px 0 0 auto; }
 .positive { color: var(--yes) !important; }
 .negative { color: var(--no) !important; }
 .records { overflow: hidden; }
-.tabs { display: flex; gap: 28px; padding: 0 24px; border-bottom: 1px solid var(--border-subtle); }
-.tabs button { display: flex; align-items: center; gap: 8px; padding: 18px 0 15px; color: var(--ink-muted); background: none; border: 0; border-bottom: 2px solid transparent; font: inherit; font-weight: 650; cursor: pointer; }
-.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--yes); }
+.tabs { --segment-index: 0; position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(100%, 380px); padding: 4px; margin: 18px 24px; background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: 999px; }
+.tabIndicator { position: absolute; z-index: 0; inset: 4px auto 4px 4px; width: calc((100% - 8px) / 2); border-radius: inherit; background: var(--surface-raised); box-shadow: var(--shadow-sm); transform: translateX(calc(var(--segment-index) * 100%)); transition: transform 320ms var(--ease-emphasized); pointer-events: none; }
+.tabs button { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 10px 14px; color: var(--ink-muted); background: none; border: 0; border-radius: inherit; font: inherit; font-weight: 650; cursor: pointer; transition: color var(--motion-fast) var(--ease-standard); }
+.tabs button[aria-selected="true"] { color: var(--ink); }
 .tabs svg { width: 16px; }
 .tabs span { min-width: 20px; padding: 2px 6px; background: var(--surface-muted); border-radius: 999px; font-size: 10px; }
+.tabPanel { animation: profile-panel-in 260ms var(--ease-emphasized) both; }
+.tabPanelBack { animation-name: profile-panel-in-back; }
+@keyframes profile-panel-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes profile-panel-in-back { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
 .toolbar { display: flex; justify-content: space-between; gap: 14px; padding: 18px 24px; }
 .search { width: min(260px, 48%); display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--ink-muted); background: var(--surface-muted); border-radius: 10px; }
 .search svg { flex: none; width: 15px; }
@@ -79,9 +95,14 @@
   .metrics { grid-template-columns: 1fr 1fr; }
   .chartHeading { display: grid; }
   .chart { height: 220px; padding-left: 38px; }
-  .tabs, .toolbar { padding-inline: 16px; }
+  .tabs { width: calc(100% - 32px); margin-inline: 16px; }
+  .toolbar { padding-inline: 16px; }
   .toolbar { align-items: stretch; flex-direction: column; }
   .search { width: auto; }
   .activityRow { grid-template-columns: 8px minmax(0, 1fr) auto; padding: 14px 16px; }
   .activityRow time { grid-column: 2 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .segmentIndicator, .tabIndicator { transition: none; }
+  .tabPanel { animation: none; }
 }
