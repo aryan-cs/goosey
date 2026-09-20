@@ -22,10 +22,10 @@ local function wrapCard(s,limit)
   local current=1
   local overflow=false
   for word in s:gmatch("%S+") do
-    if #word>limit then word=word:sub(1,limit-3).."..." end
-    local candidate=lines[current]=="" and word or lines[current].." "..word
+    local part=#word>limit and word:sub(1,limit-3).."..." or word
+    local candidate=lines[current]=="" and part or lines[current].." "..part
     if #candidate<=limit then lines[current]=candidate
-    elseif current==1 then current=2;lines[current]=word
+    elseif current==1 then current=2;lines[current]=part
     else overflow=true;break end
   end
   if overflow then
