@@ -82,9 +82,9 @@ describe("GET /api/v1/commands/[id]", () => {
     expect(mocks.transferDispatch).not.toHaveBeenCalled();
   });
 
-  it("reconciles retained managed transfer wire through status polling", async () => {
+  it.each(["SIGNED", "UNKNOWN"])("reconciles retained managed transfer wire in %s through status polling", async status => {
     mocks.load.mockResolvedValue({ identity: { actorId: "user_12345678", operation: "TRANSFER_FEATHERS" } });
-    mocks.publicStatus.mockResolvedValue({ id: "cmd_12345678", status: "SIGNED" });
+    mocks.publicStatus.mockResolvedValue({ id: "cmd_12345678", status });
     const response = await GET(request, context);
     expect(response.status).toBe(200);
     expect(mocks.transferDispatch).toHaveBeenCalledWith("cmd_12345678");

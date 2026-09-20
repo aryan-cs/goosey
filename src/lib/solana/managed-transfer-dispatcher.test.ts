@@ -98,7 +98,7 @@ describe("managed feather transfer dispatcher", () => {
     expect(f.events).toEqual(status === "SIGNED" ? ["SUBMITTED", "FINALIZED"] : ["FINALIZED"]);
   });
 
-  it.each(["UNKNOWN", "FINALIZED", "PROJECTED", "FAILED_TERMINAL"] as const)(
+  it.each(["FINALIZED", "PROJECTED", "FAILED_TERMINAL"] as const)(
     "does not lease or replace a %s command", async status => {
       const f = fixture(status);
       expect((await dispatchManagedFeatherTransferCommand("command_12345678", f.dependencies)).status).toBe(status);
@@ -135,7 +135,7 @@ describe("managed feather transfer dispatcher", () => {
     }
   });
 
-  it("accepts/replays then dispatches active commands but preserves UNKNOWN", async () => {
+  it("accepts/replays then dispatches active and UNKNOWN commands for exact-signature reconciliation", async () => {
     const dispatch = vi.fn(async () => ({ status: "FINALIZED" } as never));
     const accept = vi.fn(async () => ({ accepted: true as const, pending: true as const,
       command: { id: "command_12345678", status: "ACCEPTED" } as never }));
@@ -146,7 +146,7 @@ describe("managed feather transfer dispatcher", () => {
     dispatch.mockClear();
     accept.mockResolvedValueOnce({ accepted: true, pending: true,
       command: { id: "command_12345678", status: "UNKNOWN" } as never });
-    expect((await ensureManagedFeatherTransfer(input, { accept, dispatch })).status).toBe("UNKNOWN");
-    expect(dispatch).not.toHaveBeenCalled();
+    expect((await ensureManagedFeatherTransfer(input, { accept, dispatch })).status).toBe("FINALIZED");
+    expect(dispatch).toHaveBeenCalledOnce();
   });
 });

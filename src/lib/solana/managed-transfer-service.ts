@@ -64,7 +64,6 @@ export async function acceptManagedFeatherTransfer(input: Readonly<{
       id: request.recipientUserId,
       status: "ACTIVE",
       role: { in: [...INTERACTIVE_ROLES] },
-      emailVerifiedAt: { not: null },
     },
     select: { id: true },
   });

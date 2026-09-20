@@ -41,8 +41,16 @@ type Dependencies = Readonly<{
   signal?: AbortSignal;
 }>;
 
-const DISPATCHABLE = new Set(["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED", "FAILED_RETRYABLE"]);
-const RETAINED_WIRE = new Set(["SIGNED", "SUBMITTED", "CONFIRMED"]);
+const DISPATCHABLE = new Set([
+  "ACCEPTED",
+  "PREPARED",
+  "SIGNED",
+  "SUBMITTED",
+  "CONFIRMED",
+  "UNKNOWN",
+  "FAILED_RETRYABLE",
+]);
+const RETAINED_WIRE = new Set(["SIGNED", "SUBMITTED", "CONFIRMED", "UNKNOWN"]);
 
 function exactPreparedReceipt(expected: Readonly<{
   signature: string;
@@ -220,7 +228,7 @@ export async function dispatchManagedFeatherTransferCommand(
     return store.publicStatus(commandId);
   } catch (error) {
     try {
-      if (RETAINED_WIRE.has(command.state.status)) {
+      if (RETAINED_WIRE.has(command.state.status) && command.state.status !== "UNKNOWN") {
         command = await store.transition(commandId, {
           expectedRevision: command.state.revision, ...fence(), to: "UNKNOWN",
         });

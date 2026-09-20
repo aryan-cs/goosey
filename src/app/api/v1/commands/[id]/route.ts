@@ -43,6 +43,7 @@ export async function GET(
     const status = await store.publicStatus(id);
     const dispatch = recoveryDispatchers[command.identity.operation as keyof typeof recoveryDispatchers];
     const redispatchableStatuses = command.identity.operation === "CANCEL_ORDER"
+      || command.identity.operation === "TRANSFER_FEATHERS"
       ? redispatchableCancellationStatuses : redispatchableOrderStatuses;
     if (dispatch && redispatchableStatuses.has(status.status)) {
       // Status polling is also the crash-recovery trigger. Fenced dispatch and

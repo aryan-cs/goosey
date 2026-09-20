@@ -60,6 +60,9 @@ describe("managed feather transfer acceptance", () => {
     }, { database: db, env, ensureIdentity, provider: "postgresql" });
     expect(result).toMatchObject({ accepted: true, pending: true,
       command: { id: "cmd_transfer_123", operation: "TRANSFER_FEATHERS", status: "ACCEPTED" } });
+    expect((db as never as { user: { findFirst: ReturnType<typeof vi.fn> } }).user.findFirst)
+      .toHaveBeenCalledWith({ where: { id: "recipient_12345678", status: "ACTIVE",
+        role: { in: ["USER", "ADMIN"] } }, select: { id: true } });
     const create = (db as never as { chainCommand: { create: ReturnType<typeof vi.fn> } }).chainCommand.create;
     const command = create.mock.calls[0][0].data;
     expect(JSON.parse(command.requestJson)).toEqual({
