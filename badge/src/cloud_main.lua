@@ -22,12 +22,12 @@ local function wrapCard(s)
   local overflow=false
   for word in s:gmatch("%S+") do
     local candidate=lines[current]=="" and word or lines[current].." "..word
-    if #candidate<=24 then lines[current]=candidate
+    if #candidate<=22 then lines[current]=candidate
     elseif current==1 then current=2;lines[current]=word
     else overflow=true;break end
   end
   if overflow then
-    while #lines[2]>21 do lines[2]=lines[2]:match("^(.*)%s+%S+$") or lines[2]:sub(1,21) end
+    while #lines[2]>19 do lines[2]=lines[2]:match("^(.*)%s+%S+$") or lines[2]:sub(1,19) end
     lines[2]=lines[2].."..."
   end
   return lines[2]=="" and lines[1] or lines[1].."\n"..lines[2]
@@ -41,9 +41,6 @@ end
 local function accountSummary(user,balance)
   if #user>11 then user=user:sub(1,10).."~" end
   return user.." · "..balance
-end
-local function compactClose(value)
-  return value:gsub(" UTC$","Z")
 end
 local function drawListChart(slot,item,y)
   local line=listCharts[slot]
@@ -62,7 +59,7 @@ local function drawListChart(slot,item,y)
     local x=math.floor(math.max(0,math.min(1,(h[j][2]-first)/(last-first)))*58)
     pts[#pts+1]={x,math.floor((domainHigh-h[j][1])/span*28)}
   end
-  line:set_points(pts);line:set_pos(177,y+48)
+  line:set_points(pts);line:set_pos(180,y+16)
   line:style({line_color=(item.changeBps or 0)<0 and C.down or C.up,line_width=2})
   line:hidden(false)
 end
@@ -134,28 +131,27 @@ local function render()
     text(1,"Loading markets",10,70,300,20);return
   end
   if page=="list" then
-    local first=math.floor((selected-1)/2)*2+1
-    for row=0,1 do
+    local first=math.floor((selected-1)/3)*3+1
+    for row=0,2 do
       local i=first+row
       local item=cloud.markets[i]
       if item then
-        local y=40+row*98
-        local base=row*5
-        text(base+1,string.upper(item.category or "Market"),15,y+5,168,14)
-        text(base+2,wrapCard(item.shortTitle or item.title).."\n"..compactClose(item.closes),15,y+21,166,14)
-        text(base+3,"Vol "..item.volume,235,y+69,75,14,"right")
-        text(base+4,string.format("%.0f%%",item.probability),232,y+17,78,24,"right")
-        local change=item.changeBps and item.changeBps/100 or nil
-        text(base+5,change and string.format("%+.0f pts",change) or "-- pts",235,y+46,75,14,"right",change and (change<0 and C.down or C.up) or C.muted)
+        local y=40+row*65
+        local base=row*2
+        text(base+1,wrapCard(item.shortTitle or item.title),15,y+10,160,14)
+        text(base+2,string.format("%.0f%%",item.probability),244,y+18,66,22,"right")
         drawListChart(row+1,item,y)
-        if selected==i then focus(5,y-3,310,96) end
+        if selected==i then focus(5,y-4,310,61) end
       end
     end
   elseif page=="detail" then
     text(1,wrap(m.title,39),10,36,300,14)
-    text(2,string.format("%.0f%%",m.probability),222,87,88,24,"right")
+    text(2,string.format("%.0f%%",m.probability),212,87,98,24,"right")
     local h=detail and detail.slug==m.slug and detail.history or {}
-    text(3,(#h>0 and string.format("%+.0f pts",h[#h][1]-h[1][1]) or "-- pts").."\nPast 4 hours",212,122,98,14,"right")
+    local change=#h>0 and h[#h][1]-h[1][1] or nil
+    local changeText=change and string.format("%+.0f pts",change) or (detail and "No history" or "Loading 4H")
+    text(3,changeText.."\nPast 4 hours",212,120,98,14,"right",change and (change<0 and C.down or C.up) or C.muted)
+    text(7,"Vol "..m.volume,212,158,98,14,"right")
     track:hidden(false);midline:hidden(false)
     local low,high=100,0
     for j=1,#h do low=math.min(low,h[j][1]);high=math.max(high,h[j][1]) end
@@ -171,12 +167,12 @@ local function render()
       pts[#pts+1]={math.floor(x*132),math.floor((domainHigh-h[j][1])/domainSpan*88)}
     end
     if #pts>0 and pts[#pts][1]<132 then pts[#pts+1]={132,pts[#pts][2]} end
+    chart:set_pos(52,90);chart:style({line_color=C.text,line_width=2})
     if #pts>1 then chart:set_points(pts);chart:hidden(false) end
     if #pts>0 then dot:set_pos(51+pts[#pts][1],89+pts[#pts][2]);dot:hidden(false)
-    else text(3,(detail and "No history" or "Loading 4H"),212,122,98,14,"right") end
+    end
     local state=m.status:sub(1,1)..m.status:sub(2):lower()
-    text(7,state.."  Vol "..m.volume,10,186,125,14)
-    text(8,"Closes "..m.closes,135,186,175,14,"right")
+    text(8,state.."  Closes "..m.closes,10,186,300,14)
     focus(side==1 and 7 or 164,207,149,28)
     text(9,string.format("YES  %.0f%%",m.probability),18,212,132,16)
     text(10,string.format("NO  %.0f%%",100-m.probability),176,212,132,16)
@@ -211,7 +207,7 @@ function on_enter(root)
     b:style({bg_color=color,border_width=0,pad_all=0,radius=0});return b
   end
   box(0,0,320,240,C.bg);box(10,34,300,1,C.panel)
-  mark=box(5,37,310,96,C.panel);mark:style({border_width=1,border_color=C.text,radius=3})
+  mark=box(5,36,310,61,C.panel);mark:style({border_width=1,border_color=C.text,radius=3})
   header=badge.ui.label(root,"");header:set_pos(10,7);header:set_size(78,22)
   header:style({text_font=18,text_color=C.text})
   status=badge.ui.label(root,"");status:set_pos(88,7);status:set_size(222,18)
@@ -221,8 +217,8 @@ function on_enter(root)
   track=box(48,86,140,97,C.panel);midline=box(48,134,140,1,C.muted);dot=box(0,0,3,3,C.text)
   chart=badge.ui.line(root,{{0,0},{1,0}});chart:set_pos(52,90)
   chart:style({line_color=C.text,line_width=2})
-  listCharts={}
-  for i=1,2 do listCharts[i]=badge.ui.line(root,{{0,0},{1,0}});listCharts[i]:hidden(true) end
+  listCharts={chart}
+  for i=2,3 do listCharts[i]=badge.ui.line(root,{{0,0},{1,0}});listCharts[i]:hidden(true) end
   labels={};for i=1,10 do labels[i]=badge.ui.label(root,"") end
   badge.led.clear();badge.led.show()
   if not trade.name then page="link" end

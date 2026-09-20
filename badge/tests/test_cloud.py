@@ -47,21 +47,22 @@ press('DOWN');assert settings_box.y==93;snapshot('cloud-settings');press('A')
 has('Account Linked');has('@badge_test');has('1000.00 feathers');assert lua.eval('require("trade").slug') is None
 press('B');has('Markets')
 first=source['markets'][0]
-has(first['category'].upper());has('Vol '+first['volume']);has(first['closes'].replace(' UTC','Z'))
-close_text=first['closes'].replace(' UTC','Z')
-title_and_close=next(w for w in g.widgets.values() if not w.hide and w.text.endswith('\n'+close_text))
-volume=next(w for w in g.widgets.values() if not w.hide and w.text=='Vol '+first['volume'])
-assert (title_and_close.x,title_and_close.y)==(15,61)
-assert (volume.x,volume.y,volume.w,volume.styles['text_align'])==(235,109,75,'right')
+for market in source['markets'][:3]:
+    has(f"{market['probability']:.0f}%")
+visible=g.visible()
+assert first['category'].upper() not in visible
+assert 'Vol ' not in visible and ' pts' not in visible and first['closes'] not in visible
+title=next(w for w in g.widgets.values() if not w.hide and w.x==15 and w.y==50)
 probability=next(w for w in g.widgets.values() if not w.hide and w.text==f"{first['probability']:.0f}%")
-change=next(w for w in g.widgets.values() if not w.hide and w.text.endswith(' pts'))
-assert (probability.x,probability.y,probability.styles['text_font'])==(232,57,24)
-assert (change.x,change.y)==(235,86)
+assert (title.w,title.styles['text_font'])==(160,14)
+assert (probability.x,probability.y,probability.w,probability.styles['text_font'])==(244,58,66,22)
 visible_lines=[w for w in g.widgets.values() if not w.hide and w.kind=='line']
-assert len(visible_lines)==2
-assert all(w.x==177 and w.y in (88,186) for w in visible_lines)
+expected_lines=sum(len(m['history'])>=2 for m in source['markets'][:3])
+assert len(visible_lines)==expected_lines
+assert all(w.x==180 and w.y in (56,121,186) for w in visible_lines)
+assert sum(w.kind=='line' for w in g.widgets.values())==3
 selected_box=next(w for w in g.widgets.values() if w.kind=='box' and not w.hide and w.styles['border_width']==1)
-assert (selected_box.x,selected_box.y,selected_box.w,selected_box.h)==(5,37,310,96)
+assert (selected_box.x,selected_box.y,selected_box.w,selected_box.h)==(5,36,310,61)
 snapshot('cloud-list')
 for index,market in enumerate(source['markets']):
     press('A');has('Market');has(f"{market['probability']:.0f}%");has('Loading 4H')
@@ -72,9 +73,18 @@ for index,market in enumerate(source['markets']):
     has('Past 4 hours');has(market['closes']);has('Vol '+market['volume'])
     if index==0:
         has(f"{market['probability']-50:+.0f} pts")
+        probability=next(w for w in g.widgets.values() if not w.hide and w.text==f"{market['probability']:.0f}%" and w.x==212)
+        change=next(w for w in g.widgets.values() if not w.hide and w.text.startswith(f"{market['probability']-50:+.0f} pts"))
+        volume=next(w for w in g.widgets.values() if not w.hide and w.text=='Vol '+market['volume'])
+        metadata=next(w for w in g.widgets.values() if not w.hide and w.text.startswith('Open  Closes '))
+        assert (probability.y,probability.w,probability.styles['text_font'])==(87,98,24)
+        assert (change.x,change.y,change.w)==(212,120,98)
+        assert (volume.x,volume.y,volume.w)==(212,158,98)
+        assert (metadata.x,metadata.y,metadata.w)==(10,186,300)
         ticks=[w for w in g.widgets.values() if not w.hide and w.text.endswith('%') and w.x==7]
         assert len(ticks)==3 and all(w.styles['text_align']=='right' for w in ticks)
         line=next(w for w in g.widgets.values() if w.kind=='line')
+        assert (line.x,line.y)==(52,90)
         assert line.points[1][1]==0 and line.points[len(line.points)][1]==132
     snapshot('cloud-'+market['slug']);press('B','DOWN')
 assert dict(g.saved.items())==before and g.writes==0
