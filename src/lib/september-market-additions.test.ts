@@ -18,10 +18,11 @@ describe('September publication contracts', () => {
       expect(market.rules).toContain('multiple dances can resolve YES');
     }
   });
-  it('closes poker before its Saturday start and GPT before Sunday judging in EDT', () => {
+  it('closes poker at the user-confirmed 10 p.m. deadline and GPT before Sunday judging in EDT', () => {
     const poker=SEPTEMBER_MARKETS.find(x=>x.slug.includes('poker'))!;
     const gpt=SEPTEMBER_MARKETS.find(x=>x.slug.includes('gpt'))!;
-    expect(new Date(poker.closesAt).toISOString()).toBe('2026-09-20T00:29:00.000Z');
+    expect(new Date(poker.closesAt).toISOString()).toBe('2026-09-20T02:00:00.000Z');
+    expect(poker.rules).toContain('Trading closes at 10:00 p.m. EDT');
     expect(new Date(gpt.closesAt).toISOString()).toBe('2026-09-20T13:29:00.000Z');
     expect(gpt.rules).toContain('not when finalists are selected');
   });

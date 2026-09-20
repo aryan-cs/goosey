@@ -55,7 +55,7 @@ describe("selected market catalog", () => {
     });
     expect(bySlug.get("htn-2026-chinese-citadel-poker-winner")).toMatchObject({
       title: "Will a Chinese kid win Citadel Poker?",
-      closesAt: "2026-09-19T20:30:00-04:00",
+      closesAt: "2026-09-19T22:00:00-04:00",
       resolvesAt: "2026-09-19T22:00:00-04:00",
     });
     expect(bySlug.get("htn-2026-goose-incidents-1")).toMatchObject({

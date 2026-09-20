@@ -70,7 +70,7 @@ describe("legacy server page SQL query boundaries (mocked reads)", () => {
   it("combines browse filters without allowing query text to replace the backend", async () => {
     await MarketsPage({ searchParams: Promise.resolve({ q: "goose", category: "Campus", sort: "closing" }) });
     expect(state.market.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
-      ...boundary, status: "OPEN", category: "Campus",
+      ...boundary, status: { in: ["OPEN", "PAUSED", "CLOSED", "RESOLVED", "VOID"] }, category: "Campus",
       OR: [{ title: { contains: "goose" } }, { shortTitle: { contains: "goose" } }, { description: { contains: "goose" } }],
     } }));
     expect(state.market.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({
