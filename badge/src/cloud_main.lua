@@ -158,33 +158,40 @@ local function render()
   elseif page=="detail" then
     local detailTitle=wrapCard(m.title,38)
     local titleLines=detailTitle:find("\n",1,true) and 2 or 1
-    text(1,detailTitle,10,36,300,16)
+    local titleY=54
+    text(1,detailTitle,10,titleY,300,16)
     local h=detail and detail.slug==m.slug and detail.history or {}
     local currentBps=detail and detail.currentProbabilityBps or m.probabilityBps
     local movement=#h>1 and wholePoints(h[#h][1]-h[1][1]) or nil
     local changeText=movement and string.format("%+d pts in 1H",movement)
       or not detail and "Loading 1H History..."
       or #h==0 and "No Probability History Yet" or ""
-    text(3,changeText,10,36+titleLines*18,200,14,"left",movement and (movement<0 and C.down or C.up) or C.muted)
-    text(2,tostring(wholePercent(currentBps)).."%",212,100,98,24,"right")
-    text(7,"Vol "..m.volume,212,139,98,14,"right")
+    text(3,changeText,10,titleY+titleLines*18,200,14,"left",movement and (movement<0 and C.down or C.up) or C.muted)
+    text(2,tostring(wholePercent(currentBps)).."%",212,82,98,24,"right")
+    text(7,"Vol "..m.volume,212,121,98,14,"right")
     track:hidden(false);midline:hidden(false)
+    local offset=(titleLines-1)*18
+    local trackY=86+offset
+    local chartY=trackY+4
+    local plotHeight=88-offset
+    track:set_pos(10,trackY);track:set_size(190,97-offset)
+    midline:set_pos(10,trackY+math.floor((97-offset)/2));midline:set_size(190,1)
     local domainLow,domainHigh,domainSpan=0,10000,10000
     local pts={}
     for j=1,#h do
       local x=math.max(0,math.min(1,(h[j][2]-detail.startAt)/(detail.endAt-detail.startAt)))
-      local px,py=math.floor(x*182),math.floor((domainHigh-h[j][1])/domainSpan*88)
+      local px,py=math.floor(x*182),math.floor((domainHigh-h[j][1])/domainSpan*plotHeight)
       if #pts>0 then pts[#pts+1]={px,pts[#pts][2]} end
       pts[#pts+1]={px,py}
     end
     if #pts>0 and pts[#pts][1]<182 then pts[#pts+1]={182,pts[#pts][2]} end
-    chart:set_pos(14,90);chart:style({line_color=C.text,line_width=2})
+    chart:set_pos(14,chartY);chart:style({line_color=C.text,line_width=2})
     if #pts>1 then chart:set_points(pts);chart:hidden(false) end
-    if #pts>0 then dot:set_pos(13+pts[#pts][1],89+pts[#pts][2]);dot:hidden(false)
+    if #pts>0 then dot:set_pos(13+pts[#pts][1],chartY-1+pts[#pts][2]);dot:hidden(false)
     end
     local state=m.status:sub(1,1)..m.status:sub(2):lower()
-    text(8,"["..state.."]",212,157,98,14,"right",m.status=="OPEN" and C.up or C.muted)
-    stamp:set_pos(212,174);stamp:set_size(98,31);stamp:set_text("Closes\n"..m.closes:gsub(" UTC$","Z"))
+    text(8,"["..state.."]",212,139,98,14,"right",m.status=="OPEN" and C.up or C.muted)
+    stamp:set_pos(212,156);stamp:set_size(98,31);stamp:set_text("Closes\n"..m.closes:gsub(" UTC$","Z"))
     focus(side==1 and 7 or 164,207,149,28)
     local yes=wholePercent(currentBps)
     text(9,"YES  "..yes.."%",7,212,149,16,"center")

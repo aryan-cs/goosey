@@ -85,11 +85,16 @@ for index,market in enumerate(source['markets']):
                 sampled_from=41 if index==0 else None,downsampled=index==0)
     compact_close=market['closes'].replace(' UTC','Z')
     has(compact_close);has('Vol '+market['volume'])
+    rendered_title=next(w for w in g.widgets.values() if not w.hide and w.x==10 and w.y==54)
+    rendered_title_lines=rendered_title.text.split('\n')
+    rendered_track_y=86+(len(rendered_title_lines)-1)*18
+    assert rendered_title.y+18*len(rendered_title_lines)<=rendered_track_y
+    assert next(w for w in g.widgets.values() if w.kind=='box' and not w.hide and w.x==10 and w.y==rendered_track_y)
     if index==0:
         # Coherent history owns the headline. Half-percent values round up and
         # the displayed NO value is the exact complement of displayed YES.
         has('51%');has('YES  51%');has('NO  49%');has('+1 pts')
-        market_title=next(w for w in g.widgets.values() if not w.hide and w.x==10 and w.y==36)
+        market_title=next(w for w in g.widgets.values() if not w.hide and w.x==10 and w.y==54)
         probability=next(w for w in g.widgets.values() if not w.hide and w.text=='51%' and w.x==212)
         change=next(w for w in g.widgets.values() if not w.hide and w.text.startswith('+1 pts'))
         yes_label=next(w for w in g.widgets.values() if not w.hide and w.text=='YES  51%')
@@ -99,25 +104,27 @@ for index,market in enumerate(source['markets']):
         close_label=next(w for w in g.widgets.values() if not w.hide and w.text=='Closes\n'+compact_close)
         title_lines=market_title.text.split('\n')
         assert (market_title.w,market_title.styles['text_font'])==(300,16) and len(title_lines)<=2
-        assert (probability.y,probability.w,probability.styles['text_font'])==(100,98,24)
-        assert (change.x,change.y,change.w,change.styles['text_align'])==(10,36+18*len(title_lines),200,'left')
-        assert change.text=='+1 pts in 1H' and change.y+14<=90
+        assert (probability.y,probability.w,probability.styles['text_font'])==(82,98,24)
+        assert (change.x,change.y,change.w,change.styles['text_align'])==(10,54+18*len(title_lines),200,'left')
+        assert change.text=='+1 pts in 1H'
         assert (yes_label.x,yes_label.y,yes_label.w,yes_label.styles['text_font'],yes_label.styles['text_align'])==(7,212,149,16,'center')
         assert (no_label.x,no_label.y,no_label.w,no_label.styles['text_font'],no_label.styles['text_align'])==(164,212,149,16,'center')
         assert not any(w.text=='Current Forecast' for w in g.widgets.values() if not w.hide)
-        assert (volume.x,volume.y,volume.w)==(212,139,98)
-        assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(212,157,98,'right')
+        assert (volume.x,volume.y,volume.w)==(212,121,98)
+        assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(212,139,98,'right')
         assert market_status.styles['text_color']==0x267a35
-        assert (close_label.x,close_label.y,close_label.w,close_label.h,close_label.styles['text_align'])==(212,174,98,31,'right')
+        assert (close_label.x,close_label.y,close_label.w,close_label.h,close_label.styles['text_align'])==(212,156,98,31,'right')
         assert volume.y+14 < market_status.y and market_status.y+14 < close_label.y
         assert close_label.y+close_label.h < 207
         assert not any('Open  Closes' in w.text for w in g.widgets.values() if not w.hide)
         assert not any(w.text in ('100%','50%','0%') and w.x==7 for w in g.widgets.values() if not w.hide)
-        track_box=next(w for w in g.widgets.values() if w.kind=='box' and (w.x,w.y,w.w,w.h)==(10,86,190,97))
-        midline_box=next(w for w in g.widgets.values() if w.kind=='box' and (w.x,w.y,w.w,w.h)==(10,134,190,1))
+        expected_track_y=86+(len(title_lines)-1)*18
+        expected_track_h=97-(len(title_lines)-1)*18
+        track_box=next(w for w in g.widgets.values() if w.kind=='box' and (w.x,w.y,w.w,w.h)==(10,expected_track_y,190,expected_track_h))
+        midline_box=next(w for w in g.widgets.values() if w.kind=='box' and (w.x,w.y,w.w,w.h)==(10,expected_track_y+expected_track_h//2,190,1))
         assert track_box and midline_box
         line=next(w for w in g.widgets.values() if w.kind=='line')
-        assert (line.x,line.y)==(14,90)
+        assert (line.x,line.y)==(14,expected_track_y+4)
         # Step-after geometry holds the old price until each observation,
         # jumps vertically, then holds the last real value to the server as-of.
         assert len(line.points)==6
@@ -144,7 +151,7 @@ for generation,points in ((2000,[]),(2001,[[5000,1234567890000]])):
 # Bracketed terminal states stay distinct from the right-aligned close field.
 closed=json.loads(json.dumps(source));closed['markets'][0]['status']='CLOSED';load(closed,3000);tick(g.clock+2000);press('A')
 closed_status=next(w for w in g.widgets.values() if not w.hide and w.text=='[Closed]')
-assert (closed_status.x,closed_status.y,closed_status.w,closed_status.styles['text_align'],closed_status.styles['text_color'])==(212,157,98,'right',0x4f6b3e)
+assert (closed_status.x,closed_status.y,closed_status.w,closed_status.styles['text_align'],closed_status.styles['text_color'])==(212,139,98,'right',0x4f6b3e)
 has('Closes\n'+closed['markets'][0]['closes'].replace(' UTC','Z'));press('B')
 # Reopening cannot trust a cached account frame as a fresh login.
 g.on_exit();g.fresh();has('Reconnecting...')
