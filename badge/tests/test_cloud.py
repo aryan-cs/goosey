@@ -77,17 +77,23 @@ for index,market in enumerate(source['markets']):
         probability=next(w for w in g.widgets.values() if not w.hide and w.text==f"{market['probability']:.0f}%" and w.x==212)
         change=next(w for w in g.widgets.values() if not w.hide and w.text.startswith(f"{market['probability']-50:+.0f} pts"))
         volume=next(w for w in g.widgets.values() if not w.hide and w.text=='Vol '+market['volume'])
-        metadata=next(w for w in g.widgets.values() if not w.hide and w.text.startswith('Open  Closes '))
+        market_status=next(w for w in g.widgets.values() if not w.hide and w.text=='[Open]')
+        close_label=next(w for w in g.widgets.values() if not w.hide and w.text=='Closes '+market['closes'])
         assert (probability.y,probability.w,probability.styles['text_font'])==(87,98,24)
         assert (change.x,change.y,change.w)==(212,120,98)
         assert (volume.x,volume.y,volume.w)==(212,158,98)
-        assert (metadata.x,metadata.y,metadata.w)==(10,186,300)
+        assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(10,186,90,'left')
+        assert market_status.styles['text_color']==0x267a35
+        assert (close_label.x,close_label.y,close_label.w,close_label.styles['text_align'])==(100,186,210,'right')
+        assert not any('Open  Closes' in w.text for w in g.widgets.values() if not w.hide)
         ticks=[w for w in g.widgets.values() if not w.hide and w.text.endswith('%') and w.x==7]
         assert len(ticks)==3 and all(w.styles['text_align']=='right' for w in ticks)
         line=next(w for w in g.widgets.values() if w.kind=='line')
         assert (line.x,line.y)==(52,90)
         assert line.points[1][1]==0 and line.points[len(line.points)][1]==132
-    snapshot('cloud-'+market['slug']);press('B','DOWN')
+    snapshot('cloud-'+market['slug']);press('B')
+    if index==0: assert (close_label.x,close_label.y,close_label.w,close_label.text)==(149,16,161,'')
+    press('DOWN')
 assert dict(g.saved.items())==before and g.writes==0
 assert g.files['appdata/request.txt'] in (None,'')
 # Real selected-market mailbox histories, not the catalog frame, drive charts.
@@ -95,6 +101,11 @@ for generation,points in ((2000,[]),(2001,[[50,1234567890000]])):
     press('A');load_detail(source['markets'][0],generation,points)
     if not points:has('No History')
     snapshot('cloud-empty' if not points else 'cloud-single');press('B')
+# Bracketed terminal states stay distinct from the right-aligned close field.
+closed=json.loads(json.dumps(source));closed['markets'][0]['status']='CLOSED';load(closed,3000);tick(g.clock+2000);press('A')
+closed_status=next(w for w in g.widgets.values() if not w.hide and w.text=='[Closed]')
+assert (closed_status.x,closed_status.y,closed_status.styles['text_color'])==(10,186,0x4f6b3e)
+has('Closes '+closed['markets'][0]['closes']);press('B')
 # Reopening cannot trust a cached account frame as a fresh login.
 g.on_exit();g.fresh();has('Reconnecting...')
 assert 'Waiting for connection' not in g.visible()
