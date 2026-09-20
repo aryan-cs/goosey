@@ -6,5 +6,5 @@ import { connection } from "next/server";
 export default async function VerifyEmailPage() {
   await connection();
   if (!emailVerificationEnabled()) redirect("/");
-  return <div className="auth-page"><div className="auth-texture" aria-hidden="true" /><EmailVerificationFlow /></div>;
+  return <div className="auth-page auth-page-centered"><div className="auth-texture" aria-hidden="true" /><EmailVerificationFlow /></div>;
 }

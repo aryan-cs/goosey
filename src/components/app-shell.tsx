@@ -223,7 +223,8 @@ export function Footer() {
           <Link href="/rules">How markets work</Link>
           <Link href="/community">Community</Link>
           <Link href="/settings">Settings</Link>
-          <Link href="/settings/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+          <Link href="/privacy">Privacy</Link>
         </div>
         <div className="footer-bottom">
           <p className="legal">Play-money only. Your Goosey account never holds or sends cryptocurrency, and feathers cannot be redeemed for cash. Goosey is an independent community project and is not an official University of Waterloo or Hack the North service.</p>

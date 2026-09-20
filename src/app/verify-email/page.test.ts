@@ -30,7 +30,7 @@ describe("verify email page", () => {
     mocks.emailVerificationEnabled.mockReturnValue(true);
 
     await expect(VerifyEmailPage()).resolves.toMatchObject({
-      props: { className: "auth-page" },
+      props: { className: "auth-page auth-page-centered" },
     });
     expect(mocks.redirect).not.toHaveBeenCalled();
   });

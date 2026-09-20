@@ -59,7 +59,7 @@ export default async function HomePage() {
         <div className="hero-copy">
           <span className="eyebrow">Hack the North predictions</span>
           <h1>Nize your beak fam.<br />Bet your feathers.</h1>
-          <p>Think you know what&apos;s going down at Hack the North? Put your feathers where your beak is.<br />First place gets $1,000</p>
+          <p>Think you know what&apos;s going down at Hack the North? Put your feathers where your beak is.<br />First place gets $1,000. <Link href="/terms#prizes">Eligibility and payment terms apply.</Link></p>
           <div className="hero-actions">
             <Link className="button button-primary" href="/markets">Trade now <ArrowRight /></Link>
             <Link className="button button-secondary" href="/rules">How it works</Link>

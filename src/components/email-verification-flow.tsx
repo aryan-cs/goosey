@@ -169,6 +169,7 @@ export function EmailVerificationFlow() {
         <span className="eyebrow">Almost there</span>
         <h1 id="verification-heading">{phase === "invalid" ? "Verification link unavailable" : "Check your email"}</h1>
         <p>{verifiedSession ? "Your currently signed-in account is already verified. You can continue with that account; this does not confirm the rejected link." : signedInEmail ? <>Verify <strong>{maskEmail(email)}</strong> to finish setting up Goosey. You can request a new link below.</> : "Enter your account email to request a verification link, or sign in to an already-verified account."}</p>
+        {!verifiedSession && <p className="field-hint">Verification confirms that you control this address. It will be the authoritative email for account notices and for contacting you about any prize or payment for which you qualify.</p>}
         {message && <p className="success-message" role="status"><CheckCircle2 /> {message}</p>}
         {error && <p className="form-error" role="alert"><AlertCircle /> {error}</p>}
         {verifiedSession ? <Link className="button button-primary auth-submit" href={destination}>Continue</Link> : <form onSubmit={resend}>
