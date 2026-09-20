@@ -5,12 +5,16 @@ import { readJsonObject } from "@/lib/http";
 import { ApiError, apiErrorResponse, consumeRateLimit, jsonResponse, parseIdempotencyKey, prisma, requireUser } from "@/lib/market-service";
 import { canonicalizeUsername, constantTimeEqual } from "@/lib/security";
 
+function requireOperatorToken(request: NextRequest): void {
+  const token = /^Bearer ([A-Za-z0-9_-]{43,128})$/.exec(request.headers.get("authorization") ?? "")?.[1];
+  const configured = process.env.GOOSEY_OPERATOR_API_TOKEN;
+  if (!token || !configured || !constantTimeEqual(token, configured)) throw new ApiError(401, "OPERATOR_AUTHENTICATION_REQUIRED", "Valid operator authentication is required.");
+}
+
 async function actor(request: NextRequest): Promise<{ id: string; session: boolean }> {
   const authorization = request.headers.get("authorization");
   if (authorization) {
-    const token = /^Bearer ([A-Za-z0-9_-]{43,128})$/.exec(authorization)?.[1];
-    const configured = process.env.GOOSEY_OPERATOR_API_TOKEN;
-    if (!token || !configured || !constantTimeEqual(token, configured)) throw new ApiError(401, "OPERATOR_AUTHENTICATION_REQUIRED", "Valid operator authentication is required.");
+    requireOperatorToken(request);
     const username = canonicalizeUsername(process.env.GOOSEY_OPERATOR_ACTOR_USERNAME);
     if (!username) throw new ApiError(503, "OPERATOR_NOT_CONFIGURED", "The operator actor is not configured.");
     const configuredActor = await prisma.user.findUnique({ where: { username }, select: { id: true, role: true, status: true } });
@@ -20,6 +24,14 @@ async function actor(request: NextRequest): Promise<{ id: string; session: boole
     return { id: activeAdministrators[0].id, session: false };
   }
   const user = await requireUser(request, true); assertAdmin(user); return { id: user.id, session: true };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    requireOperatorToken(request);
+    const administrators = await prisma.user.findMany({ where: { role: "ADMIN", status: "ACTIVE" }, orderBy: { username: "asc" }, select: { username: true } });
+    return jsonResponse({ administrators }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) { return apiErrorResponse(error); }
 }
 
 export async function POST(request: NextRequest) {

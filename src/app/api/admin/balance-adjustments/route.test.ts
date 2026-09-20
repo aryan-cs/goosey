@@ -28,7 +28,7 @@ vi.mock("@/lib/market-service", () => {
   };
 });
 
-import { POST } from "./route";
+import { GET, POST } from "./route";
 
 function request(authorization?: string): never {
   return new Request("http://localhost:8080/api/admin/balance-adjustments", { method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:8080", ...(authorization ? { authorization } : {}) }, body: "{}" }) as never;
@@ -46,6 +46,13 @@ describe("admin balance adjustment route authorization", () => {
   it("rejects an unconfigured bearer before reading the mutation body", async () => {
     const response = await POST(request(`Bearer ${"a".repeat(43)}`));
     expect(response.status).toBe(401); expect(mocks.readJsonObject).not.toHaveBeenCalled(); expect(mocks.debitUserBalance).not.toHaveBeenCalled();
+  });
+
+  it("lists active administrator usernames only for the configured operator", async () => {
+    process.env.GOOSEY_OPERATOR_API_TOKEN = "d".repeat(43);
+    mocks.findMany.mockResolvedValue([{ username: "admin-one" }, { username: "admin-two" }]);
+    const response = await GET(request(`Bearer ${"d".repeat(43)}`));
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ administrators: [{ username: "admin-one" }, { username: "admin-two" }] });
   });
 
   it("uses an active administrator session and preserves the session recheck", async () => {
