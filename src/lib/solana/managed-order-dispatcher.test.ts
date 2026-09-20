@@ -40,6 +40,7 @@ describe("managed order dispatcher", () => {
       }),
       appendSignedWireBeforeSend: vi.fn(async () => { events.push("journal"); current = state("SIGNED", 3, 1);
         return { command: current, journal: {} as never }; }),
+      loadLatestWireReference: vi.fn(),
       publicStatus: vi.fn(async () => ({ id: current.state.id, operation: "PLACE_ORDER", status: current.state.status,
         revision: current.state.revision, attemptCount: current.state.attemptCount, acceptedAt: current.state.acceptedAt,
         preparedAt: current.state.preparedAt, signedAt: current.state.signedAt, submittedAt: current.state.submittedAt,
@@ -66,9 +67,75 @@ describe("managed order dispatcher", () => {
   it("never resubmits an ambiguous command", async () => {
     const current = state("UNKNOWN", 4, 1);
     const store = { load: vi.fn(async () => current), publicStatus: vi.fn(async () => ({ status: "UNKNOWN" })),
-      acquireLease: vi.fn(), transition: vi.fn(), appendSignedWireBeforeSend: vi.fn() };
+      loadLatestWireReference: vi.fn(), acquireLease: vi.fn(), transition: vi.fn(), appendSignedWireBeforeSend: vi.fn() };
     expect(await dispatchManagedOrderCommand("cmd_12345678", { store: store as never, env: runtime }))
       .toEqual({ status: "UNKNOWN" });
     expect(store.acquireLease).not.toHaveBeenCalled();
+  });
+
+  it.each(["SIGNED", "SUBMITTED", "CONFIRMED"] as const)("reconciles a retained %s wire without signing or resubmitting", async status => {
+    let current = state(status, 4);
+    const prepare = vi.fn(), submit = vi.fn(), ensureProvisioned = vi.fn();
+    const store = {
+      load: vi.fn(async () => current),
+      loadLatestWireReference: vi.fn(async () => ({ transactionSignature: "1".repeat(64), lastValidBlockHeight: 99n })),
+      acquireLease: vi.fn(async () => (current = state(status, 5, 1))),
+      transition: vi.fn(async (_id: string, input: { to: StoredChainCommand["state"]["status"] }) =>
+        (current = state(input.to, current.state.revision + 1, 1))),
+      appendSignedWireBeforeSend: vi.fn(),
+      publicStatus: vi.fn(async () => ({ status: current.state.status })),
+    };
+    const result = await dispatchManagedOrderCommand("cmd_12345678", { store: store as never, env: runtime,
+      prepare, submit, ensureProvisioned,
+      track: vi.fn(async () => ({ status: "finalized" as const, signature: "1".repeat(64) })) });
+    expect(result).toEqual({ status: "FINALIZED" });
+    expect(store.loadLatestWireReference).toHaveBeenCalledWith("cmd_12345678");
+    expect(ensureProvisioned).not.toHaveBeenCalled();
+    expect(prepare).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("retains an inconclusive recovered wire as UNKNOWN without creating a replacement", async () => {
+    let current = state("SIGNED", 4);
+    const prepare = vi.fn(), submit = vi.fn();
+    const store = {
+      load: vi.fn(async () => current),
+      loadLatestWireReference: vi.fn(async () => ({ transactionSignature: "1".repeat(64), lastValidBlockHeight: 99n })),
+      acquireLease: vi.fn(async () => (current = state("SIGNED", 5, 1))),
+      transition: vi.fn(async (_id: string, input: { to: StoredChainCommand["state"]["status"] }) =>
+        (current = state(input.to, current.state.revision + 1, input.to === "UNKNOWN" ? 0 : 1))),
+      appendSignedWireBeforeSend: vi.fn(),
+      publicStatus: vi.fn(async () => ({ status: current.state.status })),
+    };
+    const result = await dispatchManagedOrderCommand("cmd_12345678", { store: store as never, env: runtime,
+      prepare, submit, track: vi.fn(async () => ({ status: "expired" as const,
+        signature: "1".repeat(64), historicalOutcome: "unknown" as const })) });
+    expect(result).toEqual({ status: "UNKNOWN" });
+    expect(prepare).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("does not prepare or sign an order until managed provisioning is finalized", async () => {
+    let current = state("ACCEPTED", 0);
+    const prepare = vi.fn(), submit = vi.fn();
+    const transitions: string[] = [];
+    const store = {
+      load: vi.fn(async () => current), loadLatestWireReference: vi.fn(),
+      acquireLease: vi.fn(async () => (current = state("ACCEPTED", 1, 1))),
+      transition: vi.fn(async (_id: string, input: { to: StoredChainCommand["state"]["status"] }) => {
+        transitions.push(input.to);
+        current = state(input.to, current.state.revision + 1, input.to === "FAILED_RETRYABLE" ? 0 : 1);
+        return current;
+      }),
+      appendSignedWireBeforeSend: vi.fn(), publicStatus: vi.fn(),
+    };
+    await expect(dispatchManagedOrderCommand("cmd_12345678", { store: store as never, env: runtime,
+      ensureProvisioned: vi.fn(async () => ({ status: "pending" as const, operation: "enrollment" as const,
+        walletAddress: PARTICIPANT, chainId: "solana:localnet" as const, genesisHash: GENESIS })),
+      prepare, submit })).rejects.toThrow(/still provisioning/);
+    expect(transitions).toEqual(["PREPARED", "FAILED_RETRYABLE"]);
+    expect(prepare).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+    expect(store.appendSignedWireBeforeSend).not.toHaveBeenCalled();
   });
 });

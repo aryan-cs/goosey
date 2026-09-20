@@ -65,4 +65,18 @@ describe("managed order acceptance", () => {
     })).rejects.toMatchObject({ code: "MARKET_BACKEND_MISMATCH" });
     expect(ensureIdentity).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { limitPriceMilli: "1000000" },
+    { expiresAt: "2026-09-20T00:00:00.001Z" },
+  ])("rejects an order the on-chain builder cannot represent before custody or command creation", async patch => {
+    const db = database();
+    const ensureIdentity = vi.fn();
+    await expect(acceptManagedOrder({ userId: "user_12345678", marketSlug: "market-one",
+      idempotencyKey: "request-key-123456", request: { ...request(), ...patch } }, {
+      database: db, env: runtime, ensureIdentity, provider: "postgresql",
+    })).rejects.toThrow();
+    expect(ensureIdentity).not.toHaveBeenCalled();
+    expect((db as never as { chainCommand: { create: ReturnType<typeof vi.fn> } }).chainCommand.create).not.toHaveBeenCalled();
+  });
 });

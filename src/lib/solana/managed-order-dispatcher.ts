@@ -27,7 +27,7 @@ const envelopeSchema = z.object({
 }).strict();
 
 type CommandStore = Pick<PrismaChainCommandStore,
-  "load" | "acquireLease" | "transition" | "appendSignedWireBeforeSend" | "publicStatus">;
+  "load" | "loadLatestWireReference" | "acquireLease" | "transition" | "appendSignedWireBeforeSend" | "publicStatus">;
 
 type Dependencies = Readonly<{
   store?: CommandStore;
@@ -77,7 +77,7 @@ export async function dispatchManagedOrderCommand(
     || command.identity.programAddress !== runtime.programAddress) {
     throw new Error("Managed order command does not match the pinned deployment");
   }
-  if (!["ACCEPTED", "PREPARED", "FAILED_RETRYABLE"].includes(command.state.status)) {
+  if (!["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED", "FAILED_RETRYABLE"].includes(command.state.status)) {
     return store.publicStatus(commandId);
   }
 
@@ -91,6 +91,36 @@ export async function dispatchManagedOrderCommand(
   });
   const fence = () => ({ owner, token, epoch: command.state.leaseEpoch, now: now() });
   try {
+    if (["SIGNED", "SUBMITTED", "CONFIRMED"].includes(command.state.status)) {
+      const wire = await store.loadLatestWireReference(commandId);
+      if (!wire?.lastValidBlockHeight) {
+        throw new Error("Pending managed order has no recent-blockhash wire journal");
+      }
+      const tracked = await (dependencies.track ?? (value => trackTransactionStatus(
+        createSolanaRpc(runtime.rpcUrl),
+        { ...value, commitment: "finalized", timeoutMs: 45_000 },
+      )))({ signature: wire.transactionSignature, lastValidBlockHeight: wire.lastValidBlockHeight,
+        signal: dependencies.signal });
+      if (tracked.status === "finalized") {
+        command = await store.transition(commandId, {
+          expectedRevision: command.state.revision, ...fence(), to: "FINALIZED",
+        });
+      } else if (tracked.status === "failed") {
+        command = await store.transition(commandId, {
+          expectedRevision: command.state.revision, ...fence(), to: "FAILED_TERMINAL",
+          errorCode: "ONCHAIN_ORDER_REJECTED",
+          errorMessage: "The finalized settlement program rejected this order.",
+        });
+      } else {
+        // Expiry proves only that these exact bytes cannot land now; RPC
+        // history may be incomplete. Retain the receipt for reconciliation and
+        // never manufacture a replacement transaction automatically.
+        command = await store.transition(commandId, {
+          expectedRevision: command.state.revision, ...fence(), to: "UNKNOWN",
+        });
+      }
+      return store.publicStatus(commandId);
+    }
     if (command.state.status === "FAILED_RETRYABLE") {
       command = await store.transition(commandId, {
         expectedRevision: command.state.revision, ...fence(), to: "ACCEPTED",
@@ -177,7 +207,20 @@ export async function dispatchManagedOrderCommand(
     }
     return store.publicStatus(commandId);
   } catch (error) {
-    // UNKNOWN has deliberately released its lease and must only be reconciled.
+    // Any post-journal failure is ambiguous: RPC submission may have succeeded
+    // even when this worker did not persist the next state. Keep the exact wire
+    // reconcilable and never permit a freshly signed automatic replacement.
+    if (["SIGNED", "SUBMITTED", "CONFIRMED"].includes(command.state.status)) {
+      try {
+        command = await store.transition(commandId, {
+          expectedRevision: command.state.revision, ...fence(), to: "UNKNOWN",
+        });
+      } catch {
+        // Preserve the original failure. A later worker reconciles SIGNED or
+        // SUBMITTED from the append-only wire journal after the lease expires.
+      }
+      throw error;
+    }
     if (command.state.status === "UNKNOWN" || command.state.status === "FAILED_TERMINAL"
       || command.state.status === "PROJECTED") throw error;
     try {

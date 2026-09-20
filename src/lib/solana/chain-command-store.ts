@@ -40,6 +40,11 @@ export type StoredChainCommand = Readonly<{
   updatedAt: Date;
 }>;
 
+export type StoredChainCommandWireReference = Readonly<{
+  transactionSignature: string;
+  lastValidBlockHeight: bigint | null;
+}>;
+
 /** Deliberately omits request data, actors, idempotency keys, lease data, wire
  * bytes, and internal failure diagnostics. */
 export type PublicChainCommandStatus = Readonly<{
@@ -337,6 +342,20 @@ export class PrismaChainCommandStore {
 
   async load(commandId: string): Promise<StoredChainCommand> {
     return this.transaction(async tx => storedFromRow(await loadRow(tx, commandId, this.provider)));
+  }
+
+  /** Returns only the public receipt fields required to reconcile an already
+   * journaled transaction. Exact wire bytes remain confined to the append-only
+   * journal and are never exposed through command status APIs. */
+  async loadLatestWireReference(commandId: string): Promise<StoredChainCommandWireReference | null> {
+    return this.transaction(async tx => {
+      await loadRow(tx, commandId, this.provider);
+      return tx.chainCommandSignedWire.findFirst({
+        where: { commandId },
+        orderBy: [{ sequence: "desc" }, { id: "desc" }],
+        select: { transactionSignature: true, lastValidBlockHeight: true },
+      });
+    });
   }
 
   async acquireLease(commandId: string, input: LeaseInput): Promise<StoredChainCommand> {

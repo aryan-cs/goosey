@@ -65,4 +65,13 @@ describe("POST /api/v1/orders managed settlement", () => {
     expect(mocks.placeOrder).toHaveBeenCalledOnce();
     expect(mocks.acceptManagedOrder).not.toHaveBeenCalled();
   });
+
+  it("does not schedule submission when durable command acceptance fails", async () => {
+    mocks.findMarket.mockResolvedValue({ id: "market_1", executionBackend: "SOLANA" });
+    mocks.acceptManagedOrder.mockRejectedValue(new Error("durable journal unavailable"));
+    const response = await POST(request());
+    expect(response.status).toBe(500);
+    expect(mocks.after).not.toHaveBeenCalled();
+    expect(mocks.dispatchManagedOrderCommand).not.toHaveBeenCalled();
+  });
 });

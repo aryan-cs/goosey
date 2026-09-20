@@ -205,6 +205,10 @@ describe("signed wire write-before-send transaction", () => {
     expect(storedWire.signedWireBase64).toBe(wireBase64());
     expect(storedWire.signedWireSha256).toBe(result.journal.signedWireSha256);
     expect(storedWire.commandRevision).toBe(prepared.state.revision);
+    expect(await store.loadLatestWireReference(command.state.id)).toEqual({
+      transactionSignature,
+      lastValidBlockHeight: 123n,
+    });
   });
 
   it("rolls back the journal when the command fence or lifecycle is stale", async () => {
