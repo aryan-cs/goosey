@@ -163,7 +163,11 @@ export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
     originalQuoteByTrade.set(trade.id, quote);
     if (quote.grossMilli !== trade.amountMilli || quote.feeMilli !== trade.feeMilli ||
         quote.probabilityYesBeforeBps !== trade.priceBeforeBps || quote.probabilityYesAfterBps !== trade.priceAfterBps) {
-      fail(`stored execution ${trade.id} does not reproduce at version ${trade.version}`);
+      fail(`stored execution ${trade.id} does not reproduce at version ${trade.version}: ${json({
+        state,
+        stored: { grossMilli: trade.amountMilli, feeMilli: trade.feeMilli, before: trade.priceBeforeBps, after: trade.priceAfterBps },
+        replayed: { grossMilli: quote.grossMilli, feeMilli: quote.feeMilli, before: quote.probabilityYesBeforeBps, after: quote.probabilityYesAfterBps },
+      })}`);
     }
     const userPosting = trade.journal.postings.filter(posting => posting.ledgerAccount.ownerType === "USER" && posting.ledgerAccount.ownerId === trade.userId);
     const collateralPosting = trade.journal.postings.filter(posting => posting.ledgerAccountId === input.market.collateralAccountId);
