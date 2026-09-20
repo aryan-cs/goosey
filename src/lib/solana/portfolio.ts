@@ -31,17 +31,28 @@ export async function readSolanaPortfolio(input: { userId: string; runtime: Sola
   const signal = AbortSignal.any([...(input.signal ? [input.signal] : []), AbortSignal.timeout(15_000)]);
   signal.throwIfAborted();
   await requireDatabaseStartup();
-  const links = await db.solanaWalletLink.findMany({ where: { userId, chainId: `solana:${runtime.cluster}`, genesisHash: runtime.genesisHash },
-    select: { walletAddress: true }, take: 2 });
+  const network = { userId, chainId: `solana:${runtime.cluster}`, genesisHash: runtime.genesisHash } as const;
+  const [managedIdentity, links] = await Promise.all([
+    db.solanaCustodyIdentity.findUnique({
+      where: { userId_chainId_genesisHash: network },
+      select: { walletAddress: true },
+    }),
+    db.solanaWalletLink.findMany({ where: network, select: { walletAddress: true }, take: 2 }),
+  ]);
   signal.throwIfAborted();
   const deployment = { cluster: runtime.cluster, genesisHash: runtime.genesisHash, programAddress: runtime.programAddress };
   const scope = "published-catalog-page" as const;
   const units = { cash: "feather-base-units", featherDecimals: 3, positions: "contracts" } as const;
   const consistency = "independent-finalized-snapshots" as const;
-  if (!links.length) return { status: "not-linked" as const, deployment, scope, units, consistency, wallet: null, items: [], hasMore: false, nextCursor: null };
-  if (links.length !== 1) throw unavailable();
+  // Ordinary Goosey accounts trade through the app-managed identity. A legacy
+  // linked wallet remains a read-only fallback only when no managed identity
+  // exists, so creating invisible custody cannot accidentally switch financial
+  // reads to a user-selected address.
+  const selected = managedIdentity ?? (links.length === 1 ? links[0] : null);
+  if (!selected && links.length === 0) return { status: "not-linked" as const, deployment, scope, units, consistency, wallet: null, items: [], hasMore: false, nextCursor: null };
+  if (!selected) throw unavailable();
   let wallet: Address;
-  try { wallet = address(links[0].walletAddress); if (wallet === "11111111111111111111111111111111") throw unavailable(); }
+  try { wallet = address(selected.walletAddress); if (wallet === "11111111111111111111111111111111") throw unavailable(); }
   catch { throw unavailable(); }
   const rpc = createSolanaRpc(runtime.rpcUrl);
   async function checkGenesis() {

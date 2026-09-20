@@ -1,7 +1,10 @@
 import { address } from "@solana/kit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ links: vi.fn(), startup: vi.fn(), catalog: vi.fn(), balance: vi.fn(), escrow: vi.fn(), genesis: vi.fn() }));
-vi.mock("@/lib/db", () => ({ db: { solanaWalletLink: { findMany: mocks.links } }, requireDatabaseStartup: mocks.startup }));
+const mocks = vi.hoisted(() => ({ links: vi.fn(), custody: vi.fn(), startup: vi.fn(), catalog: vi.fn(), balance: vi.fn(), escrow: vi.fn(), genesis: vi.fn() }));
+vi.mock("@/lib/db", () => ({ db: {
+  solanaWalletLink: { findMany: mocks.links },
+  solanaCustodyIdentity: { findUnique: mocks.custody },
+}, requireDatabaseStartup: mocks.startup }));
 vi.mock("@/lib/market-service", () => ({ ApiError: class extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
 } }));
@@ -26,7 +29,7 @@ const snapshot = () => ({ market: program, seat: seat(), finalizedSlot: 90071992
 const run = (query: Record<string, unknown> = {}) => readSolanaPortfolio({ userId: "current_user", runtime, query });
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv("GOOSEY_SOLANA_CATALOG_ENABLED", "true");
-  mocks.links.mockResolvedValue([{ walletAddress: wallet }]); mocks.startup.mockResolvedValue(undefined);
+  mocks.custody.mockResolvedValue(null); mocks.links.mockResolvedValue([{ walletAddress: wallet }]); mocks.startup.mockResolvedValue(undefined);
   mocks.genesis.mockResolvedValue(runtime.genesisHash);
   mocks.catalog.mockResolvedValue({ items: [item()], hasMore: false, nextCursor: null });
   mocks.balance.mockResolvedValue({ mint: program, walletTokens: program, featherAmount: 9007199254740993n,
@@ -41,6 +44,9 @@ describe("portfolio service with mocked SQL/RPC reader boundaries", () => {
     expect(mocks.startup).toHaveBeenCalledOnce();
     expect(mocks.links).toHaveBeenCalledExactlyOnceWith({ where: { userId: "current_user", chainId: "solana:localnet", genesisHash: runtime.genesisHash },
       select: { walletAddress: true }, take: 2 });
+    expect(mocks.custody).toHaveBeenCalledExactlyOnceWith({ where: { userId_chainId_genesisHash: {
+      userId: "current_user", chainId: "solana:localnet", genesisHash: runtime.genesisHash,
+    } }, select: { walletAddress: true } });
     expect(mocks.catalog).toHaveBeenCalledExactlyOnceWith(runtime, { limit: 10 });
     expect(mocks.escrow).toHaveBeenCalledExactlyOnceWith(runtime, { marketId: 7n, wallet }, { signal: expect.any(AbortSignal), includeMarketTerms: true });
     expect(result).toMatchObject({ status: "linked", scope: "published-catalog-page", wallet: { address: wallet,
@@ -55,6 +61,23 @@ describe("portfolio service with mocked SQL/RPC reader boundaries", () => {
     mocks.links.mockResolvedValue([]);
     expect(await run()).toMatchObject({ status: "not-linked", wallet: null, items: [], nextCursor: null });
     expect(mocks.catalog).not.toHaveBeenCalled(); expect(mocks.balance).not.toHaveBeenCalled(); expect(mocks.genesis).not.toHaveBeenCalled();
+  });
+  it("uses the app-managed custody identity for ordinary no-wallet trading", async () => {
+    mocks.custody.mockResolvedValue({ walletAddress: wallet });
+    mocks.links.mockResolvedValue([]);
+    const result = await run();
+    expect(result).toMatchObject({ status: "linked", wallet: { address: wallet } });
+    expect(mocks.balance).toHaveBeenCalledWith({ runtime, wallet, signal: expect.any(AbortSignal) });
+    expect(mocks.escrow).toHaveBeenCalledWith(runtime, { marketId: 7n, wallet },
+      { signal: expect.any(AbortSignal), includeMarketTerms: true });
+  });
+  it("keeps managed custody authoritative when a different legacy wallet is linked", async () => {
+    const legacy = address("SysvarC1ock11111111111111111111111111111111");
+    mocks.custody.mockResolvedValue({ walletAddress: wallet });
+    mocks.links.mockResolvedValue([{ walletAddress: legacy }]);
+    const result = await run();
+    expect(result).toMatchObject({ status: "linked", wallet: { address: wallet } });
+    expect(mocks.balance).toHaveBeenCalledWith({ runtime, wallet, signal: expect.any(AbortSignal) });
   });
   it.each([{ links: [{ walletAddress: "invalid" }] }, { links: [{ walletAddress: program }, { walletAddress: wallet }] }, { links: [{ walletAddress: "11111111111111111111111111111111" }] }])("fails closed on invalid/non-single link %j", async ({ links }) => {
     mocks.links.mockResolvedValue(links); await expect(run()).rejects.toMatchObject({ code: "PORTFOLIO_UNAVAILABLE" });
