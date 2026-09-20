@@ -8,6 +8,7 @@ import { runSerializableTransaction, type TransactionRunner } from "@/lib/serial
 import type { SignedWireInput } from "@/lib/solana/chain-command";
 import { PrismaChainCommandStore, type PublicChainCommandStatus } from "@/lib/solana/chain-command-store";
 import { readGooseyEscrow } from "@/lib/solana/escrow-read";
+import { ensureManagedMarketBookCommand } from "@/lib/solana/managed-market-book-service";
 import { loadSolanaMarketAuthoritySigner } from "@/lib/solana/market-authority-service";
 import { managedMarketProvisioningEnvelopeSchema } from "@/lib/solana/managed-market-provisioning-service";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
@@ -92,6 +93,9 @@ async function defaultProject(
         }),
       } });
     }
+    await ensureManagedMarketBookCommand(tx, { runtime, actorUserId: market.createdById,
+      marketId: market.id, marketSlug: market.slug, chainMarketId: envelope.request.chainMarketId,
+      marketAddress: envelope.request.marketAddress, step: { kind: "create" } });
   });
 }
 
@@ -159,6 +163,9 @@ export async function dispatchManagedMarketProvisioningCommand(
       const tracked = await (dependencies.track ?? (value => trackTransactionStatus(createSolanaRpc(runtime.rpcUrl), {
         ...value, commitment: "finalized", timeoutMs: 45_000,
       })))( { signature: wire.transactionSignature, lastValidBlockHeight: wire.lastValidBlockHeight, signal: dependencies.signal });
+      if (tracked.signature !== wire.transactionSignature) {
+        throw new Error("Market reconciliation returned a different signature");
+      }
       if (tracked.status === "finalized") {
         command = await store.transition(commandId, { expectedRevision: command.state.revision, ...fence(), to: "FINALIZED" });
         if (tracked.executionSlot === undefined) throw new Error("Finalized market transaction omitted its execution slot");

@@ -50,8 +50,8 @@ describe("managed Solana command worker", () => {
     expect(dispatchOrder).toHaveBeenCalledWith("order_12345678", expect.objectContaining({
       database: {}, env, owner: "worker-restarted",
     }));
-    expect(queue.findMany).toHaveBeenCalledTimes(6);
-    expect(queue.findMany.mock.calls[3]?.[0]).toEqual(expect.objectContaining({
+    expect(queue.findMany).toHaveBeenCalledTimes(12);
+    expect(queue.findMany.mock.calls[4]?.[0]).toEqual(expect.objectContaining({
       where: expect.objectContaining({ cluster: "localnet", genesisHash: GENESIS,
         programAddress: PROGRAM, operation: "PLACE_ORDER" }),
       take: 25,
@@ -143,12 +143,12 @@ describe("managed Solana command worker", () => {
       database: {} as never, env, now: () => now, dispatchOrder,
       dispatchMarket: vi.fn(), dispatchSeat: vi.fn(), dispatchEscrow: vi.fn(), sleep });
     await vi.waitFor(() => expect(dispatchOrder).toHaveBeenCalledOnce());
-    expect(queue.findMany).toHaveBeenCalledTimes(6);
+    expect(queue.findMany).toHaveBeenCalledTimes(12);
     finish();
     await running;
 
     expect(dispatchOrder).toHaveBeenCalledOnce();
-    expect(queue.findMany).toHaveBeenCalledTimes(6);
+    expect(queue.findMany).toHaveBeenCalledTimes(12);
     expect(sleep).not.toHaveBeenCalled();
   });
 
@@ -168,35 +168,65 @@ describe("managed Solana command worker", () => {
       env, now: () => now, retryCooldownMs: 9_000 });
     const query = queue.findMany.mock.calls[0]?.[0] as unknown as { where: { AND: unknown[] } };
     expect(query.where.AND).toContainEqual({ OR: [
-      { status: { in: ["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED", "UNKNOWN"] } },
+      { status: { in: ["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED", "UNKNOWN", "FINALIZED"] } },
       { status: "FAILED_RETRYABLE", updatedAt: { lte: new Date("2026-09-20T00:09:51Z") } },
     ] });
-    const participantQuery = queue.findMany.mock.calls[1]?.[0] as unknown as { where: { AND: unknown[] } };
+    const participantQuery = queue.findMany.mock.calls[2]?.[0] as unknown as { where: { AND: unknown[] } };
     expect(participantQuery.where.AND).toContainEqual({ OR: [
       { status: { in: ["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED"] } },
       { status: "FAILED_RETRYABLE", updatedAt: { lte: new Date("2026-09-20T00:09:51Z") } },
     ] });
   });
 
-  it.each(["SIGNED", "UNKNOWN"])("resumes %s market provisioning before dependent participant commands", async marketStatus => {
+  it.each(["SIGNED", "UNKNOWN", "FINALIZED"])("resumes %s market provisioning before dependent participant commands", async marketStatus => {
     const queue = queueFor({
       PROVISION_MARKET: [candidate("market_12345678", "PROVISION_MARKET", marketStatus)],
+      PROVISION_MARKET_BOOK: [candidate("book_12345678", "PROVISION_MARKET_BOOK", marketStatus)],
       REGISTER_SEAT: [candidate("seat_12345678", "REGISTER_SEAT")],
       PLACE_ORDER: [candidate("order_12345678", "PLACE_ORDER")],
     });
     const events: string[] = [];
     const dispatchMarket = vi.fn(async () => { events.push("market"); return { status: "PROJECTED" } as never; });
+    const dispatchBook = vi.fn(async () => { events.push("book"); return { status: "PROJECTED" } as never; });
     const dispatchSeat = vi.fn(async () => { events.push("seat"); return { status: "PROJECTED" } as never; });
     const dispatchOrder = vi.fn(async () => { events.push("order"); return { status: "UNKNOWN" } as never; });
     const result = await runManagedCommandWorkerCycle({ queue: queue as never, database: {} as never,
-      env, now: () => now, dispatchMarket, dispatchSeat, dispatchEscrow: vi.fn(), dispatchOrder });
+      env, now: () => now, dispatchMarket, dispatchBook, dispatchSeat, dispatchEscrow: vi.fn(), dispatchOrder });
 
-    expect(events).toEqual(["market", "seat", "order"]);
+    expect(events).toEqual(["market", "book", "seat", "order"]);
     expect(dispatchMarket).toHaveBeenCalledWith("market_12345678", expect.any(Object));
-    expect(result).toEqual(expect.objectContaining({ selected: 3, attempted: 3, completed: 2, uncertain: 1 }));
+    expect(dispatchBook).toHaveBeenCalledWith("book_12345678", expect.any(Object));
+    expect(result).toEqual(expect.objectContaining({ selected: 4, attempted: 4, completed: 3, uncertain: 1 }));
     expect(queue.findMany.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
       where: expect.objectContaining({ operation: "PROVISION_MARKET" }),
     }));
+  });
+
+  it("dispatches resolution commands in lifecycle order and reconciles retained UNKNOWN wire", async () => {
+    const queue = queueFor({
+      CLOSE_RESOLUTION: [candidate("close_12345678", "CLOSE_RESOLUTION")],
+      PROPOSE_RESOLUTION: [candidate("propose_12345678", "PROPOSE_RESOLUTION")],
+      APPROVE_RESOLUTION: [candidate("approve_12345678", "APPROVE_RESOLUTION", "UNKNOWN")],
+      CLAIM_RESOLUTION: [candidate("claim_12345678", "CLAIM_RESOLUTION", "SIGNED")],
+      FINALIZE_RESOLUTION: [candidate("finalize_12345678", "FINALIZE_RESOLUTION")],
+    });
+    const events: string[] = [];
+    const dispatchResolution = vi.fn(async (commandId: string) => {
+      events.push(commandId.split("_")[0]!);
+      return { status: commandId.startsWith("claim") ? "UNKNOWN" : "PROJECTED" } as never;
+    });
+
+    const result = await runManagedCommandWorkerCycle({ queue: queue as never, database: {} as never,
+      env, now: () => now, dispatchResolution });
+
+    expect(events).toEqual(["close", "propose", "approve", "claim", "finalize"]);
+    expect(dispatchResolution).toHaveBeenCalledTimes(5);
+    expect(result).toEqual(expect.objectContaining({ selected: 5, attempted: 5, completed: 4, uncertain: 1 }));
+    const approveQuery = queue.findMany.mock.calls[9]?.[0] as unknown as { where: { AND: unknown[] } };
+    expect(approveQuery.where.AND).toContainEqual({ OR: [
+      { status: { in: ["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED", "UNKNOWN"] } },
+      { status: "FAILED_RETRYABLE", updatedAt: { lte: new Date("2026-09-20T00:09:55Z") } },
+    ] });
   });
 
   it("caps polling backoff and reports only a bounded error type", async () => {

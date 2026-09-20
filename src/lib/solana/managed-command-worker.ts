@@ -8,20 +8,36 @@ import type { PublicChainCommandStatus } from "@/lib/solana/chain-command-store"
 import { dispatchManagedCancellationCommand } from "@/lib/solana/managed-cancellation-dispatcher";
 import { dispatchManagedEscrowDepositCommand } from "@/lib/solana/managed-escrow-dispatcher";
 import { dispatchManagedMarketProvisioningCommand } from "@/lib/solana/managed-market-provisioning-dispatcher";
+import { dispatchManagedMarketBookCommand } from "@/lib/solana/managed-market-book-dispatcher";
 import { dispatchManagedOrderCommand } from "@/lib/solana/managed-order-dispatcher";
+import { dispatchManagedResolutionCommand } from "@/lib/solana/managed-resolution-dispatcher";
 import { dispatchManagedSeatRegistrationCommand } from "@/lib/solana/managed-seat-dispatcher";
 import { dispatchManagedFeatherTransferCommand } from "@/lib/solana/managed-transfer-dispatcher";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 
 export const MANAGED_COMMAND_OPERATIONS = [
   "PROVISION_MARKET",
+  "PROVISION_MARKET_BOOK",
   "REGISTER_SEAT",
   "DEPOSIT_ESCROW",
   "PLACE_ORDER",
   "CANCEL_ORDER",
   "TRANSFER_FEATHERS",
+  "CLOSE_RESOLUTION",
+  "PROPOSE_RESOLUTION",
+  "APPROVE_RESOLUTION",
+  "CLAIM_RESOLUTION",
+  "FINALIZE_RESOLUTION",
 ] as const;
 export type ManagedCommandOperation = (typeof MANAGED_COMMAND_OPERATIONS)[number];
+
+const MANAGED_RESOLUTION_OPERATIONS = new Set<ManagedCommandOperation>([
+  "CLOSE_RESOLUTION",
+  "PROPOSE_RESOLUTION",
+  "APPROVE_RESOLUTION",
+  "CLAIM_RESOLUTION",
+  "FINALIZE_RESOLUTION",
+]);
 
 const DISPATCHABLE_STATUSES = [
   "ACCEPTED",
@@ -84,11 +100,13 @@ type CycleDependencies = Readonly<{
   perOperationBatchSize?: number;
   retryCooldownMs?: number;
   dispatchMarket?: Dispatch;
+  dispatchBook?: Dispatch;
   dispatchSeat?: Dispatch;
   dispatchEscrow?: Dispatch;
   dispatchOrder?: Dispatch;
   dispatchCancellation?: Dispatch;
   dispatchTransfer?: Dispatch;
+  dispatchResolution?: Dispatch;
 }>;
 
 type LoopDependencies = CycleDependencies & Readonly<{
@@ -137,10 +155,14 @@ export function managedCommandWorkerConfigFromEnvironment(
 
 function dispatchForOperation(operation: ManagedCommandOperation, dependencies: CycleDependencies): Dispatch {
   if (operation === "PROVISION_MARKET") return dependencies.dispatchMarket ?? dispatchManagedMarketProvisioningCommand;
+  if (operation === "PROVISION_MARKET_BOOK") return dependencies.dispatchBook ?? dispatchManagedMarketBookCommand;
   if (operation === "REGISTER_SEAT") return dependencies.dispatchSeat ?? dispatchManagedSeatRegistrationCommand;
   if (operation === "DEPOSIT_ESCROW") return dependencies.dispatchEscrow ?? dispatchManagedEscrowDepositCommand;
   if (operation === "PLACE_ORDER") return dependencies.dispatchOrder ?? dispatchManagedOrderCommand;
   if (operation === "CANCEL_ORDER") return dependencies.dispatchCancellation ?? dispatchManagedCancellationCommand;
+  if (MANAGED_RESOLUTION_OPERATIONS.has(operation)) {
+    return dependencies.dispatchResolution ?? dispatchManagedResolutionCommand;
+  }
   return dependencies.dispatchTransfer ?? dispatchManagedFeatherTransferCommand;
 }
 
@@ -186,9 +208,9 @@ export async function runManagedCommandWorkerCycle(
 
   for (const operation of MANAGED_COMMAND_OPERATIONS) {
     if (shouldStop()) break;
-    const immediatelyDispatchable = operation === "PROVISION_MARKET"
-      ? [...NON_RETRYABLE_STARTS, "UNKNOWN"]
-      : NON_RETRYABLE_STARTS;
+    const immediatelyDispatchable = operation === "PROVISION_MARKET" || operation === "PROVISION_MARKET_BOOK"
+      ? [...NON_RETRYABLE_STARTS, "UNKNOWN", "FINALIZED"]
+      : MANAGED_RESOLUTION_OPERATIONS.has(operation) ? [...NON_RETRYABLE_STARTS, "UNKNOWN"] : NON_RETRYABLE_STARTS;
     const rows = await queue.findMany({
       where: {
         cluster: runtime.cluster,
