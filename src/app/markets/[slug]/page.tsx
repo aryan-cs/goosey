@@ -27,6 +27,7 @@ import { MarketResolutionNote } from "@/components/market-resolution-note";
 import { MarketSettlementStatus } from "@/components/market-settlement-status";
 import { UnifiedSolanaMarketDetail } from "@/components/unified-solana-market-detail";
 import { unifiedMarketReadRepository } from "@/lib/unified-market-repository";
+import { settlementAttestationEnabled } from "@/lib/solana/settlement-attestation";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
   const initialOutcome = query.outcome === "NO" ? "NO" : "YES";
   const initialAction = query.action === "SELL" ? "SELL" : "BUY";
   const user = await getServerUser();
+  const showSettlementAttestation = settlementAttestationEnabled();
   const backend = await db.market.findUnique({ where: { slug }, select: { id: true, executionBackend: true } });
   if (backend?.executionBackend === "SOLANA") {
     const unified = await unifiedMarketReadRepository.findBySlug(slug);
@@ -112,7 +114,8 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
           <div className="market-header-actions"><WatchlistButton marketId={market.id} signedIn={Boolean(user)} icon={<Bookmark />} /><ShareButton title={market.title} icon={<Share2 />} /></div>
         </header>
 
-        <MarketSettlementStatus status={market.status} attestation={data.settlementAttestation} />
+        {(showSettlementAttestation || data.settlementAttestation) &&
+          <MarketSettlementStatus status={market.status} attestation={data.settlementAttestation} />}
 
         <ProbabilityChart openingBaseline={orderBookMarket || openingBps === null ? undefined : {
           probability: openingBps / 10_000,
