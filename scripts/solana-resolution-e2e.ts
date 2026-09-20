@@ -60,7 +60,8 @@ type Row = { available: bigint; reserved: bigint; yes: bigint; no: bigint; reser
 type Order = { id: bigint; owner: number; price: bigint; quantity: bigint; chain: bigint;
   side: "BID" | "ASK"; heapIndex: number; action: "BUY" | "SELL"; outcome: "YES" | "NO" };
 type Market = { marketId: bigint; market: Address; seats: Address; vault: Address; book: Address;
-  resolution: Address; terms: Address; payout: bigint; closesAt: bigint; resolvesAt: bigint; outcome: ResolutionOutcome };
+  resolution: Address; terms: Address; payout: bigint; feeBps: number; closesAt: bigint; resolvesAt: bigint;
+  outcome: ResolutionOutcome };
 
 async function main() {
   if (process.argv.includes("--help")) {
@@ -274,10 +275,11 @@ configuration, account injection and validator resets are refused.`);
   const testSourceHash = createHash("sha256").update(testSource).digest("hex");
   await writeFile(path.join(path.dirname(adminPath), "resolution-suite-source.ts"), testSource, { flag: "wx", mode: 0o600 });
   let earlyResolutionTimingChecked = false;
-  async function createMarket(marketId: bigint, payout: bigint, outcome: ResolutionOutcome): Promise<Market> {
+  async function createMarket(marketId: bigint, payout: bigint, outcome: ResolutionOutcome,
+    feeBps = FEE_BPS): Promise<Market> {
     const created = await buildCreateMarketInstructions({ programAddress: PROGRAM, marketId, admin,
       seats: await generateKeyPairSigner(), seatsRentLamports: BigInt(await rpc<number>("getMinimumBalanceForRentExemption", [32_816])),
-      payoutMilli: payout, feeBps: FEE_BPS, closesAt: commonClose, resolvesAt: commonResolve });
+      payoutMilli: payout, feeBps, closesAt: commonClose, resolvesAt: commonResolve });
     await execute(`create ${outcome} market ${marketId}`, created.instructions);
     const { book } = await deriveGooseyBookAddress(PROGRAM, created.market);
     for (const key of [created.market, created.seats, created.vault, book]) watched.add(key);
@@ -303,7 +305,7 @@ configuration, account injection and validator resets are refused.`);
       creator: admin, proposer: reviewers[0].address, approver: reviewers[1].address });
     const binding = { cluster: runtime.cluster, genesisHash: runtime.genesisHash, program: PROGRAM, config: base.config,
       market: created.market, marketId: marketId.toString(), creator: admin.address, featherMint: base.featherMint };
-    const economics = { payoutMilli: payout.toString(), feeBps: FEE_BPS.toString(), closesAt: commonClose.toString(),
+    const economics = { payoutMilli: payout.toString(), feeBps: feeBps.toString(), closesAt: commonClose.toString(),
       resolvesAt: commonResolve.toString(), decimals: 3 as const };
     const proposer = { wallet: reviewers[0].address, enrollment: resolution.proposerEnrollment };
     const approver = { wallet: reviewers[1].address, enrollment: resolution.approverEnrollment };
@@ -371,11 +373,12 @@ configuration, account injection and validator resets are refused.`);
     watched.add(resolution.resolution);
     await execute(`freeze ${outcome} reviewers before first trade`, [resolution.instruction]);
     return { marketId, market: created.market, seats: created.seats, vault: created.vault, book,
-      resolution: resolution.resolution, terms: terms.terms, payout, closesAt: commonClose, resolvesAt: commonResolve, outcome };
+      resolution: resolution.resolution, terms: terms.terms, payout, feeBps,
+      closesAt: commonClose, resolvesAt: commonResolve, outcome };
   }
 
   const markets = [
-    await createMarket(1n, 100_000n, "YES"),
+    await createMarket(1n, 1_000n, "YES", 0),
     await createMarket(2n, 100_000n, "NO"),
     await createMarket(3n, 100_001n, "VOID"),
   ];
@@ -412,7 +415,7 @@ configuration, account injection and validator resets are refused.`);
     }
     assert.equal(orders.length, bd.readUInt16LE(78));
     const expected = rows.map(() => ({ cash: 0n, yes: 0n, no: 0n }));
-    const fee = (notional: bigint) => (notional * BigInt(FEE_BPS) + 9_999n) / 10_000n;
+    const fee = (notional: bigint) => (notional * BigInt(market.feeBps) + 9_999n) / 10_000n;
     for (const order of orders) {
       const reserve = expected[order.owner]; assert(reserve);
       if (order.action === "BUY") {
@@ -479,15 +482,20 @@ configuration, account injection and validator resets are refused.`);
     }
   }
 
+  let ninetyNineWinnerAvailableBefore: bigint | undefined;
   for (const market of markets) {
-    const noPrice = market.payout - 40_000n;
-    await place(market, 1, orderInput("BUY", "NO", noPrice, market.outcome === "VOID" ? 1n : 3n));
-    await place(market, 0, orderInput("BUY", "YES", 40_000n, market.outcome === "VOID" ? 1n : 3n, "FOK"));
-    await place(market, 2, orderInput("BUY", "YES", 10_000n, 1n));
+    const yesPrice = market.outcome === "YES" ? 990n : 40_000n;
+    const noPrice = market.payout - yesPrice;
+    const quantity = market.outcome === "YES" || market.outcome === "VOID" ? 1n : 3n;
+    await place(market, 1, orderInput("BUY", "NO", noPrice, quantity));
+    if (market.outcome === "YES") ninetyNineWinnerAvailableBefore = (await state(market)).rows[0].available;
+    await place(market, 0, orderInput("BUY", "YES", yesPrice, quantity, "FOK"));
+    await place(market, 2, orderInput("BUY", "YES", market.outcome === "YES" ? 100n : 10_000n, 1n));
     const filled = await state(market);
     assert(filled.rows[0].yes > 0n && filled.rows[1].no > 0n);
     assert.equal(filled.orders.length, 1);
-    assert(filled.fees > 0n && filled.collateral > 0n);
+    assert.equal(filled.fees > 0n, market.feeBps > 0);
+    assert(filled.collateral > 0n);
   }
 
   const earlyClose = await buildCloseResolutionInstruction({ programAddress: PROGRAM, marketId: markets[0].marketId,
@@ -495,7 +503,7 @@ configuration, account injection and validator resets are refused.`);
   await execute("close before chain close rejected atomically", [earlyClose.instruction], { code: 7404 });
   await waitUntil(commonClose);
   for (const market of markets) {
-    await place(market, 3, orderInput("BUY", "NO", 20_000n, 1n), { code: 7002 });
+    await place(market, 3, orderInput("BUY", "NO", market.outcome === "YES" ? 200n : 20_000n, 1n), { code: 7002 });
     const close = await buildCloseResolutionInstruction({ programAddress: PROGRAM, marketId: market.marketId,
       seats: market.seats, keeper: admin });
     await execute(`close ${market.outcome} blocked while canonical order remains`, [close.instruction], { code: 7406 });
@@ -557,7 +565,7 @@ configuration, account injection and validator resets are refused.`);
     assert.equal(resolved.resolution.phase, 3);
     assert.equal(resolved.resolution.outcome, { YES: 0, NO: 1, VOID: 2 }[market.outcome]);
     fingerprints.set(market.marketId, fingerprint);
-    await place(market, 3, orderInput("BUY", "YES", 30_000n, 1n), { code: 7002 });
+    await place(market, 3, orderInput("BUY", "YES", market.outcome === "YES" ? 300n : 30_000n, 1n), { code: 7002 });
   }
 
   for (const market of markets) {
@@ -587,6 +595,12 @@ configuration, account injection and validator resets are refused.`);
       const after = await state(market);
       assert.equal(after.rows[seatIndex].yes, 0n); assert.equal(after.rows[seatIndex].no, 0n);
       assert.equal(after.rows[seatIndex].available - before.rows[seatIndex].available, expectedPayouts[seatIndex]);
+      if (market.outcome === "YES" && seatIndex === 0) {
+        assert.equal(market.payout, 1_000n);
+        assert.equal(expectedPayouts[seatIndex], 1_000n);
+        assert.equal(after.rows[seatIndex].available - ninetyNineWinnerAvailableBefore!, 10n,
+          "one 0.990 winning contract must earn exactly 0.010 feathers net");
+      }
       if (seatIndex === 0) {
         await awaitFinalized(sent.signature);
         const phaseThree = await state(market, "finalized");
@@ -715,7 +729,8 @@ configuration, account injection and validator resets are refused.`);
     funding: "authorized grants -> wallet claims -> wallet-signed deposits -> actual CLOB fills",
     checks: ["mandatory pre-trade resolution", "canonical post-close cleanup",
       ...(earlyResolutionTimingChecked ? ["pre-resolvesAt rejection"] : []), "frozen two-person review",
-      "immutable evidence fingerprints", "rejection/new sequence", "YES/NO/VOID payouts", "claim replay resistance",
+      "immutable evidence fingerprints", "rejection/new sequence", "YES/NO/VOID payouts",
+      "0.990 winning contract earns exactly 0.010 net", "claim replay resistance",
       "odd VOID dust to fee revenue", "failed-transition rollback", "resolved trading rejection", "SPL withdrawal and total conservation"],
     earlyResolutionTimingChecked, phaseThreeReaderEvidence, fingerprints: [...fingerprints.entries()], receipts },
   (_, value: unknown) => typeof value === "bigint" ? value.toString() : value, 2));
