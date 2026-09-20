@@ -410,11 +410,12 @@ async function applyCleanup() {
     if (!publisher || publisher.role !== "ADMIN" || publisher.status !== "ACTIVE") fail("audit publisher is unavailable");
 
     const userWallet = new Map((await tx.ledgerAccount.findMany({ where: { ownerType: "USER", ownerId: { in: [...new Set(plan.ordered.map(t => t.userId))] }, purpose: "USER_FEATHERS" } })).map(account => [account.ownerId!, account]));
-    const [revenue, issuance] = await Promise.all([
+    const [revenue, issuanceAccounts] = await Promise.all([
       tx.ledgerAccount.findUnique({ where: { ownerType_ownerId_purpose: { ownerType: "SYSTEM", ownerId: "GOOSEY", purpose: "PROTOCOL_REVENUE" } } }),
-      tx.ledgerAccount.findUnique({ where: { ownerType_ownerId_purpose: { ownerType: "SYSTEM", ownerId: "GOOSEY", purpose: "ISSUANCE" } } }),
+      tx.ledgerAccount.findMany({ where: { ownerType: "SYSTEM", purpose: "ISSUANCE" } }),
     ]);
-    if (!issuance || !issuance.allowsNegative) fail("system issuance account is unavailable");
+    if (issuanceAccounts.length !== 1 || !issuanceAccounts[0].allowsNegative) fail("system issuance account is unavailable");
+    const issuance = issuanceAccounts[0];
     const oldUserCash = new Map<string, bigint>();
     let oldRevenue = 0n;
     for (const trade of plan.ordered) for (const posting of trade.journal.postings) {
