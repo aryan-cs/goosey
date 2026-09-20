@@ -23,8 +23,10 @@ describe("admin account identity links", () => {
 
   it("links suggestion submitters and resolution proposers", () => {
     const suggestion = renderToStaticMarkup(React.createElement(SuggestionQueue, { initialSuggestions: [{ id: "suggestion-1", title: "Idea", description: "Description", category: "Campus", createdAt: new Date(), user: { username: "submitter", displayName: "Submitter" } }] }));
-    const resolution = renderToStaticMarkup(React.createElement(ResolutionQueue, { initialProposals: [{ id: "proposal-1", outcome: "YES", reason: "Resolved", evidence: "Source", proposer: { username: "admin_goose", displayName: "Admin Goose" }, market: { title: "Market", slug: "market", status: "RESOLVING" } }], initialRuns: [], viewerId: "reviewer", proposerIds: { "proposal-1": "proposer" } }));
+    const resolution = renderToStaticMarkup(React.createElement(ResolutionQueue, { initialProposals: [{ id: "proposal-1", outcome: "YES", reason: "Resolved", evidence: "Source", proposer: { username: "admin_goose", displayName: "Admin Goose" }, market: { title: "Market", slug: "market", status: "RESOLVING" } }], initialRuns: [], viewerId: "proposer", proposerIds: { "proposal-1": "proposer" } }));
     expect(suggestion).toContain('href="/users/submitter"');
     expect(resolution).toContain('href="/users/admin_goose"');
+    expect(resolution).toContain('Confirm outcome and pay');
+    expect(resolution).not.toContain('disabled');
   });
 });

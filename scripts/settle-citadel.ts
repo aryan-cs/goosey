@@ -33,7 +33,7 @@ try {
   }
   const [final,settlements,positions,snapshot] = await Promise.all([
    db.market.findUniqueOrThrow({where:{id:market.id},include:{settlementRun:true}}),
-   db.positionSettlement.findMany({where:{marketId:market.id},include:{user:{select:{username:true,balanceMilli:true}}}}),
+   db.positionSettlement.findMany({where:{marketId:market.id}}),
    db.position.count({where:{marketId:market.id,OR:[{yesShares:{gt:0}},{noShares:{gt:0}},{reservedYesShares:{gt:0}},{reservedNoShares:{gt:0}}]}}),
    db.marketPriceSnapshot.findFirst({where:{marketId:market.id},orderBy:{createdAt:'desc'}})
   ]);
@@ -47,6 +47,6 @@ try {
     if (journal.postings.reduce((sum,p)=>sum+p.amountMilli,0n)!==0n || !journal.postings.some(p=>p.ledgerAccount.ownerId===settlement.userId && p.amountMilli===settlement.payoutMilli)) throw new Error('Payout ledger mismatch');
    }
   }
-  print({verified:true,run:final.settlementRun,snapshot,settlements:settlements.map(s=>({userId:s.userId,username:s.user.username,payout:s.payoutMilli,balance:s.user.balanceMilli,journalEntryId:s.journalEntryId}))});
+  print({verified:true,run:final.settlementRun,snapshot,settlements:settlements.map(s=>({userId:s.userId,username:market.positions.find(p=>p.userId===s.userId)?.user.username,payout:s.payoutMilli,journalEntryId:s.journalEntryId}))});
  }
 } finally { await db.$disconnect(); }
