@@ -99,8 +99,11 @@ export type UnifiedSolanaMarket = Readonly<{
 
 export type UnifiedMarket = UnifiedDatabaseMarket | UnifiedSolanaMarket;
 
+type PublicMarketStatus = "OPEN" | "PAUSED" | "CLOSED" | "RESOLVED" | "VOID";
+
 export type UnifiedMarketListQuery = Readonly<{
-  status?: "OPEN" | "PAUSED" | "CLOSED" | "RESOLVED" | "VOID";
+  status?: PublicMarketStatus;
+  statuses?: readonly PublicMarketStatus[];
   category?: string;
   q?: string;
   sort?: "featured" | "newest" | "closing";
@@ -294,7 +297,15 @@ function parseQuery(input: UnifiedMarketListQuery) {
   const category = input.category?.trim();
   if (q !== undefined && (q.length < 1 || q.length > 100)) throw new ApiError(400, "INVALID_QUERY", "Market search is invalid.");
   if (category !== undefined && (category.length < 1 || category.length > 60)) throw new ApiError(400, "INVALID_QUERY", "Market category is invalid.");
-  return { status: input.status ?? "OPEN", sort: input.sort ?? "featured", limit, q, category };
+  if (input.status !== undefined && input.statuses !== undefined) throw new ApiError(400, "INVALID_QUERY", "Choose one market status filter.");
+  const statuses = input.statuses === undefined ? [input.status ?? "OPEN"] : [...new Set(input.statuses)];
+  if (statuses.length === 0) throw new ApiError(400, "INVALID_QUERY", "At least one market status is required.");
+  return { statuses, sort: input.sort ?? "featured", limit, q, category };
+}
+
+function matchesRequestedStatus(market: UnifiedSolanaMarket, statuses: readonly PublicMarketStatus[]) {
+  if (statuses.includes(market.financial.status === "RESOLVING" ? "CLOSED" : market.financial.status)) return true;
+  return statuses.includes("VOID") && market.financial.status === "RESOLVED" && market.financial.resolution === "VOID";
 }
 
 function commonWhere(query: ReturnType<typeof parseQuery>): Prisma.MarketWhereInput {
@@ -367,7 +378,8 @@ export function createUnifiedMarketReadRepository(options: UnifiedMarketReposito
       const query = parseQuery(input), at = now(), shared = commonWhere(query);
       const rows = await runSerializableTransaction(client, async tx => {
         const [databaseRows, solanaRows] = await Promise.all([
-          tx.market.findMany({ where: { ...shared, ...DATABASE_MARKET_FILTER, status: query.status }, include: databaseInclude,
+          tx.market.findMany({ where: { ...shared, ...DATABASE_MARKET_FILTER,
+            status: query.statuses.length === 1 ? query.statuses[0] : { in: query.statuses } }, include: databaseInclude,
             orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: query.limit + 1 }),
           tx.market.findMany({ where: { ...shared, executionBackend: "SOLANA", collateralAccountId: null,
             status: "OPEN", acceptingOrders: false, solanaBinding: { isNot: null } }, select: solanaCatalogSelect,
@@ -381,7 +393,7 @@ export function createUnifiedMarketReadRepository(options: UnifiedMarketReposito
         }), solanaRows };
       });
       const solana = await Promise.all(rows.solanaRows.map(row => solanaView(row, at)));
-      const visibleSolana = solana.filter(market => market.financial.status === query.status);
+      const visibleSolana = solana.filter(market => matchesRequestedStatus(market, query.statuses));
       return sortMarkets([...rows.databaseRows, ...visibleSolana], query.sort).slice(0, query.limit);
     },
   } as const;

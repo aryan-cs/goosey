@@ -45,6 +45,7 @@
     "reconcile": "tsx scripts/reconcile.ts",
     "admin:create": "tsx scripts/create-admin.ts",
     "accounts:cleanup-bots": "tsx scripts/remove-production-bot-accounts.ts",
+    "accounts:verify-bot-cleanup": "tsx scripts/verify-production-bot-cleanup.ts",
     "worker:settlement": "tsx scripts/settlement-worker.ts",
     "worker:settlement:continuous": "tsx scripts/settlement-worker.ts --continuous",
     "chain:backfill:settlements": "tsx scripts/backfill-solana-settlement-attestations.ts",

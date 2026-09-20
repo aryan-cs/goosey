@@ -42,6 +42,23 @@ if (env.GOOSEY_BOT_CLEANUP_MODE) {
   if (env.GOOSEY_BOT_CLEANUP_MODE === "apply") run("reconcile");
 }
 
+// Exact post-incident verification. Apply only purges quotes invalidated by the
+// market replay, then runs the same comprehensive assertions as preview.
+if (env.GOOSEY_BOT_POSTCHECK_MODE) {
+  if (!["preview", "apply"].includes(env.GOOSEY_BOT_POSTCHECK_MODE)) throw new Error("Invalid bot postcheck mode");
+  run("db:generate");
+  const result = spawnSync("node", ["--import", "tsx", "scripts/verify-production-bot-cleanup.ts", ...(env.GOOSEY_BOT_POSTCHECK_MODE === "apply" ? ["--apply"] : [])], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+  if (env.GOOSEY_BOT_POSTCHECK_MODE === "apply") run("reconcile");
+}
+
+// One-time, exact correction authorized by the owner while the market is live.
+if (env.GOOSEY_CORRECT_CITADEL_DEADLINE) {
+  run("db:generate");
+  const result = spawnSync("node", ["--import", "tsx", "scripts/correct-citadel-deadline.ts"], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
 if (env.GOOSEY_VERIFY_LEADERBOARD === "1") {
   run("db:generate");
   const result = spawnSync("node", ["--import", "tsx", "scripts/verify-production-leaderboard.ts"], { env, stdio: "inherit" });

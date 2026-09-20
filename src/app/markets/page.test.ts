@@ -7,6 +7,7 @@ import type { UnifiedDatabaseMarket, UnifiedSolanaMarket } from "@/lib/unified-m
 const list = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/unified-market-repository", () => ({ unifiedMarketReadRepository: { list } }));
+vi.mock("@/components/live-page-refresh", () => ({ LivePageRefresh: () => null }));
 
 vi.mock("@/components/market", () => ({
   MarketListRow: ({ market }: { market: { slug: string; volume: string; sparkline?: unknown[] } }) =>
@@ -39,11 +40,12 @@ function solana(overrides: Partial<UnifiedSolanaMarket["financial"]> = {}): Unif
   } };
 }
 
-function database(id: string, volumeMilli: bigint, createdAt = now): UnifiedDatabaseMarket {
-  const summary = { id, slug: id, title: id, category: "Campus", closesAt: "in 1 day", status: "open" as const,
+function database(id: string, volumeMilli: bigint, createdAt = now, closesAt = new Date("2026-09-21T00:00:00.000Z")): UnifiedDatabaseMarket {
+  const expired = closesAt <= now;
+  const summary = { id, slug: id, title: id, category: "Campus", closesAt: expired ? "1 minute ago" : "in 1 day", status: expired ? "closed" as const : "open" as const,
     volume: Number(volumeMilli), outcomes: [{ id: "YES", label: "Yes", probability: 0.5 }], sparkline: [] };
   return { executionBackend: "DATABASE", href: `/markets/${id}`, editorial: editorial(id, createdAt), financial: {
-    source: "database", market: { id, volumeMilli, closesAt: new Date("2026-09-21T00:00:00.000Z") } as never,
+    source: "database", market: { id, volumeMilli, closesAt } as never,
     mark: {} as never, summary,
   } };
 }
@@ -67,15 +69,23 @@ describe("markets browse page", () => {
       .map((market) => market.editorial.id)).toEqual(["high", "low", "finalized-market"]);
   });
 
+  it("keeps live markets ahead of higher-volume closed markets in trending order", () => {
+    expect(sortBrowseMarkets([
+      database("closed-high", 100n, now, new Date("2026-09-19T23:59:00.000Z")),
+      database("open-low", 1n),
+    ], "trending").map((market) => market.editorial.id)).toEqual(["open-low", "closed-high"]);
+  });
+
   it("passes filters and sort to the unified repository and renders one unbranded market list", async () => {
-    list.mockResolvedValue([database("db-market", 4n), solana()]);
+    list.mockResolvedValue([database("db-market", 4n), database("expired-market", 9n, now, new Date("2026-09-19T23:59:00.000Z")), solana()]);
     const html = renderToStaticMarkup(await MarketsPage({ searchParams: Promise.resolve({
       q: " goose ", category: "Campus", sort: "closing",
     }) }));
 
-    expect(list).toHaveBeenCalledWith({ status: "OPEN", category: "Campus", q: "goose", sort: "closing", limit: 100 });
+    expect(list).toHaveBeenCalledWith({ statuses: ["OPEN", "PAUSED", "CLOSED", "RESOLVED", "VOID"], category: "Campus", q: "goose", sort: "closing", limit: 100 });
     expect(html).toContain('class="market-list browse-list"');
     expect(html).toContain('data-row="db-market"');
+    expect(html).toContain('data-row="expired-market"');
     expect(html).toContain('data-row="finalized-market"');
     expect(html).toContain('href="/markets/finalized-market"');
     expect(html).toContain('data-volume="—"');

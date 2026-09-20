@@ -1,5 +1,6 @@
 import { INDEPENDENT_DANCE_GROUP, INDEPENDENT_DANCE_MARKETS } from "@/lib/september-market-additions";
 import { DanceMarketPanel } from "@/components/dance-market-panel";
+import { LivePageRefresh } from "@/components/live-page-refresh";
 import { DANCE_MARKET_GROUP, DANCE_MARKET_OUTCOMES } from "@/lib/dance-market";
 import { getServerUser } from "@/lib/server-session";
 import Link from "next/link";
@@ -29,7 +30,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
       <DanceMarketPanel independent={independent} title={event.title} markets={options} signedIn={Boolean(user)} balanceMilli={user?.balanceMilli.toString()} initialSlug={typeof query.option === "string" ? query.option : undefined} initialAction={query.action === "SELL" ? "SELL" : "BUY"} />
     </div>;
   }
-  return <div className={`page-shell ${styles.page}`}>
+  return <div className={`page-shell ${styles.page}`}><LivePageRefresh showButton={false} />
     <nav aria-label="Breadcrumb"><Link href="/events">Events</Link><span aria-hidden="true"> / </span><span>{event.category}</span></nav>
     <header><p className={styles.eyebrow}>{event.category}</p><h1>{event.title}</h1><p>{event.description}</p><p className={styles.meta}><LocalTime value={event.startsAt} preset="medium" /> – <LocalTime value={event.endsAt} preset="medium" /></p></header>
     <aside className={styles.notice}>These markets are independent contracts. Their YES probabilities do not have to add up to 100%. Read each market’s rules before trading.</aside>

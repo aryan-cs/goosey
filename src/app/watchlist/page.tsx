@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { LivePageRefresh } from "@/components/live-page-refresh";
 import { MarketListRow } from "@/components/market";
 import { EmptyState } from "@/components/states";
 import { db } from "@/lib/db";
@@ -20,5 +21,5 @@ export default async function WatchlistPage() {
     const entries = await tx.watchlistEntry.findMany({ where: { userId: user.id, market: { ...DATABASE_MARKET_FILTER, ...(user.role === "ADMIN" ? {} : { status: { not: "DRAFT" } }) } }, orderBy: { createdAt: "desc" }, include: { market: { include: { priceHistory: { orderBy: { createdAt: "desc" }, take: 30 }, orderFills: { orderBy: { tradeSequence: "desc" }, take: 30, select: { canonicalYesPriceMilli: true, createdAt: true } } } } } });
     return { entries, marks: await loadMarketMarks(tx, entries.map((entry) => entry.market)) };
   });
-  return <div className="page-shell"><header className="page-header"><span className="eyebrow">Saved markets</span><h1>Watchlist</h1></header>{entries.length ? <div className="market-list browse-list">{entries.map(({ market }) => <MarketListRow key={market.id} market={marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, marks.get(market.id)!.probabilityYesBps)} />)}</div> : <EmptyState title="Your watchlist is empty" description="Tap the bookmark on a market to save it here." action={<Link className="button button-primary" href="/markets">Browse markets</Link>} />}</div>;
+  return <div className="page-shell"><LivePageRefresh showButton={false} /><header className="page-header"><span className="eyebrow">Saved markets</span><h1>Watchlist</h1></header>{entries.length ? <div className="market-list browse-list">{entries.map(({ market }) => <MarketListRow key={market.id} market={marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, marks.get(market.id)!.probabilityYesBps)} />)}</div> : <EmptyState title="Your watchlist is empty" description="Tap the bookmark on a market to save it here." action={<Link className="button button-primary" href="/markets">Browse markets</Link>} />}</div>;
 }

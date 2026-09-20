@@ -249,6 +249,54 @@ describe("unified market read repository", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ executionBackend: "SOLANA", financial: { status: "CLOSED" } });
   });
+
+  it("returns genuinely closed database rows and closed finalized projections for a multi-status browse", async () => {
+    const database = databaseMarket({ status: "CLOSED", acceptingOrders: false });
+    const solana = await solanaMarket();
+    const findMany = vi.fn(async (args: { where: { executionBackend: string; status: unknown } }) => {
+      if (args.where.executionBackend === "DATABASE") {
+        expect(args.where.status).toEqual({ in: ["OPEN", "CLOSED"] });
+        return [database];
+      }
+      expect(args.where.status).toBe("OPEN");
+      return [solana];
+    });
+    const repository = createUnifiedMarketReadRepository({
+      client: runner({ market: { findMany }, marketOrder: { groupBy: vi.fn() } }),
+      runtime,
+      now: () => now,
+      loadSolanaProjection: vi.fn().mockResolvedValue(finalizedProjection({ status: "CLOSED", acceptingOrders: false })),
+    });
+
+    const result = await repository.list({ statuses: ["OPEN", "CLOSED"], limit: 10 });
+
+    expect(result.map(item => item.executionBackend).sort()).toEqual(["DATABASE", "SOLANA"]);
+  });
+
+  it("normalizes duplicate statuses and rejects empty or conflicting status filters", async () => {
+    const findMany = vi.fn(async (args: { where: unknown }) => { void args; return []; });
+    const repository = createUnifiedMarketReadRepository({
+      client: runner({ market: { findMany }, marketOrder: { groupBy: vi.fn() } }), runtime, now: () => now,
+    });
+
+    await repository.list({ statuses: ["OPEN", "OPEN", "CLOSED"] });
+    expect(findMany.mock.calls[0]?.[0]).toMatchObject({ where: { status: { in: ["OPEN", "CLOSED"] } } });
+    await expect(repository.list({ statuses: [] })).rejects.toThrow("At least one market status");
+    await expect(repository.list({ status: "OPEN", statuses: ["CLOSED"] })).rejects.toThrow("Choose one market status");
+  });
+
+  it("treats resolving finalized markets as closed for public browsing", async () => {
+    const solana = await solanaMarket();
+    const repository = createUnifiedMarketReadRepository({
+      client: runner({ market: { findMany: vi.fn(async (args: { where: { executionBackend: string } }) =>
+        args.where.executionBackend === "SOLANA" ? [solana] : []) }, marketOrder: { groupBy: vi.fn() } }),
+      runtime,
+      now: () => now,
+      loadSolanaProjection: vi.fn().mockResolvedValue(finalizedProjection({ status: "RESOLVING", acceptingOrders: false })),
+    });
+
+    await expect(repository.list({ status: "CLOSED" })).resolves.toHaveLength(1);
+  });
 });
 
 describe("finalized projection coverage gate", () => {

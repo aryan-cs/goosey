@@ -19,10 +19,11 @@ import { UserProfileLink } from "@/components/user-profile-link";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [markets, leaders, recentTrades] = await Promise.all([
+  const now = new Date();
+  const [markets, leaders, recentTrades, recentlyClosed] = await Promise.all([
     runSerializableTransaction(db, async (tx) => {
       const rows = await tx.market.findMany({
-      where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: new Date() } },
+      where: { ...DATABASE_MARKET_FILTER, status: "OPEN", closesAt: { gt: now } },
       include: { priceHistory: { orderBy: { createdAt: "desc" }, take: 24 }, orderFills: { orderBy: { tradeSequence: "desc" }, take: 24, select: { canonicalYesPriceMilli: true, createdAt: true } } },
       orderBy: [{ featured: "desc" }, { volumeMilli: "desc" }, { closesAt: "asc" }],
       take: 12,
@@ -32,10 +33,24 @@ export default async function HomePage() {
     }),
     getLeaderboardRows(8),
     runSerializableTransaction(db, (tx) => loadPublicTradeActivity(tx, 4)),
+    runSerializableTransaction(db, async (tx) => {
+      const rows = await tx.market.findMany({
+        where: { ...DATABASE_MARKET_FILTER, status: { not: "DRAFT" }, OR: [
+          { closesAt: { lte: now } },
+          { status: { in: ["CLOSED", "RESOLVED", "VOID"] } },
+        ] },
+        include: { priceHistory: { orderBy: { createdAt: "desc" }, take: 24 }, orderFills: { orderBy: { tradeSequence: "desc" }, take: 24, select: { canonicalYesPriceMilli: true, createdAt: true } } },
+        orderBy: [{ closesAt: "desc" }, { id: "asc" }],
+        take: 3,
+      });
+      const marks = await loadMarketMarks(tx, rows);
+      return rows.map((market) => ({ ...market, mark: marks.get(market.id)! }));
+    }),
   ]);
   const summaries = markets.map((market) => marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, market.mark.probabilityYesBps));
   const featured = summaries.slice(0, 3);
   const rest = summaries.slice(3);
+  const closedSummaries = recentlyClosed.map((market) => marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, market.mark.probabilityYesBps));
 
   return (
     <div className={`page-shell home-page ${styles.home}`}>
@@ -85,6 +100,7 @@ export default async function HomePage() {
         </div>
 
         {summaries.length > 0 && <section className="dense-market-section" aria-labelledby="closing-heading"><div className="section-heading"><h2 id="closing-heading">Closing soon</h2></div><div className="market-list">{markets.slice().sort((a, b) => a.closesAt.getTime() - b.closesAt.getTime()).slice(0, 5).map((market) => <MarketListRow market={marketSummary({ ...market, priceHistory: [...market.priceHistory].reverse() }, market.mark.probabilityYesBps)} key={market.id} />)}</div></section>}
+        {closedSummaries.length > 0 && <section className="dense-market-section" aria-labelledby="recently-closed-heading"><div className="section-heading"><h2 id="recently-closed-heading">Recently closed</h2><Link href="/markets">Browse all</Link></div><div className="market-list">{closedSummaries.map((market) => <MarketListRow market={market} key={market.id} />)}</div></section>}
       </section>
     </div>
   );

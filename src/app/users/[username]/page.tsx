@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
+import { LivePageRefresh } from "@/components/live-page-refresh";
 import { PublicProfileDashboard } from "@/components/public-profile-dashboard";
 import { db } from "@/lib/db";
 import { loadPublicProfile } from "@/lib/public-profile";
@@ -19,7 +20,7 @@ export default async function UserProfilePage({ params }: { params: Promise<{ us
   const profile = await runSerializableTransaction(db, (tx) => loadPublicProfile(tx, username));
   if (!profile) notFound();
 
-  return <main className="page-shell profile-page"><PublicProfileDashboard
+  return <main className="page-shell profile-page"><LivePageRefresh showButton={false} /><PublicProfileDashboard
     identity={{ ...profile.identity, joinedAt: profile.identity.joinedAt.toISOString() }}
     summary={{
       equity: formatFeathers(profile.summary.equityMilli, 2),

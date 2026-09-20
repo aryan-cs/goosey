@@ -74,6 +74,22 @@ export function SearchExperience({ initialQuery = "", syncUrl = true }: { initia
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [query, retry, router, syncUrl]);
 
+  useEffect(() => {
+    if (query.trim().length < 2) return;
+    const refresh = () => setRetry((value) => value + 1);
+    const refreshWhenVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [query]);
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (query.trim().length >= 2) { setStatus("loading"); setRetry((value) => value + 1); }

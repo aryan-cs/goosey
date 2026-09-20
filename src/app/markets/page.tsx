@@ -2,6 +2,7 @@ import { formatDistanceStrict } from "date-fns";
 import { Filter, Search } from "lucide-react";
 import Link from "next/link";
 
+import { LivePageRefresh } from "@/components/live-page-refresh";
 import { MarketListRow, type MarketSummary } from "@/components/market";
 import { EmptyState } from "@/components/states";
 import { MARKET_CATEGORIES } from "@/lib/market-categories";
@@ -64,6 +65,10 @@ export function sortBrowseMarkets(markets: readonly UnifiedMarket[], sort: Brows
       return closesAt(left).getTime() - closesAt(right).getTime() || compareIds(left, right);
     }
 
+    const leftOpen = left.executionBackend === "DATABASE" ? left.financial.summary.status === "open" : left.financial.status === "OPEN";
+    const rightOpen = right.executionBackend === "DATABASE" ? right.financial.summary.status === "open" : right.financial.status === "OPEN";
+    if (leftOpen !== rightOpen) return leftOpen ? -1 : 1;
+
     // The finalized Solana projection has no all-time-volume field. Preserve
     // the established database volume ordering and place unknown-volume cards
     // after it instead of manufacturing a comparable value from recent trades.
@@ -84,19 +89,22 @@ export default async function MarketsPage({ searchParams }: { searchParams: Prom
   const sort: BrowseSort = params.sort === "new" || params.sort === "closing" ? params.sort : "trending";
   const now = new Date();
   const loaded = await unifiedMarketReadRepository.list({
-    status: "OPEN",
+    statuses: ["OPEN", "PAUSED", "CLOSED", "RESOLVED", "VOID"],
     category,
     q: query || undefined,
     sort: sort === "new" ? "newest" : sort === "closing" ? "closing" : "featured",
     limit: 100,
   });
-  const markets = sortBrowseMarkets(loaded.filter((market) =>
-    market.executionBackend === "SOLANA" || market.financial.market.closesAt > now), sort);
+  // Keep an expired-but-not-yet-settled market discoverable. Trading controls
+  // already derive their closed state from the authoritative close time; hiding
+  // the row here made the entire market and its history appear to be deleted.
+  const markets = sortBrowseMarkets(loaded, sort);
   const summaries = markets.map((market) => market.executionBackend === "DATABASE"
     ? market.financial.summary
     : solanaMarketSummary(market, now));
 
   return <div className="page-shell browse-page">
+    <LivePageRefresh showButton={false} />
     <div className="browse-layout">
       <div className={styles.intro}>
         <header className={styles.header}><h1>Markets</h1><a className={`button button-secondary ${styles.suggest}`} href={MARKET_SUGGESTION_FORM_URL} target="_blank" rel="noreferrer" aria-label="Suggest a market (opens in a new tab)">Suggest a market</a></header>
