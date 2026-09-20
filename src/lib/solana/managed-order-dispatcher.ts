@@ -6,9 +6,12 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { type TransactionRunner } from "@/lib/serializable-transaction";
 import { type SignedWireInput } from "@/lib/solana/chain-command";
+import { PrismaChainMutationLaneStore, type ChainMutationLane } from "@/lib/solana/chain-mutation-lane";
 import { PrismaChainCommandStore, type PublicChainCommandStatus, type StoredChainCommand } from "@/lib/solana/chain-command-store";
 import { loadAppManagedSolanaSigner } from "@/lib/solana/custody-service";
 import { ensureManagedFeatherAccountReady } from "@/lib/solana/managed-account-readiness";
+import { ensureManagedEscrowDeposit } from "@/lib/solana/managed-escrow-dispatcher";
+import { planManagedMarketReadiness } from "@/lib/solana/managed-market-readiness";
 import { ensureManagedSeatRegistration } from "@/lib/solana/managed-seat-dispatcher";
 import { managedOrderRequestSchema } from "@/lib/solana/managed-order-service";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
@@ -29,6 +32,7 @@ const envelopeSchema = z.object({
 
 type CommandStore = Pick<PrismaChainCommandStore,
   "load" | "loadLatestWireReference" | "acquireLease" | "transition" | "appendSignedWireBeforeSend" | "publicStatus">;
+type MutationLaneStore = Pick<PrismaChainMutationLaneStore, "loadOrCreate" | "acquire" | "release">;
 
 type Dependencies = Readonly<{
   store?: CommandStore;
@@ -38,6 +42,9 @@ type Dependencies = Readonly<{
   owner?: string;
   ensureProvisioned?: typeof ensureManagedFeatherAccountReady;
   ensureSeat?: typeof ensureManagedSeatRegistration;
+  ensureEscrow?: typeof ensureManagedEscrowDeposit;
+  planReadiness?: typeof planManagedMarketReadiness;
+  laneStore?: MutationLaneStore;
   loadParticipant?: typeof loadAppManagedSolanaSigner;
   loadSponsor?: typeof loadSolanaSponsorSigner;
   prepare?: typeof prepareSponsoredOrder;
@@ -92,6 +99,22 @@ export async function dispatchManagedOrderCommand(
     expiresAt: new Date(startedAt.getTime() + 5 * 60_000),
   });
   const fence = () => ({ owner, token, epoch: command.state.leaseEpoch, now: now() });
+  const laneToken = randomBytes(32).toString("base64url");
+  let mutationLane: ChainMutationLane | null = null;
+  let mutationLaneKey: Readonly<{ genesisHash: string; programAddress: string;
+    walletAddress: string; chainMarketId: string }> | null = null;
+  const laneStore = dependencies.laneStore
+    ?? new PrismaChainMutationLaneStore((dependencies.database ?? db) as never);
+  const releaseMutationLane = async () => {
+    if (!mutationLane?.lease || !mutationLaneKey) return;
+    mutationLane = await laneStore.release({ ...mutationLaneKey,
+      expectedRevision: mutationLane.revision,
+      owner,
+      token: laneToken,
+      epoch: mutationLane.leaseEpoch,
+      now: now(),
+    });
+  };
   try {
     if (["SIGNED", "SUBMITTED", "CONFIRMED"].includes(command.state.status)) {
       const wire = await store.loadLatestWireReference(commandId);
@@ -141,6 +164,20 @@ export async function dispatchManagedOrderCommand(
       signal: dependencies.signal,
     });
     if (readiness.status !== "ready") throw new Error("Managed feather account is still provisioning");
+    mutationLaneKey = {
+      genesisHash: runtime.genesisHash,
+      programAddress: runtime.programAddress,
+      walletAddress: readiness.walletAddress,
+      chainMarketId: request.chainMarketId,
+    };
+    mutationLane = await laneStore.loadOrCreate(mutationLaneKey);
+    mutationLane = await laneStore.acquire({ ...mutationLaneKey,
+      expectedRevision: mutationLane.revision,
+      owner,
+      token: laneToken,
+      now: now(),
+      expiresAt: new Date(now().getTime() + 5 * 60_000),
+    });
     const seat = await (dependencies.ensureSeat ?? ensureManagedSeatRegistration)({
       userId: command.identity.actorId,
       marketSlug: request.marketSlug,
@@ -151,6 +188,45 @@ export async function dispatchManagedOrderCommand(
     });
     if (seat.status !== "PROJECTED" && seat.status !== "FINALIZED") {
       throw new Error("Managed market seat registration is not finalized");
+    }
+    let marketReadiness = await (dependencies.planReadiness ?? planManagedMarketReadiness)({
+      runtime,
+      walletAddress: readiness.walletAddress,
+      marketId: BigInt(request.chainMarketId),
+      action: request.action,
+      limitPriceMilli: BigInt(request.limitPriceMilli),
+      quantity: BigInt(request.quantity),
+      signal: dependencies.signal,
+    });
+    if (marketReadiness.status === "register-seat") {
+      throw new Error("Managed market seat is not visible in finalized state");
+    }
+    if (marketReadiness.status === "deposit") {
+      const deposit = await (dependencies.ensureEscrow ?? ensureManagedEscrowDeposit)({
+        userId: command.identity.actorId,
+        marketSlug: request.marketSlug,
+        parentCommandId: command.state.id,
+        amount: marketReadiness.amount,
+      }, {
+        database: dependencies.database,
+        env,
+        signal: dependencies.signal,
+      });
+      if (deposit.status !== "FINALIZED" && deposit.status !== "PROJECTED") {
+        throw new Error("Managed escrow deposit is not finalized");
+      }
+      marketReadiness = await (dependencies.planReadiness ?? planManagedMarketReadiness)({
+        runtime,
+        walletAddress: readiness.walletAddress,
+        marketId: BigInt(request.chainMarketId),
+        action: request.action,
+        limitPriceMilli: BigInt(request.limitPriceMilli),
+        quantity: BigInt(request.quantity),
+        signal: dependencies.signal,
+      });
+    }
+    if (marketReadiness.status !== "ready") {
+      throw new Error("Managed market funding is not visible in finalized state");
     }
     const [participant, sponsor] = await Promise.all([
       (dependencies.loadParticipant ?? loadAppManagedSolanaSigner)(command.identity.actorId, env),
@@ -218,6 +294,14 @@ export async function dispatchManagedOrderCommand(
         });
       }
     }
+    if (command.state.status === "FINALIZED" || command.state.status === "FAILED_TERMINAL") {
+      try {
+        await releaseMutationLane();
+      } catch {
+        // The completed order is authoritative; the bounded lane lease may be
+        // reclaimed after expiry if release loses its fence.
+      }
+    }
     return store.publicStatus(commandId);
   } catch (error) {
     // Any post-journal failure is ambiguous: RPC submission may have succeeded
@@ -236,6 +320,11 @@ export async function dispatchManagedOrderCommand(
     }
     if (command.state.status === "UNKNOWN" || command.state.status === "FAILED_TERMINAL"
       || command.state.status === "PROJECTED") throw error;
+    try {
+      await releaseMutationLane();
+    } catch {
+      // The lane lease remains bounded and fenced if release races or fails.
+    }
     try {
       const failed = await store.transition(commandId, {
         expectedRevision: command.state.revision,

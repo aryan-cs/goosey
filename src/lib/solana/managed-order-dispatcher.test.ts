@@ -52,17 +52,40 @@ describe("managed order dispatcher", () => {
       recentBlockhash: SPONSOR, lastValidBlockHeight: 99n };
     const submit = vi.fn(async () => { events.push("submit"); return { status: "submitted" as const,
       signature: signed.signature, signedWireBase64: signed.signedWireBase64, lastValidBlockHeight: 99n }; });
+    const lane = { id: "lane_12345678", key: { genesisHash: GENESIS, programAddress: PROGRAM,
+      walletAddress: PARTICIPANT, chainMarketId: "7" }, revision: 0, leaseEpoch: 0, lease: null,
+      createdAt: new Date(), updatedAt: new Date() };
+    const laneStore = {
+      loadOrCreate: vi.fn(async () => lane),
+      acquire: vi.fn(async () => ({ ...lane, revision: 1, leaseEpoch: 1,
+        lease: { owner: "worker", epoch: 1, expiresAt: new Date("2026-09-20T00:05:01Z") } })),
+      release: vi.fn(async () => ({ ...lane, revision: 2, leaseEpoch: 1, lease: null })),
+    };
+    const planReadiness = vi.fn()
+      .mockResolvedValueOnce({ status: "deposit", amount: 702n, requiredCash: 902n, availableCash: 200n,
+        walletTokenAmount: 10_000n, expectedNonce: 1n, observedSlot: 4n })
+      .mockResolvedValueOnce({ status: "ready", requiredCash: 902n, availableCash: 902n,
+        expectedNonce: 2n, observedSlot: 5n });
+    const ensureEscrow = vi.fn(async () => ({ status: "FINALIZED" } as never));
     const result = await dispatchManagedOrderCommand("cmd_12345678", { store, env: runtime, owner: "worker",
       now: () => new Date("2026-09-20T00:00:01Z"), loadParticipant: vi.fn(async () => createNoopSigner(PARTICIPANT)),
       ensureProvisioned: vi.fn(async () => ({ status: "ready" as const, operation: null, walletAddress: PARTICIPANT,
         chainId: "solana:localnet" as const, genesisHash: GENESIS, finalizedSlot: 1n })),
       ensureSeat: vi.fn(async () => ({ status: "PROJECTED" } as never)),
+      laneStore: laneStore as never,
+      planReadiness,
+      ensureEscrow,
       loadSponsor: vi.fn(async () => createNoopSigner(SPONSOR)), prepare: vi.fn(async () => ({ signed,
         market: SPONSOR, book: SPONSOR, expectedNonce: 0n, observedSlot: 1n, bookRevision: 1n })), submit,
       track: vi.fn(async () => ({ status: "finalized" as const, signature: signed.signature })) });
     expect(events).toEqual(["journal", "submit"]);
     expect(result.status).toBe("FINALIZED");
     expect(store.appendSignedWireBeforeSend).toHaveBeenCalledOnce();
+    expect(laneStore.acquire).toHaveBeenCalledOnce();
+    expect(laneStore.release).toHaveBeenCalledOnce();
+    expect(ensureEscrow).toHaveBeenCalledWith({ userId: "user_12345678", marketSlug: "market-one",
+      parentCommandId: "cmd_12345678", amount: 702n }, expect.objectContaining({ env: runtime }));
+    expect(planReadiness).toHaveBeenCalledTimes(2);
   });
 
   it("never resubmits an ambiguous command", async () => {
