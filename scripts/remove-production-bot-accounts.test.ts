@@ -15,6 +15,7 @@ const active = [
   ["asdf13", "cmu8x6qu50002l304cegd4xe6"], ["asdf14", "cmu8x71o4000dl304tyziwvhl"],
   ["asdf15", "cmu8x7yqb0027k104zn2kxwxa"], ["asdf16", "cmu91uay30000kx04jul0y5gf"],
   ["asdf17", "cmu91xtsb0000l504ny7nc28q"],
+  ["arsonistduck", "cmu8wmj39001wlj04fv4b75dg"],
 ] as const;
 
 function fixture() {

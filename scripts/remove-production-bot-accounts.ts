@@ -15,7 +15,7 @@ import { computeQuote, type ComputedQuote } from "../src/lib/trading";
 const MARKET_ID = "cmu8tqf120002gm6k0gw5vxgl";
 const MARKET_SLUG = "htn-2026-all-toronto-team-wins";
 const PUBLISHER_ID = "goosey-market-publisher-v1";
-const APPLY_CONFIRMATION = "2026-09-20-test-and-asdf-bot-replay";
+const APPLY_CONFIRMATION = "2026-09-20-sybil-bot-replay";
 const EXPECTED_ACTIVE = new Map([
   ["test1", "cmu8wfl20000lic040xxx0dfm"],
   ["test11", "cmu8wrrxa000blb044szi94ys"],
@@ -35,6 +35,7 @@ const EXPECTED_ACTIVE = new Map([
   ["asdf15", "cmu8x7yqb0027k104zn2kxwxa"],
   ["asdf16", "cmu91uay30000kx04jul0y5gf"],
   ["asdf17", "cmu91xtsb0000l504ny7nc28q"],
+  ["arsonistduck", "cmu8wmj39001wlj04fv4b75dg"],
 ]);
 const INCIDENT_NAMES = new Set(EXPECTED_ACTIVE.keys());
 const BASIS_POINTS = 10_000n;
@@ -212,7 +213,7 @@ export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
   if (duplicateNames.length) fail(`duplicate incident identities: ${duplicateNames.join(", ")}`);
   const targetIds = new Set(nameById.keys());
   const discoveredNames = new Set(nameById.values());
-  if (targetIds.size !== INCIDENT_NAMES.size || discoveredNames.size !== INCIDENT_NAMES.size || [...INCIDENT_NAMES].some(name => !discoveredNames.has(name))) fail("preview did not discover exactly the reviewed test/asdf bot identities");
+  if (targetIds.size !== INCIDENT_NAMES.size || discoveredNames.size !== INCIDENT_NAMES.size || [...INCIDENT_NAMES].some(name => !discoveredNames.has(name))) fail("preview did not discover exactly the reviewed Sybil incident identities");
   if ([...targetIds].some(id => !input.users.some(user => user.id === id && user.role === "USER"))) fail("a reviewed incident identity is missing or is no longer an ordinary user");
 
   const journalByTrade = new Map<string, typeof input.journals[number]>();
