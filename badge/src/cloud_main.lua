@@ -181,8 +181,8 @@ local function render()
     text(9,string.format("YES  %.0f%%",m.probability),18,212,132,16)
     text(10,string.format("NO  %.0f%%",100-m.probability),176,212,132,16)
   elseif page=="settings" then
-    local options={"Return to markets","Trade selected market","Account Info"}
-    for i=1,3 do text(i,options[i],18,54+(i-1)*46,285,18) end
+    local options={"Return to markets","Account Info"}
+    for i=1,2 do text(i,options[i],18,54+(i-1)*46,285,18) end
     focus(7,47+(setting-1)*46,307,39)
     text(5,"USB account and market sync",10,211,300,14)
   else
@@ -231,11 +231,11 @@ end
 function on_button(button,kind)
   if not initialized or kind~=badge.input.KIND.PRESSED then return end
   local B=badge.input.BUTTON
-  if #cloud.markets==0 and page~="link" and button~=B.START and button~=B.B then return end
+  if #cloud.markets==0 and page~="link" and page~="settings" and button~=B.START and button~=B.B then return end
   if page=="link" and trade.phase=="account" and trade.name and button==B.A then
     page="list"
   elseif page=="link" then
-    if trade.button(button) then page="detail" end
+    if trade.button(button) then page=trade.slug and "detail" or "list" end
   elseif button==B.START then page=page=="settings" and "list" or "settings";setting=1
   elseif page=="list" then
     if button==B.UP then selected=(selected-2)%#cloud.markets+1
@@ -246,8 +246,12 @@ function on_button(button,kind)
     elseif button==B.B then page="list";detail=nil;detailGeneration=nil;badge.sys.gc_step()
     elseif button==B.A then page="link";local m=cloud.markets[selected];trade.open(m.slug,side==1 and "YES" or "NO",m.title) else return end
   elseif page=="settings" then
-    if button==B.UP then setting=(setting-2)%3+1 elseif button==B.DOWN then setting=setting%3+1
-    elseif button==B.B then page="list" elseif button==B.A then page=setting==1 and "list" or "link";if page=="link" then local m=cloud.markets[selected];if not m then page="list";render();return end;trade.open(m.slug,side==1 and "YES" or "NO",m.title);if setting==3 then trade.phase="account" end end else return end
+    if button==B.UP then setting=(setting-2)%2+1 elseif button==B.DOWN then setting=setting%2+1
+    elseif button==B.B then page="list"
+    elseif button==B.A then
+      if setting==1 then page="list"
+      else page="link";trade.phase="account";trade.slug=nil end
+    else return end
   elseif button==B.B then page="list" else return end
   render()
 end
