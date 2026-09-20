@@ -108,7 +108,11 @@ async function loadIncident(tx: typeof db) {
     tx.idempotencyRequest.findMany({ where: { route: `/api/markets/${MARKET_ID}/trades`, userId: { in: tradeUsers } } }),
     tx.notification.findMany({ where: { userId: { in: tradeUsers }, type: "TRADE_CONFIRMED", href: `/markets/${MARKET_SLUG}` } }),
   ]);
-  return { market, users, audits, trades, journals: journals.filter(journal => tradeIds.has(journal.referenceId)), positions, snapshots, requests, notifications };
+  const marketUsers = await tx.user.findMany({
+    where: { id: { in: tradeUsers } },
+    select: { id: true, username: true, displayName: true, role: true, status: true, createdAt: true },
+  });
+  return { market, users, marketUsers, audits, trades, journals: journals.filter(journal => tradeIds.has(journal.referenceId)), positions, snapshots, requests, notifications };
 }
 
 export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
@@ -366,6 +370,19 @@ async function main() {
   if (mode === "apply") console.log(json({ mode, result: await applyCleanup() }));
   else {
     const input = await db.$transaction(async tx => { await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY"); return loadIncident(tx as typeof db); }, { isolationLevel: "Serializable" });
+    console.log(json({
+      mode: "preview-diagnostics",
+      market: MARKET_SLUG,
+      marketUsers: input.marketUsers,
+      trades: input.trades.map(trade => ({
+        id: trade.id,
+        userId: trade.userId,
+        side: trade.side,
+        action: trade.action,
+        quantity: trade.quantity,
+        createdAt: trade.createdAt,
+      })),
+    }));
     const plan = buildReplay(input);
     console.log(json({ mode, digest: plan.digest, market: MARKET_SLUG, discoveredAccounts: [...plan.nameById.entries()], removedTradeIds: plan.ordered.filter(t => plan.targetIds.has(t.userId)).map(t => t.id), survivingTradeIds: plan.surviving.map(t => t.id), projected: { yesShares: plan.state.yesShares, noShares: plan.state.noShares, volumeMilli: plan.volumeMilli, traderCount: new Set(plan.surviving.map(t => t.userId)).size }, next: `Set GOOSEY_BOT_CLEANUP_DIGEST=${plan.digest} and the exact apply confirmation only after reviewing this preview and a verified backup.` }));
   }
