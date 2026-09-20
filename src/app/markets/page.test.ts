@@ -74,7 +74,7 @@ describe("markets browse page", () => {
     }) }));
 
     expect(list).toHaveBeenCalledWith({ status: "OPEN", category: "Campus", q: "goose", sort: "closing", limit: 100 });
-    expect(html).toMatch(/class="market-list browse-list [^"]+"/);
+    expect(html).toContain('class="market-list browse-list"');
     expect(html).toContain('data-row="db-market"');
     expect(html).toContain('data-row="finalized-market"');
     expect(html).toContain('href="/markets/finalized-market"');
