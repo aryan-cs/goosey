@@ -84,7 +84,7 @@ export default async function HomePage() {
             <aside className="home-sidebar">
               <section className="sidebar-panel" aria-labelledby="leader-preview">
                 <div className="section-heading compact"><h2 id="leader-preview"><Trophy /> Leaderboard</h2><Link href="/leaderboard">All</Link></div>
-                {leaders.length ? <ol className="mini-leaderboard">{leaders.map((leader) => <li key={leader.userId}><span className="rank">{leader.rank}</span><UserProfileLink username={leader.username} aria-label={`View ${leader.displayName}'s profile`}><strong>{leader.displayName}</strong><small>@{leader.username}</small></UserProfileLink><b aria-label={`Total balance ${formatFeathers(leader.equityMilli)} feathers`}><FeatherIcon /> {formatFeathers(leader.equityMilli)}</b></li>)}</ol> : <EmptyState title="No rankings yet" description="All active players appear here automatically." />}
+                {leaders.length ? <ol className="mini-leaderboard">{leaders.map((leader) => <li key={leader.userId}><span className="rank">{leader.rank}</span><UserProfileLink username={leader.username} aria-label={`View ${leader.username}'s profile`}><strong>{leader.username}</strong></UserProfileLink><b aria-label={`Total balance ${formatFeathers(leader.equityMilli)} feathers`}><FeatherIcon /> {formatFeathers(leader.equityMilli)}</b></li>)}</ol> : <EmptyState title="No rankings yet" description="All active players appear here automatically." />}
               </section>
               <section className="sidebar-panel" aria-labelledby="activity-preview">
                 <div className="section-heading compact"><h2 id="activity-preview"><Users /> Live activity</h2></div>
