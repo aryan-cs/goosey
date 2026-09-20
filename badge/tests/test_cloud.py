@@ -78,7 +78,7 @@ for index,market in enumerate(source['markets']):
     load_detail(market,1000+index,points,current=5050 if index==0 else None,
                 sampled_from=41 if index==0 else None,downsampled=index==0)
     compact_close=market['closes'].replace(' UTC','Z')
-    has('Sampled 1H' if index==0 else 'Past 1 Hour');has(compact_close);has('Vol '+market['volume'])
+    has('1H');has(compact_close);has('Vol '+market['volume'])
     if index==0:
         # Coherent history owns the headline. Half-percent values round up and
         # the displayed NO value is the exact complement of displayed YES.
@@ -92,8 +92,10 @@ for index,market in enumerate(source['markets']):
         title_lines=market_title.text.split('\n')
         assert (market_title.w,market_title.styles['text_font'])==(300,16) and len(title_lines)<=2
         assert (probability.y,probability.w,probability.styles['text_font'])==(100,98,24)
-        assert (change.x,change.y,change.w,change.styles['text_align'])==(10,36+18*len(title_lines),190,'left')
-        assert change.text.endswith(' | Sampled 1H') and change.y+14<=90
+        forecast=next(w for w in g.widgets.values() if not w.hide and w.text=='Current Forecast')
+        assert (change.x,change.y,change.w,change.styles['text_align'])==(10,36+18*len(title_lines),200,'left')
+        assert change.text=='+1 pts in 1H' and change.y+14<=90
+        assert (forecast.x,forecast.y,forecast.w,forecast.styles['text_font'],forecast.styles['text_align'])==(200,82,110,14,'right')
         assert (volume.x,volume.y,volume.w)==(212,139,98)
         assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(212,157,98,'right')
         assert market_status.styles['text_color']==0x267a35
@@ -101,11 +103,12 @@ for index,market in enumerate(source['markets']):
         assert volume.y+14 < market_status.y and market_status.y+14 < close_label.y
         assert close_label.y+close_label.h < 207
         assert not any('Open  Closes' in w.text for w in g.widgets.values() if not w.hide)
-        ticks=[w for w in g.widgets.values() if not w.hide and w.text.endswith('%') and w.x==7]
-        assert [w.text for w in ticks]==['100%','50%','0%']
-        assert all(w.styles['text_align']=='right' for w in ticks)
+        assert not any(w.text in ('100%','50%','0%') and w.x==7 for w in g.widgets.values() if not w.hide)
+        track_box=next(w for w in g.widgets.values() if w.kind=='box' and (w.x,w.y,w.w,w.h)==(10,86,190,97))
+        midline_box=next(w for w in g.widgets.values() if w.kind=='box' and (w.x,w.y,w.w,w.h)==(10,134,190,1))
+        assert track_box and midline_box
         line=next(w for w in g.widgets.values() if w.kind=='line')
-        assert (line.x,line.y)==(52,90)
+        assert (line.x,line.y)==(14,90)
         # Step-after geometry holds the old price until each observation,
         # jumps vertically, then holds the last real value to the server as-of.
         assert len(line.points)==6
@@ -113,7 +116,7 @@ for index,market in enumerate(source['markets']):
         assert line.points[2][2]==line.points[1][2] and line.points[3][2]!=line.points[2][2]
         assert line.points[4][1]==line.points[5][1]
         assert line.points[4][2]==line.points[3][2] and line.points[5][2]!=line.points[4][2]
-        assert line.points[6][1]==132 and line.points[6][2]==line.points[5][2]
+        assert line.points[6][1]==182 and line.points[6][2]==line.points[5][2]
         assert line.points[1][2]==44 and line.points[3][2]==34 and line.points[5][2]==43
     snapshot('cloud-'+market['slug']);press('B')
     if index==0: assert (close_label.x,close_label.y,close_label.w,close_label.text)==(149,16,161,'')
@@ -123,7 +126,7 @@ assert g.files['appdata/request.txt'] in (None,'')
 # Real selected-market mailbox histories, not the catalog frame, drive charts.
 for generation,points in ((2000,[]),(2001,[[5000,1234567890000]])):
     press('A');load_detail(source['markets'][0],generation,points)
-    expected='1 Price | Past 1 Hour' if points else 'No History | Past 1 Hour'
+    expected='No Earlier Price | 1H' if points else 'No Probability History Yet'
     has(expected);assert ' pts' not in expected
     snapshot('cloud-empty' if not points else 'cloud-single');press('B')
 # Bracketed terminal states stay distinct from the right-aligned close field.

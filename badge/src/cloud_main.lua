@@ -161,29 +161,26 @@ local function render()
     local h=detail and detail.slug==m.slug and detail.history or {}
     local currentBps=detail and detail.currentProbabilityBps or m.probabilityBps
     local movement=#h>1 and wholePoints(h[#h][1]-h[1][1]) or nil
-    local period=detail and detail.downsampled and "Sampled 1H" or "Past 1 Hour"
-    local changeText=movement and string.format("%+d pts | %s",movement,period)
+    local changeText=movement and string.format("%+d pts in 1H",movement)
       or not detail and "Loading 1H History..."
-      or #h==1 and "1 Price | "..period or "No History | "..period
-    text(3,changeText,10,36+titleLines*18,190,14,"left",movement and (movement<0 and C.down or C.up) or C.muted)
+      or #h==1 and "No Earlier Price | 1H" or "No Probability History Yet"
+    text(3,changeText,10,36+titleLines*18,200,14,"left",movement and (movement<0 and C.down or C.up) or C.muted)
+    text(4,"Current Forecast",200,82,110,14,"right",C.muted)
     text(2,tostring(wholePercent(currentBps)).."%",212,100,98,24,"right")
     text(7,"Vol "..m.volume,212,139,98,14,"right")
     track:hidden(false);midline:hidden(false)
     local domainLow,domainHigh,domainSpan=0,10000,10000
-    text(4,tostring(wholePercent(domainHigh)).."%",7,85,36,14,"right")
-    text(5,tostring(wholePercent(math.floor((domainHigh+domainLow)/2))).."%",7,128,36,14,"right")
-    text(6,tostring(wholePercent(domainLow)).."%",7,168,36,14,"right")
     local pts={}
     for j=1,#h do
       local x=math.max(0,math.min(1,(h[j][2]-detail.startAt)/(detail.endAt-detail.startAt)))
-      local px,py=math.floor(x*132),math.floor((domainHigh-h[j][1])/domainSpan*88)
+      local px,py=math.floor(x*182),math.floor((domainHigh-h[j][1])/domainSpan*88)
       if #pts>0 then pts[#pts+1]={px,pts[#pts][2]} end
       pts[#pts+1]={px,py}
     end
-    if #pts>0 and pts[#pts][1]<132 then pts[#pts+1]={132,pts[#pts][2]} end
-    chart:set_pos(52,90);chart:style({line_color=C.text,line_width=2})
+    if #pts>0 and pts[#pts][1]<182 then pts[#pts+1]={182,pts[#pts][2]} end
+    chart:set_pos(14,90);chart:style({line_color=C.text,line_width=2})
     if #pts>1 then chart:set_points(pts);chart:hidden(false) end
-    if #pts>0 then dot:set_pos(51+pts[#pts][1],89+pts[#pts][2]);dot:hidden(false)
+    if #pts>0 then dot:set_pos(13+pts[#pts][1],89+pts[#pts][2]);dot:hidden(false)
     end
     local state=m.status:sub(1,1)..m.status:sub(2):lower()
     text(8,"["..state.."]",212,157,98,14,"right",m.status=="OPEN" and C.up or C.muted)
@@ -230,8 +227,8 @@ function on_enter(root)
   status:style({text_font=14,text_color=C.text,text_align="right"})
   stamp=badge.ui.label(root,"");stamp:set_pos(149,16);stamp:set_size(161,17)
   stamp:style({text_font=14,text_color=C.text,text_align="right"})
-  track=box(48,86,140,97,C.panel);midline=box(48,134,140,1,C.muted);dot=box(0,0,3,3,C.text)
-  chart=badge.ui.line(root,{{0,0},{1,0}});chart:set_pos(52,90)
+  track=box(10,86,190,97,C.panel);midline=box(10,134,190,1,C.muted);dot=box(0,0,3,3,C.text)
+  chart=badge.ui.line(root,{{0,0},{1,0}});chart:set_pos(14,90)
   chart:style({line_color=C.text,line_width=2})
   listCharts={chart}
   for i=2,3 do listCharts[i]=badge.ui.line(root,{{0,0},{1,0}});listCharts[i]:hidden(true) end
