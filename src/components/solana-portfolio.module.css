@@ -17,6 +17,7 @@
 .cardHeading, .marketHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .cardHeading h3, .marketHeader h3 { margin: 4px 0 0; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
 .walletAmount { font: 652 clamp(27px, 4vw, 36px)/1 var(--font-data); letter-spacing: -.04em; overflow-wrap: anywhere; }
+.walletAmount svg, .values dd svg, .orders svg { width: .9em; height: .9em; vertical-align: -.08em; }
 .slot, .note, .noSeat p { margin: 0; color: var(--ink-muted); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
 .note { max-width: 65ch; }
 .manageLink, .marketLink { width: fit-content; display: inline-flex; align-items: center; gap: 5px; color: var(--feather-700); font-size: 13px; font-weight: 600; }
@@ -34,6 +35,12 @@
 .values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; overflow: hidden; border-radius: var(--radius-sm); background: var(--border-subtle); }
 .values > div { min-width: 0; display: grid; gap: 3px; padding: 12px; background: var(--surface-sunken); }
 .values dt { color: var(--ink-muted); font-size: 11px; }.values dd { margin: 0; font: 600 14px/1.35 var(--font-data); overflow-wrap: anywhere; }
+.orders { display: grid; gap: 9px; }
+.orders h4 { margin: 0; color: var(--ink-muted); font-size: 12px; font-weight: 600; }
+.orders ul { display: grid; gap: 1px; margin: 0; padding: 0; overflow: hidden; border-radius: var(--radius-sm); background: var(--border-subtle); list-style: none; }
+.orders li { display: grid; grid-template-columns: auto minmax(100px, 1fr) minmax(120px, auto); align-items: center; gap: 12px; padding: 12px; background: var(--surface-sunken); font-size: 13px; }
+.orders li > :nth-child(3) { text-align: right; font-family: var(--font-data); }
+.orders small { grid-column: 2 / -1; color: var(--ink-muted); }
 .inlineUnavailable, .noSeat { padding: 14px; background: var(--surface-sunken); border-radius: var(--radius-sm); }
 .inlineUnavailable strong { font-size: 13px; }.inlineUnavailable p { margin: 3px 0 0; color: var(--ink-muted); font-size: 12px; }
 .pagination { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -42,9 +49,12 @@
   .root { padding: var(--space-panel-mobile); }
   .heading { display: grid; }.heading > a { width: fit-content; }
   .marketSections { grid-template-columns: 1fr; gap: 16px; }
+  .orders li { grid-template-columns: auto 1fr; }
+  .orders li > :nth-child(3) { grid-column: 2; text-align: left; }
 }
 @media (max-width: 480px) {
   .root { margin-inline: -4px; padding: 16px; border-radius: var(--radius-md); }
+  .marketTitle { display: grid; gap: 4px; }
   .marketHeader { display: grid; gap: 10px; }.badge { width: fit-content; }
   .values { grid-template-columns: 1fr; }
   .walletAmount { font-size: 24px; }

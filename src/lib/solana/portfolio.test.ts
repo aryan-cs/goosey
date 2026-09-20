@@ -25,7 +25,7 @@ const item = (id = "7") => ({ chain: { marketId: id, marketAddress: program }, t
 const seat = () => ({ index: 1, availableCash: 18446744073709551615n, reservedCash: 100n, yes: 20n, no: 10n,
   reservedYes: 2n, reservedNo: 1n, nextNonce: 9007199254740993n, everTraded: true });
 const snapshot = () => ({ market: program, seat: seat(), finalizedSlot: 9007199254740995n,
-  orderBook: {}, resolution: { phase: 0 }, marketTerms: {}, walletTokenAmount: 777n });
+  orderBook: { orders: [] }, resolution: { phase: 0 }, marketTerms: {}, walletTokenAmount: 777n });
 const run = (query: Record<string, unknown> = {}) => readSolanaPortfolio({ userId: "current_user", runtime, query });
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubEnv("GOOSEY_SOLANA_CATALOG_ENABLED", "true");
@@ -57,8 +57,21 @@ describe("portfolio service with mocked SQL/RPC reader boundaries", () => {
     expect(text).not.toContain("rpcUrl"); expect(text).not.toContain("secret"); expect(text).not.toContain("777");
     expect(text).not.toContain("totalBalance"); expect(mocks.genesis).toHaveBeenCalledTimes(2);
   });
+  it("prefers the app-managed identity and returns only that account's resting orders", async () => {
+    mocks.custody.mockResolvedValue({ walletAddress: wallet });
+    mocks.links.mockResolvedValue([{ walletAddress: program }, { walletAddress: wallet }]);
+    mocks.escrow.mockResolvedValue({ ...snapshot(), orderBook: { orders: [
+      { id: 9n, wallet, outcome: "YES", action: "BUY", limitPrice: 640n, remaining: 2n, expiresAt: null },
+      { id: 10n, wallet: program, outcome: "NO", action: "SELL", limitPrice: 360n, remaining: 1n, expiresAt: 2_000_000_000n },
+    ] } });
+    const result = await run();
+    expect(mocks.custody).toHaveBeenCalledWith({ where: { userId_chainId_genesisHash: {
+      userId: "current_user", chainId: "solana:localnet", genesisHash: runtime.genesisHash,
+    } }, select: { walletAddress: true } });
+    expect(result.items[0]).toMatchObject({ orders: [{ id: "9", outcome: "YES", action: "BUY", limitPrice: "640", remaining: "2", expiresAt: null }] });
+  });
   it("not linked is explicit and does not read catalog/RPC or invent a zero balance", async () => {
-    mocks.links.mockResolvedValue([]);
+    mocks.custody.mockResolvedValue(null); mocks.links.mockResolvedValue([]);
     expect(await run()).toMatchObject({ status: "not-linked", wallet: null, items: [], nextCursor: null });
     expect(mocks.catalog).not.toHaveBeenCalled(); expect(mocks.balance).not.toHaveBeenCalled(); expect(mocks.genesis).not.toHaveBeenCalled();
   });
@@ -80,7 +93,7 @@ describe("portfolio service with mocked SQL/RPC reader boundaries", () => {
     expect(mocks.balance).toHaveBeenCalledWith({ runtime, wallet, signal: expect.any(AbortSignal) });
   });
   it.each([{ links: [{ walletAddress: "invalid" }] }, { links: [{ walletAddress: program }, { walletAddress: wallet }] }, { links: [{ walletAddress: "11111111111111111111111111111111" }] }])("fails closed on invalid/non-single link %j", async ({ links }) => {
-    mocks.links.mockResolvedValue(links); await expect(run()).rejects.toMatchObject({ code: "PORTFOLIO_UNAVAILABLE" });
+    mocks.custody.mockResolvedValue(null); mocks.links.mockResolvedValue(links); await expect(run()).rejects.toMatchObject({ code: "PORTFOLIO_UNAVAILABLE" });
     expect(mocks.catalog).not.toHaveBeenCalled();
   });
   it.each([undefined, "false", "TRUE"])("requires exact catalog gate %s", async flag => {

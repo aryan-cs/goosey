@@ -13,52 +13,53 @@ const wallet = { address: "SysvarRent111111111111111111111111111111111",
 const market = (marketId = "7", marketAddress = `market-${marketId}`) => ({ marketId, marketAddress,
   title: `Verified market ${marketId}`, slug: `verified-${marketId}`, href: `/chain/markets/${marketId}`,
   status: "available" as const, finalizedSlot: "9007199254740995", registered: true,
-  seat: { availableCash: "18446744073709551615", reservedCash: "1000", yes: "20", no: "10", reservedYes: "2", reservedNo: "1" } });
+  seat: { availableCash: "18446744073709551615", reservedCash: "1000", yes: "20", no: "10", reservedYes: "2", reservedNo: "1" },
+  orders: [{ id: "9", outcome: "YES" as const, action: "BUY" as const, limitPrice: "640", remaining: "2", expiresAt: null }] });
 type LinkedPortfolio = Extract<SolanaPortfolioData, { status: "linked" }>;
 const linked = (items: LinkedPortfolio["items"] = [market()]): LinkedPortfolio => ({ status: "linked", wallet, items, hasMore: false, nextCursor: null });
 const view = (data: SolanaPortfolioData | null, patch: Partial<React.ComponentProps<typeof SolanaPortfolioView>> = {}) => renderToStaticMarkup(<SolanaPortfolioView
-  data={data} loading={false} loadingMore={false} error={null} capped={false} onRetry={() => undefined} onLoadMore={() => undefined} {...patch} />);
+  data={data} loading={false} loadingMore={false} error={null} capped={false} nowMs={1_800_000_000_000} onRetry={() => undefined} onLoadMore={() => undefined} {...patch} />);
 
 describe("SolanaPortfolio", () => {
-  it("formats full-range feather strings at exactly three decimals without precision loss", () => {
-    expect(formatFeatherAmount("0")).toBe("0.000 🪶");
-    expect(formatFeatherAmount("1")).toBe("0.001 🪶");
-    expect(formatFeatherAmount("18446744073709551615")).toBe("18,446,744,073,709,551.615 🪶");
+  it("formats full-range feather strings to the nearest feather without precision loss", () => {
+    expect(formatFeatherAmount("0")).toBe("0");
+    expect(formatFeatherAmount("1")).toBe("0");
+    expect(formatFeatherAmount("18446744073709551615")).toBe("18,446,744,073,709,552");
     expect(() => formatFeatherAmount("1.5")).toThrow();
   });
 
-  it("renders wallet-held and each market escrow separately with slots and no estimate language", () => {
+  it("renders ordinary account, position and order language without wallet or chain branding", () => {
     const html = view(linked());
-    expect(html).toContain("Wallet-held");
-    expect(html).toContain("9,007,199,254,740.993 🪶");
-    expect(html).toContain("Finalized at slot 9007199254740994");
-    expect(html).toContain("Available feathers");
-    expect(html).toContain("18,446,744,073,709,551.615 🪶");
+    expect(html).toContain("Account balance");
+    expect(html).toContain("9,007,199,254,741");
+    expect(html).toContain("Feathers in this market");
+    expect(html).toContain("18,446,744,073,709,552");
     expect(html).toContain("Reserved YES"); expect(html).toContain("Reserved NO");
-    expect(html).toContain("Finalized at slot 9007199254740995");
+    expect(html).toContain("Open orders"); expect(html).toContain("Buy YES"); expect(html).toContain("2 contracts");
+    expect(html).toContain('href="/markets/verified-7"');
     expect(html).not.toMatch(/net worth|profit|loss|p&l|estimated value/i);
-    expect(html).not.toContain("genesis"); expect(html).not.toContain("rpc");
+    expect(html.replace(/<[^>]+>/g, " ")).not.toMatch(/solana|on-chain|wallet|slot|genesis|rpc|🪶/i);
   });
 
   it("distinguishes not linked, wallet unavailable, empty catalog, market unavailable and no seat", () => {
-    expect(view({ status: "not-linked", wallet: null, items: [], hasMore: false, nextCursor: null })).toContain("Link a Solana wallet");
-    expect(view({ ...linked(), wallet: { ...wallet, balance: { status: "unavailable", code: "WALLET_BALANCE_UNAVAILABLE" } } })).toContain("Wallet balance unavailable");
-    expect(view(linked([]))).toContain("No published on-chain markets");
+    expect(view({ status: "not-linked", wallet: null, items: [], hasMore: false, nextCursor: null })).toContain("trading account is getting ready");
+    expect(view({ ...linked(), wallet: { ...wallet, balance: { status: "unavailable", code: "WALLET_BALANCE_UNAVAILABLE" } } })).toContain("Balance unavailable");
+    expect(view(linked([]))).toContain("No active positions");
     const unavailable: LinkedPortfolio["items"][number] = { marketId: "7", marketAddress: "market-7",
       title: "Verified market 7", slug: "verified-7", href: "/chain/markets/7",
       status: "unavailable", code: "MARKET_STATE_UNAVAILABLE" };
-    expect(view(linked([unavailable]))).toContain("Market state unavailable");
-    expect(view(linked([{ ...market(), registered: false, seat: null }]))).toContain("No market seat");
+    expect(view(linked([unavailable]))).toContain("Market details unavailable");
+    expect(view(linked([{ ...market(), registered: false, seat: null }]))).toContain("No active positions");
   });
 
   it("renders accessible loading, unavailable, retry and bounded pagination states", () => {
     const loading = view(null, { loading: true });
     expect(loading).toContain('aria-busy="true"'); expect(loading).toContain('role="status"');
     const error = view(null, { error: "unavailable" });
-    expect(error).toContain('role="alert"'); expect(error).toContain("catalog is disabled or its verified data source is unavailable");
+    expect(error).toContain('role="alert"'); expect(error).toContain("current balance and positions could not be verified");
     expect(error).toContain(">Retry</button>");
     const more = view({ ...linked(), hasMore: true, nextCursor: "opaque" });
-    expect(more).toContain("Load more markets");
+    expect(more).toContain("Load more");
     expect(view({ ...linked(), hasMore: true, nextCursor: "opaque" }, { capped: true })).toContain("Showing the first");
     expect(MAX_PORTFOLIO_PAGES).toBe(10);
   });
@@ -84,6 +85,7 @@ describe("SolanaPortfolio", () => {
       { ...linked(), wallet: { ...wallet, balance: { ...wallet.balance, amount: "9007199254740993.0" } } },
       { ...linked(), items: [{ ...market(), registered: false }] },
       { ...linked(), items: [{ ...market(), seat: { ...market().seat, reservedYes: "21" } }] },
+      { ...linked(), items: [{ ...market(), orders: [{ ...market().orders[0], remaining: "1.5" }] }] },
       { ...linked(), hasMore: true, nextCursor: null },
       { ...linked([]), hasMore: true, nextCursor: "opaque" },
     ]) expect(() => parsePortfolioResponse(value)).toThrow(PortfolioReadError);

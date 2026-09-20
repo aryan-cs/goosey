@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   market: { findMany: vi.fn(), findUnique: vi.fn() },
@@ -11,6 +12,7 @@ const state = vi.hoisted(() => ({
   marketOrder: { findMany: vi.fn() },
   orderFill: { count: vi.fn(), findMany: vi.fn() },
   marketEvent: { findUnique: vi.fn() },
+  solanaCustodyIdentity: { findUnique: vi.fn() },
   marks: vi.fn(), valuations: vi.fn(), serverUser: vi.fn(),
 }));
 vi.mock("./db", () => ({ db: state }));
@@ -21,6 +23,7 @@ vi.mock("./market-marks", () => ({ loadMarketMarks: state.marks }));
 vi.mock("./position-valuation", () => ({ loadPositionValuations: state.valuations }));
 vi.mock("./leaderboard", () => ({ getLeaderboardRows: async () => [] }));
 vi.mock("./public-trade-activity", () => ({ loadPublicTradeActivity: async () => [] }));
+vi.mock("./solana/runtime", () => ({ resolveSolanaRuntime: () => ({ cluster: "localnet", genesisHash: "genesis" }) }));
 vi.mock("next/navigation", () => ({
   notFound: () => { throw new Error("NEXT_NOT_FOUND"); },
   redirect: (url: string) => { throw new Error(`NEXT_REDIRECT:${url}`); },
@@ -57,7 +60,9 @@ beforeEach(() => {
   state.trade.groupBy.mockResolvedValue([]);
   state.marketOrder.findMany.mockResolvedValue([]);
   state.orderFill.findMany.mockResolvedValue([]);
+  state.solanaCustodyIdentity.findUnique.mockResolvedValue(null);
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("legacy server page SQL query boundaries (mocked reads)", () => {
   it("filters home cards before marks while retaining live-only membership", async () => {
@@ -107,6 +112,17 @@ describe("legacy server page SQL query boundaries (mocked reads)", () => {
       userId: "viewer", market: boundary, cashAccountId: { not: null },
     } }));
     expect(state.valuations).toHaveBeenCalledWith(state, []);
+  });
+  it("renders the managed active portfolio without querying or labeling legacy totals", async () => {
+    vi.stubEnv("GOOSEY_SOLANA_CATALOG_ENABLED", "true");
+    state.solanaCustodyIdentity.findUnique.mockResolvedValue({ id: "managed" });
+    const html = renderToStaticMarkup(await PortfolioPage({ searchParams: Promise.resolve({}) }));
+    expect(html).toContain("Active positions");
+    expect(html).not.toContain("Total value");
+    expect(state.position.findMany).not.toHaveBeenCalled();
+    expect(state.solanaCustodyIdentity.findUnique).toHaveBeenCalledWith({ where: {
+      userId_chainId_genesisHash: { userId: "viewer", chainId: "solana:localnet", genesisHash: "genesis" },
+    }, select: { id: true } });
   });
   it("redirects the retired portfolio orders view to dedicated order management", async () => {
     await expect(PortfolioPage({ searchParams: Promise.resolve({ view: "orders" }) })).rejects.toThrow("NEXT_REDIRECT:/portfolio/activity");

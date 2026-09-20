@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Feather, ShieldCheck, Wallet } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { FeatherIcon } from "./brand";
+import { formatFeathers } from "@/lib/feather-format";
 import styles from "./solana-portfolio.module.css";
 
 const PAGE_SIZE = 10;
@@ -34,6 +36,14 @@ type AvailableMarket = {
     reservedYes: string;
     reservedNo: string;
   };
+  orders: Array<{
+    id: string;
+    outcome: "YES" | "NO";
+    action: "BUY" | "SELL";
+    limitPrice: string;
+    remaining: string;
+    expiresAt: string | null;
+  }>;
 };
 
 type UnavailableMarket = Pick<AvailableMarket, "marketId" | "marketAddress" | "title" | "slug" | "href"> & {
@@ -101,8 +111,17 @@ function parseMarket(value: unknown): AvailableMarket | UnavailableMarket | null
   }
   if (value.status !== "available" || !exactU64(value.finalizedSlot) || typeof value.registered !== "boolean") return null;
   const seat = parseSeat(value.seat);
-  if (seat === undefined || value.registered !== (seat !== null)) return null;
-  return { ...identity, status: "available", finalizedSlot: value.finalizedSlot, registered: value.registered, seat };
+  if (seat === undefined || value.registered !== (seat !== null) || !Array.isArray(value.orders)) return null;
+  const orders = value.orders.map(order => {
+    if (!record(order) || !exactU64(order.id) || !["YES", "NO"].includes(order.outcome as string)
+      || !["BUY", "SELL"].includes(order.action as string) || !exactU64(order.limitPrice)
+      || !exactU64(order.remaining) || !(order.expiresAt === null || exactU64(order.expiresAt))) return null;
+    return { id: order.id as string, outcome: order.outcome as "YES" | "NO", action: order.action as "BUY" | "SELL",
+      limitPrice: order.limitPrice as string, remaining: order.remaining as string, expiresAt: order.expiresAt as string | null };
+  });
+  if (orders.some(order => order === null)) return null;
+  return { ...identity, status: "available", finalizedSlot: value.finalizedSlot, registered: value.registered, seat,
+    orders: orders as AvailableMarket["orders"] };
 }
 
 export function parsePortfolioResponse(value: unknown): SolanaPortfolioData {
@@ -154,8 +173,7 @@ export async function requestPortfolioPage(cursor: string | null, signal: AbortS
 
 export function formatFeatherAmount(value: string) {
   if (!exactU64(value)) throw new Error("Invalid feather amount");
-  const amount = BigInt(value);
-  return `${(amount / 1000n).toLocaleString("en-CA")}.${(amount % 1000n).toString().padStart(3, "0")} 🪶`;
+  return formatFeathers(BigInt(value));
 }
 
 function contracts(value: string) {
@@ -172,13 +190,13 @@ export function mergePortfolioItems(current: SolanaPortfolioData | null, incomin
 
 function StateAction({ kind, retry }: { kind: ReadErrorKind; retry: () => void }) {
   const signedOut = kind === "signed-out";
-  const title = kind === "unavailable" ? "On-chain portfolio unavailable"
+  const title = kind === "unavailable" ? "Portfolio temporarily unavailable"
     : kind === "rate-limited" ? "Portfolio refresh paused"
-      : signedOut ? "Sign in again to view your portfolio" : "Could not load on-chain portfolio";
-  const copy = kind === "unavailable" ? "The on-chain catalog is disabled or its verified data source is unavailable. No cached balances are shown."
+      : signedOut ? "Sign in again to view your portfolio" : "Could not load your portfolio";
+  const copy = kind === "unavailable" ? "Your current balance and positions could not be verified. No cached amounts are shown."
     : kind === "rate-limited" ? "Too many refreshes were requested. Wait a moment, then retry."
-      : signedOut ? "Your session ended. Your on-chain accounts have not changed."
-        : "The private portfolio response could not be verified. No balances are shown.";
+      : signedOut ? "Your session ended. Your account has not changed."
+        : "Your portfolio response could not be verified. No balances are shown.";
   return <div className={styles.state} role="alert"><h3>{title}</h3><p>{copy}</p>
     {signedOut ? <Link className="button button-primary" href="/login?next=%2Fportfolio">Sign in</Link>
       : <button type="button" className="button button-secondary" onClick={retry}>Retry</button>}</div>;
@@ -186,28 +204,27 @@ function StateAction({ kind, retry }: { kind: ReadErrorKind; retry: () => void }
 
 function WalletCard({ wallet }: { wallet: Extract<SolanaPortfolioData, { status: "linked" }>["wallet"] }) {
   return <article className={`${styles.card} ${styles.walletCard}`}>
-    <div className={styles.cardHeading}><div><span className={styles.eyebrow}>Wallet-held</span><h3>Feathers outside market escrow</h3></div><Wallet aria-hidden="true" size={20} /></div>
+    <div className={styles.cardHeading}><div><span className={styles.eyebrow}>Account balance</span><h3>Feathers ready to use</h3></div></div>
     {wallet.balance.status === "available" ? <>
-      <strong className={styles.walletAmount}>{formatFeatherAmount(wallet.balance.amount)}</strong>
-      <p className={styles.slot}>Finalized at slot {wallet.balance.finalizedSlot}</p>
-      {wallet.balance.accountStatus === "absent" && <p className={styles.note}>No feather token account exists for this wallet yet. The verified wallet-held balance is zero.</p>}
-    </> : <div className={styles.inlineUnavailable} role="status"><strong>Wallet balance unavailable</strong><p>Market escrow snapshots may still be shown below. This balance is not treated as zero.</p></div>}
-    <Link className={styles.manageLink} href="/wallet">Wallet setup and account link <ArrowRight size={15} aria-hidden="true" /></Link>
+      <strong className={styles.walletAmount}><FeatherIcon /> {formatFeatherAmount(wallet.balance.amount)}</strong>
+      {wallet.balance.accountStatus === "absent" && <p className={styles.note}>No feathers are available in your account yet.</p>}
+    </> : <div className={styles.inlineUnavailable} role="status"><strong>Balance unavailable</strong><p>Market positions may still be shown below. This balance is not treated as zero.</p></div>}
   </article>;
 }
 
-function MarketCard({ item }: { item: AvailableMarket | UnavailableMarket }) {
+function MarketCard({ item, nowMs }: { item: AvailableMarket | UnavailableMarket; nowMs: number }) {
+  const marketHref = `/markets/${encodeURIComponent(item.slug)}`;
   return <article className={styles.marketCard}>
-    <header className={styles.marketHeader}><div><span className={styles.eyebrow}>On-chain market</span><h3><Link href={item.href}>{item.title}</Link></h3></div>
+    <header className={styles.marketHeader}><div><span className={styles.eyebrow}>Active market</span><h3><Link href={marketHref}>{item.title}</Link></h3></div>
       <span className={`${styles.badge} ${item.status === "available" && item.registered ? styles.active : ""}`}>
-        {item.status === "unavailable" ? "Unavailable" : item.registered ? "Seat registered" : "No market seat"}
+        {item.status === "unavailable" ? "Unavailable" : item.registered ? "Active" : "No position"}
       </span></header>
-    {item.status === "unavailable" ? <div className={styles.inlineUnavailable} role="status"><strong>Market state unavailable</strong><p>No escrow or position amounts are shown for this market.</p></div>
-      : item.seat === null ? <div className={styles.noSeat}><p>This wallet has no escrow or position seat in this market.</p><p className={styles.slot}>Verified at finalized slot {item.finalizedSlot}</p></div>
+    {item.status === "unavailable" ? <div className={styles.inlineUnavailable} role="status"><strong>Market details unavailable</strong><p>No reserved feathers, positions, or orders are shown for this market.</p></div>
+      : item.seat === null ? <div className={styles.noSeat}><p>You have no active position in this market.</p></div>
         : <><div className={styles.marketSections}>
-          <section aria-label={`${item.title} escrow`}><h4>Market escrow</h4><dl className={styles.values}>
-            <div><dt>Available feathers</dt><dd>{formatFeatherAmount(item.seat.availableCash)}</dd></div>
-            <div><dt>Reserved feathers</dt><dd>{formatFeatherAmount(item.seat.reservedCash)}</dd></div>
+          <section aria-label={`${item.title} feathers`}><h4>Feathers in this market</h4><dl className={styles.values}>
+            <div><dt>Available</dt><dd><FeatherIcon /> {formatFeatherAmount(item.seat.availableCash)}</dd></div>
+            <div><dt>Reserved</dt><dd><FeatherIcon /> {formatFeatherAmount(item.seat.reservedCash)}</dd></div>
           </dl></section>
           <section aria-label={`${item.title} positions`}><h4>Positions</h4><dl className={styles.values}>
             <div><dt>YES contracts</dt><dd>{contracts(item.seat.yes)}</dd></div>
@@ -215,39 +232,45 @@ function MarketCard({ item }: { item: AvailableMarket | UnavailableMarket }) {
             <div><dt>NO contracts</dt><dd>{contracts(item.seat.no)}</dd></div>
             <div><dt>Reserved NO</dt><dd>{contracts(item.seat.reservedNo)}</dd></div>
           </dl></section>
-        </div><p className={styles.slot}>Finalized at slot {item.finalizedSlot}. Contract totals include their reserved amounts.</p></>}
-    <Link className={styles.marketLink} href={item.href}>Open verified market <ArrowRight size={15} aria-hidden="true" /></Link>
+        </div>{item.orders.length > 0 && <section className={styles.orders} aria-label={`${item.title} open orders`}><h4>Open orders</h4><ul>{item.orders.map(order => {
+          const expired = order.expiresAt !== null && BigInt(order.expiresAt) * 1000n <= BigInt(nowMs);
+          return <li key={order.id}><span className={`side-badge ${order.outcome.toLowerCase()}`}>{order.action === "BUY" ? "Buy" : "Sell"} {order.outcome}</span><span>{contracts(order.remaining)} {order.remaining === "1" ? "contract" : "contracts"}</span><span><FeatherIcon /> {formatFeatherAmount(order.limitPrice)} each</span>{expired && <small>Expired · cleanup pending</small>}</li>;
+        })}</ul></section>}<p className={styles.note}>Contract totals include amounts reserved by open orders.</p></>}
+    <Link className={styles.marketLink} href={marketHref}>View market <ArrowRight size={15} aria-hidden="true" /></Link>
   </article>;
 }
 
-export function SolanaPortfolioView({ data, loading, loadingMore, error, capped, onRetry, onLoadMore }: {
+export function SolanaPortfolioView({ data, loading, loadingMore, error, capped, nowMs, onRetry, onLoadMore }: {
   data: SolanaPortfolioData | null;
   loading: boolean;
   loadingMore: boolean;
   error: ReadErrorKind | null;
   capped: boolean;
+  nowMs: number;
   onRetry: () => void;
   onLoadMore: () => void;
 }) {
-  return <section className={styles.root} aria-labelledby="solana-portfolio-heading" aria-busy={loading || loadingMore}>
-    <header className={styles.heading}><div><span className={styles.eyebrow}><Feather size={14} aria-hidden="true" /> Goosey on Solana</span>
-      <h2 id="solana-portfolio-heading">On-chain portfolio</h2><p>Wallet and market holdings from verified finalized chain reads.</p></div>
-      <Link className="button button-secondary" href="/chain">Browse on-chain markets</Link></header>
-    <aside className={styles.integrity}><ShieldCheck size={19} aria-hidden="true" /><p>Wallet-held feathers and every market escrow can be observed at different finalized slots. They are displayed separately; no combined total is calculated.</p></aside>
-    {loading && !data && <div className={styles.loading} role="status"><span>Loading private on-chain portfolio…</span><div /><div /></div>}
+  const visibleItems = data?.status === "linked"
+    ? data.items.filter(item => item.status === "unavailable" || item.seat !== null)
+    : [];
+  return <section className={styles.root} aria-labelledby="managed-portfolio-heading" aria-busy={loading || loadingMore}>
+    <header className={styles.heading}><div><span className={styles.eyebrow}>Current account</span>
+      <h2 id="managed-portfolio-heading">Active positions</h2><p>Your available feathers, open positions, and resting orders.</p></div></header>
+    <aside className={styles.integrity}><p>Balances are verified independently. They stay separate here so an unavailable market cannot be mistaken for a zero balance.</p></aside>
+    {loading && !data && <div className={styles.loading} role="status"><span>Loading your portfolio…</span><div /><div /></div>}
     {!loading && !data && error && <StateAction kind={error} retry={onRetry} />}
-    {data?.status === "not-linked" && <div className={styles.state}><h3>Link a Solana wallet</h3><p>Link the wallet you use for Goosey to read its feathers and published-market positions.</p><Link className="button button-primary" href="/wallet">Set up wallet</Link></div>}
+    {data?.status === "not-linked" && <div className={styles.state}><h3>Your trading account is getting ready</h3><p>Your active positions will appear here after your first trade.</p><Link className="button button-primary" href="/markets">Find a market</Link></div>}
     {data?.status === "linked" && <div className={styles.content}>
       <WalletCard wallet={data.wallet} />
-      <div className={styles.marketTitle}><h3>Published market holdings</h3><p>Each card is an independent market snapshot.</p></div>
-      {!data.items.length ? <div className={styles.state}><h3>No published on-chain markets</h3><p>There are no verified published markets to inspect. No sample positions or prices are shown.</p><Link className="button button-secondary" href="/chain">View market directory</Link></div>
-        : <div className={styles.markets}>{data.items.map(item => <MarketCard key={item.marketAddress} item={item} />)}</div>}
+      <div className={styles.marketTitle}><h3>Open markets</h3><p>Only active positions and resting orders appear here.</p></div>
+      {!visibleItems.length ? <div className={styles.state}><h3>No active positions</h3><p>Your positions and orders will appear here after you trade.</p><Link className="button button-secondary" href="/markets">Find a market</Link></div>
+        : <div className={styles.markets}>{visibleItems.map(item => <MarketCard key={item.marketAddress} item={item} nowMs={nowMs} />)}</div>}
       {error && <StateAction kind={error} retry={onRetry} />}
       <div className={styles.pagination}>
-        <span role="status">{data.items.length ? `${data.items.length} ${data.items.length === 1 ? "market" : "markets"} shown` : ""}</span>
-        {data.nextCursor && !capped && <button type="button" className="button button-secondary" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? "Loading more…" : "Load more markets"}</button>}
+        <span role="status">{visibleItems.length ? `${visibleItems.length} ${visibleItems.length === 1 ? "market" : "markets"} shown` : ""}</span>
+        {data.nextCursor && !capped && <button type="button" className="button button-secondary" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? "Loading more…" : "Load more"}</button>}
       </div>
-      {capped && <p className={styles.cap} role="status">Showing the first {data.items.length} published markets. Open the market directory to browse the rest.</p>}
+      {capped && <p className={styles.cap} role="status">Showing the first {data.items.length} active markets.</p>}
     </div>}
   </section>;
 }
@@ -260,6 +283,7 @@ export function SolanaPortfolio() {
   const [error, setError] = useState<ReadErrorKind | null>(null);
   const [pages, setPages] = useState(0);
   const [capped, setCapped] = useState(false);
+  const [nowMs, setNowMs] = useState(0);
   const cursors = useRef(new Set<string>());
 
   useEffect(() => {
@@ -285,6 +309,30 @@ export function SolanaPortfolio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
 
+  useEffect(() => {
+    function refresh() {
+      if (document.visibilityState !== "visible" || !navigator.onLine || loading || loadingMore || error || request.cursor) return;
+      setRequest(current => ({ cursor: null, attempt: current.attempt + 1 }));
+    }
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loading, loadingMore, error, request.cursor]);
+
+  useEffect(() => {
+    const update = () => setNowMs(Date.now());
+    update();
+    const timer = window.setInterval(update, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   function retry() {
     if (loading || loadingMore) return;
     setError(null);
@@ -297,5 +345,5 @@ export function SolanaPortfolio() {
     setRequest(current => ({ cursor: data.nextCursor, attempt: current.attempt + 1 }));
   }
 
-  return <SolanaPortfolioView data={data} loading={loading} loadingMore={loadingMore} error={error} capped={capped} onRetry={retry} onLoadMore={loadMore} />;
+  return <SolanaPortfolioView data={data} loading={loading} loadingMore={loadingMore} error={error} capped={capped} nowMs={nowMs} onRetry={retry} onLoadMore={loadMore} />;
 }

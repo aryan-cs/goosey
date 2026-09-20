@@ -79,11 +79,16 @@ export async function readSolanaPortfolio(input: { userId: string; runtime: Sola
       const snapshot = await readGooseyEscrow(runtime, { marketId: BigInt(item.chain.marketId), wallet }, { signal, includeMarketTerms: true });
       if (snapshot.market !== item.chain.marketAddress || !snapshot.orderBook || !snapshot.resolution || !snapshot.marketTerms) throw unavailable();
       const seat = snapshot.seat;
+      const orders = snapshot.orderBook.orders.filter(order => order.wallet === wallet).map(order => ({
+        id: order.id.toString(), outcome: order.outcome, action: order.action,
+        limitPrice: order.limitPrice.toString(), remaining: order.remaining.toString(),
+        expiresAt: order.expiresAt?.toString() ?? null,
+      }));
       return { ...identity, status: "available" as const, finalizedSlot: snapshot.finalizedSlot.toString(),
         registered: seat !== null, seat: seat === null ? null : { index: seat.index,
           availableCash: seat.availableCash.toString(), reservedCash: seat.reservedCash.toString(),
           yes: seat.yes.toString(), no: seat.no.toString(), reservedYes: seat.reservedYes.toString(), reservedNo: seat.reservedNo.toString(),
-          nextNonce: seat.nextNonce.toString(), everTraded: seat.everTraded },
+          nextNonce: seat.nextNonce.toString(), everTraded: seat.everTraded }, orders,
         resolutionPhase: snapshot.resolution.phase };
     } catch { return { ...identity, status: "unavailable" as const, code: "MARKET_STATE_UNAVAILABLE" as const }; }
   }

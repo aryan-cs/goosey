@@ -19,6 +19,8 @@ import { ApiError } from "@/lib/market-service";
 import { TradeHistory } from "@/components/trade-history";
 import { authDestination, authPageHref } from "@/lib/auth-destination";
 import { PortfolioSwitcher } from "./portfolio-switcher";
+import { SolanaPortfolio } from "@/components/solana-portfolio";
+import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,18 @@ export default async function PortfolioPage({ searchParams }: { searchParams: Pr
   const user = await getServerUser();
   if (!user) return <div className="page-shell centered-state"><EmptyState title="Your picks, all in one place" description="Sign in to see your picks, trades, and feathers." action={<Link className="button button-primary" href={authPageHref("/login", destination)}>Sign in</Link>} /></div>;
   if (requiresEmailVerification(user)) redirect(`/verify-email?next=${encodeURIComponent(destination)}`);
+  let hasManagedAccount = false;
+  try {
+    const runtime = resolveSolanaRuntime();
+    hasManagedAccount = Boolean(await db.solanaCustodyIdentity.findUnique({
+      where: { userId_chainId_genesisHash: { userId: user.id, chainId: `solana:${runtime.cluster}`, genesisHash: runtime.genesisHash } },
+      select: { id: true },
+    }));
+  } catch { hasManagedAccount = false; }
+  if (hasManagedAccount) return <div className="page-shell portfolio-page">
+    <header className="page-header"><h1>Portfolio</h1><div className={styles.links}><Link className="section-link" href="/watchlist">Watchlist</Link></div></header>
+    <SolanaPortfolio />
+  </div>;
   let cursor: TradeHistoryCursor | undefined;
   let invalidCursor = false;
   try {
