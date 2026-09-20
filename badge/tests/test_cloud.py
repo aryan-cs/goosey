@@ -66,7 +66,7 @@ selected_box=next(w for w in g.widgets.values() if w.kind=='box' and not w.hide 
 assert (selected_box.x,selected_box.y,selected_box.w,selected_box.h)==(5,36,310,61)
 snapshot('cloud-list')
 for index,market in enumerate(source['markets']):
-    press('A');has('Market');has(f"{market['probability']:.0f}%");has('Loading 4H')
+    press('A');has('Market');has(f"{market['probability']:.0f}%");has('Loading 4H History...')
     assert g.files['appdata/detail_request.txt']==f"GD1\t{market['slug']}\n"
     points=[[market['probability'],1234567880000]]
     if index==0: points=[[50,1234567880000],[61.23,1234575090000],[market['probability'],1234578690000]]
@@ -74,14 +74,18 @@ for index,market in enumerate(source['markets']):
     has('Past 4 Hours');has(market['closes']);has('Vol '+market['volume'])
     if index==0:
         has(f"{market['probability']-50:+.0f} pts")
+        market_title=next(w for w in g.widgets.values() if not w.hide and w.x==10 and w.y==36)
         probability=next(w for w in g.widgets.values() if not w.hide and w.text==f"{market['probability']:.0f}%" and w.x==212)
         change=next(w for w in g.widgets.values() if not w.hide and w.text.startswith(f"{market['probability']-50:+.0f} pts"))
         volume=next(w for w in g.widgets.values() if not w.hide and w.text=='Vol '+market['volume'])
         market_status=next(w for w in g.widgets.values() if not w.hide and w.text=='[Open]')
         close_label=next(w for w in g.widgets.values() if not w.hide and w.text=='Closes '+market['closes'])
-        assert (probability.y,probability.w,probability.styles['text_font'])==(87,98,24)
-        assert (change.x,change.y,change.w)==(212,120,98)
-        assert (volume.x,volume.y,volume.w)==(212,158,98)
+        title_lines=market_title.text.split('\n')
+        assert (market_title.w,market_title.styles['text_font'])==(300,16) and len(title_lines)<=2
+        assert (probability.y,probability.w,probability.styles['text_font'])==(100,98,24)
+        assert (change.x,change.y,change.w,change.styles['text_align'])==(10,36+18*len(title_lines),190,'left')
+        assert change.text.endswith(' | Past 4 Hours') and change.y+14<=90
+        assert (volume.x,volume.y,volume.w)==(212,139,98)
         assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(10,186,90,'left')
         assert market_status.styles['text_color']==0x267a35
         assert (close_label.x,close_label.y,close_label.w,close_label.styles['text_align'])==(100,186,210,'right')
@@ -99,7 +103,8 @@ assert g.files['appdata/request.txt'] in (None,'')
 # Real selected-market mailbox histories, not the catalog frame, drive charts.
 for generation,points in ((2000,[]),(2001,[[50,1234567890000]])):
     press('A');load_detail(source['markets'][0],generation,points)
-    if not points:has('No History')
+    expected='1 Price | Past 4 Hours' if points else 'No History | Past 4 Hours'
+    has(expected);assert ' pts' not in expected
     snapshot('cloud-empty' if not points else 'cloud-single');press('B')
 # Bracketed terminal states stay distinct from the right-aligned close field.
 closed=json.loads(json.dumps(source));closed['markets'][0]['status']='CLOSED';load(closed,3000);tick(g.clock+2000);press('A')

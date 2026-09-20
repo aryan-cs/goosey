@@ -16,18 +16,20 @@ local function wrap(s,limit)
   end
   return out..line
 end
-local function wrapCard(s)
+local function wrapCard(s,limit)
+  limit=limit or 22
   local lines={"",""}
   local current=1
   local overflow=false
   for word in s:gmatch("%S+") do
+    if #word>limit then word=word:sub(1,limit-3).."..." end
     local candidate=lines[current]=="" and word or lines[current].." "..word
-    if #candidate<=22 then lines[current]=candidate
+    if #candidate<=limit then lines[current]=candidate
     elseif current==1 then current=2;lines[current]=word
     else overflow=true;break end
   end
   if overflow then
-    while #lines[2]>19 do lines[2]=lines[2]:match("^(.*)%s+%S+$") or lines[2]:sub(1,19) end
+    while #lines[2]>limit-3 do lines[2]=lines[2]:match("^(.*)%s+%S+$") or lines[2]:sub(1,limit-3) end
     lines[2]=lines[2].."..."
   end
   return lines[2]=="" and lines[1] or lines[1].."\n"..lines[2]
@@ -146,13 +148,17 @@ local function render()
       end
     end
   elseif page=="detail" then
-    text(1,wrap(m.title,39),10,36,300,14)
-    text(2,string.format("%.0f%%",m.probability),212,87,98,24,"right")
+    local detailTitle=wrapCard(m.title,34)
+    local titleLines=detailTitle:find("\n",1,true) and 2 or 1
+    text(1,detailTitle,10,36,300,16)
     local h=detail and detail.slug==m.slug and detail.history or {}
-    local change=#h>0 and h[#h][1]-h[1][1] or nil
-    local changeText=change and string.format("%+.0f pts",change) or (detail and "No History" or "Loading 4H")
-    text(3,changeText.."\nPast 4 Hours",212,120,98,14,"right",change and (change<0 and C.down or C.up) or C.muted)
-    text(7,"Vol "..m.volume,212,158,98,14,"right")
+    local change=#h>1 and h[#h][1]-h[1][1] or nil
+    local changeText=change and string.format("%+.0f pts | Past 4 Hours",change)
+      or not detail and "Loading 4H History..."
+      or #h==1 and "1 Price | Past 4 Hours" or "No History | Past 4 Hours"
+    text(3,changeText,10,36+titleLines*18,190,14,"left",change and (change<0 and C.down or C.up) or C.muted)
+    text(2,string.format("%.0f%%",m.probability),212,100,98,24,"right")
+    text(7,"Vol "..m.volume,212,139,98,14,"right")
     track:hidden(false);midline:hidden(false)
     local low,high=100,0
     for j=1,#h do low=math.min(low,h[j][1]);high=math.max(high,h[j][1]) end
