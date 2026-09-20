@@ -40,6 +40,7 @@ assert '765.43' not in g.visible() and '@old_local' not in g.visible()
 g.files['appdata/account.txt']=f'GA1\t1\t{challenge}\tREADY\tbadge_test\t1000000\tEND\n'
 load(source,100)
 has('@badge_test · 1000.00 feathers');press('A');has('Markets')
+press('START');has('Account Info');assert 'Linked account' not in g.visible();snapshot('cloud-settings');press('B')
 first=source['markets'][0]
 has(first['category'].upper());has('Vol '+first['volume']);has(first['closes'].replace(' UTC','Z'))
 close_text=first['closes'].replace(' UTC','Z')

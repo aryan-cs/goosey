@@ -181,7 +181,7 @@ local function render()
     text(9,string.format("YES  %.0f%%",m.probability),18,212,132,16)
     text(10,string.format("NO  %.0f%%",100-m.probability),176,212,132,16)
   elseif page=="settings" then
-    local options={"Return to markets","Trade selected market","Linked account"}
+    local options={"Return to markets","Trade selected market","Account Info"}
     for i=1,3 do text(i,options[i],18,54+(i-1)*46,285,18) end
     focus(7,47+(setting-1)*46,307,39)
     text(5,"USB account and market sync",10,211,300,14)
