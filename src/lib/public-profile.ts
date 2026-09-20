@@ -1,6 +1,7 @@
 import type { Market, Position, Prisma } from "@prisma/client";
 
 import { DATABASE_MARKET_FILTER } from "@/lib/market-backend";
+import { contributedCapitalDelta } from "@/lib/admin-balance-adjustment";
 import { loadPositionValuations } from "@/lib/position-valuation";
 import { loadTradeHistory, type TradeHistoryItem } from "@/lib/trade-history";
 import { loadTradingActivity } from "@/lib/trading-activity";
@@ -120,7 +121,7 @@ export async function loadPublicProfile(
         balanceMilli: true,
         postings: {
           where: { journalEntry: { status: "POSTED" } },
-          select: { amountMilli: true, createdAt: true, id: true, journalEntry: { select: { type: true } } },
+          select: { amountMilli: true, createdAt: true, id: true, journalEntry: { select: { type: true, metadata: true } } },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         },
       },
@@ -155,9 +156,10 @@ export async function loadPublicProfile(
   const reservedCashMilli = reservations.reduce((sum, reservation) => sum + (reservation.cashAccount?.balanceMilli ?? 0n), 0n);
   const positionValueMilli = user.positions.reduce((sum, position) => sum + valuations.get(position.id)!.valueMilli, 0n);
   const equityMilli = availableCashMilli + reservedCashMilli + positionValueMilli;
-  const contributedMilli = (wallet?.postings ?? []).reduce((sum, posting) => {
-    return ["WELCOME_GRANT", "ADMIN_GRANT"].includes(posting.journalEntry.type) && posting.amountMilli > 0n ? sum + posting.amountMilli : sum;
-  }, 0n);
+  const contributedMilli = (wallet?.postings ?? []).reduce(
+    (sum, posting) => sum + contributedCapitalDelta(posting.journalEntry.type, posting.amountMilli, posting.journalEntry.metadata),
+    0n,
+  );
 
   let balance = 0n;
   const balanceSeries = compactSeries((wallet?.postings ?? []).map((posting) => {

@@ -7,6 +7,7 @@ import { ModerationQueue } from "@/components/moderation-queue";
 import { SuggestionQueue } from "@/components/suggestion-queue";
 import { ResolutionQueue } from "@/components/resolution-queue";
 import { InviteConsole } from "@/components/invite-console";
+import { BalanceAdjustmentConsole } from "@/components/balance-adjustment-console";
 
 export const dynamic = "force-dynamic";
 
@@ -21,5 +22,5 @@ export default async function AdminPage() {
     db.marketSettlementRun.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { market: { select: { title: true, slug: true } } } }),
     db.registrationInvite.findMany({ orderBy: { createdAt: "desc" }, take: 100, select: { id: true, label: true, status: true, maxUses: true, useCount: true, expiresAt: true } }),
   ]);
-  return <div className="page-shell"><header className="page-header"><span className="eyebrow">Audited operations</span><h1>Market desk</h1><p>Create, pause, close, and settle Goosey markets. Resolution requires a proposal and approval from two distinct, conflict-free administrators who did not create the market.</p></header><AdminConsole markets={markets} /><InviteConsole initialInvites={invites} /><ResolutionQueue initialProposals={proposals} initialRuns={settlementRuns} viewerId={user.id} proposerIds={Object.fromEntries(proposals.map((proposal) => [proposal.id, proposal.proposerId]))} /><SuggestionQueue initialSuggestions={suggestions} /><ModerationQueue initialReports={reports} /></div>;
+  return <div className="page-shell"><header className="page-header"><span className="eyebrow">Audited operations</span><h1>Market desk</h1><p>Create, pause, close, and settle Goosey markets. Resolution requires a proposal and approval from two distinct, conflict-free administrators who did not create the market.</p></header><BalanceAdjustmentConsole /><AdminConsole markets={markets} /><InviteConsole initialInvites={invites} /><ResolutionQueue initialProposals={proposals} initialRuns={settlementRuns} viewerId={user.id} proposerIds={Object.fromEntries(proposals.map((proposal) => [proposal.id, proposal.proposerId]))} /><SuggestionQueue initialSuggestions={suggestions} /><ModerationQueue initialReports={reports} /></div>;
 }
