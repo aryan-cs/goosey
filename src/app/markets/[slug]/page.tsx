@@ -48,6 +48,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
       discussion={focusedComment && !focusedComment.success
         ? <section className="comments-section" aria-labelledby="discussion-heading"><h2 id="discussion-heading">Linked discussion unavailable</h2><p>This comment link is invalid.</p><Link href={`/markets/${encodeURIComponent(unified.editorial.slug)}#discussion-heading`}>View all discussion</Link></section>
         : <CommentSection marketId={backend.id} marketSlug={unified.editorial.slug} focusedCommentId={focusedCommentId} currentUserId={user?.id} endpoint={`/api/markets/${unified.editorial.slug}/comments`} />}
+      signedIn={Boolean(user)} initialOutcome={initialOutcome} initialAction={initialAction}
     />;
   }
   const data = await runSerializableTransaction(db, async (tx) => {

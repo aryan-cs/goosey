@@ -2,8 +2,8 @@ import Link from "next/link";
 import { CalendarClock, ChevronRight, Users } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { FeatherIcon } from "@/components/brand";
 import { MarketStatusLabel } from "@/components/market-status";
+import { ManagedOrderTicket } from "@/components/managed-order-ticket";
 import { formatFeathers } from "@/lib/feather-format";
 import type { UnifiedSolanaMarket } from "@/lib/unified-market-repository";
 
@@ -14,6 +14,9 @@ export type UnifiedSolanaMarketDetailProps = Readonly<{
   watchAction?: ReactNode;
   shareAction?: ReactNode;
   discussion?: ReactNode;
+  signedIn?: boolean;
+  initialOutcome?: "YES" | "NO";
+  initialAction?: "BUY" | "SELL";
 }>;
 
 const dateTimeFormat = new Intl.DateTimeFormat("en-CA", {
@@ -108,7 +111,8 @@ function resolutionText(value: UnifiedSolanaMarket["financial"]["resolution"]) {
   return value === "VOID" ? "This market was voided." : `This market resolved ${value}.`;
 }
 
-export function UnifiedSolanaMarketDetail({ market, watchAction, shareAction, discussion }: UnifiedSolanaMarketDetailProps) {
+export function UnifiedSolanaMarketDetail({ market, watchAction, shareAction, discussion, signedIn = false,
+  initialOutcome = "YES", initialAction = "BUY" }: UnifiedSolanaMarketDetailProps) {
   const { editorial, financial } = market;
   const source = safeSource(editorial.resolutionSource);
   const actions = watchAction || shareAction;
@@ -177,20 +181,11 @@ export function UnifiedSolanaMarketDetail({ market, watchAction, shareAction, di
         </section>
       </main>
 
-      <aside className={styles.tradeCard} aria-labelledby="trade-heading">
-        <span className="eyebrow">Trade</span>
-        <h2 id="trade-heading">Choose an outcome</h2>
-        <p>Order entry is temporarily unavailable while trading is being connected.</p>
-        <div className={styles.tradeChoices}>
-          <button type="button" disabled>Buy YES</button>
-          <button type="button" disabled>Buy NO</button>
-        </div>
-        <dl>
-          <div><dt>Current forecast</dt><dd>{formatProbability(financial.probabilityYesBps)}</dd></div>
-          <div><dt>Payout</dt><dd><FeatherIcon /> {formatFeathers(financial.payoutMilli, 3)}</dd></div>
-          <div><dt>Fee</dt><dd>{financial.feeBps / 100}%</dd></div>
-        </dl>
-        <button className={styles.submit} type="button" disabled>Trading unavailable</button>
+      <aside className={styles.tradeCard} aria-label="Trade">
+        <ManagedOrderTicket marketSlug={editorial.slug} payoutMilli={financial.payoutMilli.toString()}
+          feeBps={financial.feeBps} signedIn={signedIn}
+          disabled={financial.status !== "OPEN" || !financial.acceptingOrders}
+          initialOutcome={initialOutcome} initialAction={initialAction} />
       </aside>
     </div>
     {discussion && <div className={styles.discussion}>{discussion}</div>}

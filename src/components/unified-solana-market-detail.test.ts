@@ -1,6 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 import type { UnifiedSolanaMarket } from "@/lib/unified-market-repository";
 
@@ -76,12 +78,12 @@ describe("UnifiedSolanaMarketDetail", () => {
     expect(html).toContain("Share market");
   });
 
-  it("has a neutral disabled trade state and no wallet or separate-chain language", () => {
+  it("renders the ordinary order ticket with no wallet or separate-chain language", () => {
     const html = renderToStaticMarkup(createElement(UnifiedSolanaMarketDetail, { market: market() }));
 
-    expect(html).toContain("Order entry is temporarily unavailable while trading is being connected.");
-    expect(html).toContain("Trading unavailable");
-    expect(html.match(/disabled=""/g)).toHaveLength(3);
+    expect(html).toContain("Place a limit order");
+    expect(html).toContain("Sign in to place an order");
+    expect(html).toContain("Good until canceled");
     expect(html).not.toMatch(/phantom|metamask|connect wallet|on-chain|chain market/i);
     expect(html).not.toContain("/chain");
   });
