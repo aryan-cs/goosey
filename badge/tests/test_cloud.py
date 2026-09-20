@@ -43,7 +43,8 @@ assert 'Account' not in texts
 offline=next(w for w in g.widgets.values() if w.text=='Account Offline')
 usb=next(w for w in g.widgets.values() if w.text=='USB Required')
 assert (offline.x,offline.y,offline.w)==(10,7,125)
-assert (usb.x,usb.y,usb.w)==(135,1,175) and usb.styles['text_align']=='right'
+assert (usb.x,usb.y,usb.w,usb.h)==(135,7,175,22)
+assert usb.styles['text_align']=='right' and usb.styles['text_font']==18
 assert 'Waiting for connection' not in g.visible()
 reconnecting=next(w for w in g.widgets.values() if w.text=='Reconnecting...')
 assert reconnecting.y==110 and reconnecting.styles['text_align']=='center'

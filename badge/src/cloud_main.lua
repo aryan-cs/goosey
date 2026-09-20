@@ -126,13 +126,14 @@ local function render()
   if qr then qr:hidden(true) end
   header:set_pos(10,7);header:set_size(78,22)
   status:set_pos(88,7);status:set_size(222,18)
+  status:style({text_font=14})
   stamp:set_pos(149,16);stamp:set_size(161,17)
   header:set_text(({list="Markets",detail="Market",settings="Settings",link="Account"})[page])
   status:set_text(lastRx and badge.sys.ms()-lastRx<45000 and "USB Updated" or "Saved Snapshot")
   stamp:set_text(cloud.capturedAt)
   if trade then
     local user,balance,offline=trade.header()
-    if page=="link" and offline then header:set_size(125,22);status:set_pos(135,1);status:set_size(175,17);header:set_text(user);status:set_text(balance);stamp:set_text("")
+    if page=="link" and offline then header:set_size(125,22);status:set_pos(135,7);status:set_size(175,22);status:style({text_font=18});header:set_text(user);status:set_text(balance);stamp:set_text("")
     elseif offline then status:set_text(user);stamp:set_text("")
     else status:set_text(accountSummary(user,balance));stamp:set_text("") end
   end
