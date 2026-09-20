@@ -76,7 +76,10 @@ end
 local function requestDetail()
   detail=nil;detailGeneration=nil
   local m=cloud.markets[selected]
-  if m then badge.fs.write("appdata/detail_request.txt","GD1\t"..m.slug.."\n") end
+  if m then
+    if not readDetailFrame then readDetailFrame=require("detail_reader");for i=1,4 do badge.sys.gc_step() end end
+    badge.fs.write("appdata/detail_request.txt","GD1\t"..m.slug.."\n")
+  end
 end
 local function refreshDetail()
   local m=cloud.markets[selected]
@@ -85,7 +88,6 @@ local function refreshDetail()
   if type(data)~="string" then return false end
   local generation=data:match("^GH2\t(%d+)\t")
   if not generation or generation==detailGeneration then return false end
-  if not readDetailFrame then readDetailFrame=require("detail_reader") end
   local nextDetail=readDetailFrame(data)
   if not nextDetail or nextDetail.slug~=m.slug then return false end
   detail=nextDetail;detailGeneration=generation
@@ -102,7 +104,6 @@ local function refresh(initial)
     end
     local data=badge.fs.read("appdata/market_snapshot.txt")
     if type(data)=="string" and cloud.generation and data:match("^GS[12]\t(%d+)\t")==cloud.generation then return false end
-    if not readCloudFrame then readCloudFrame=require("cloud_reader") end
     pendingCloud=readCloudFrame(data,true)
     return false
   end
@@ -214,6 +215,8 @@ function on_enter(root)
   badge.sys.gc_step()
   trade=require("trade");trade.init()
   badge.sys.gc_step()
+  readCloudFrame=require("cloud_reader")
+  for i=1,8 do badge.sys.gc_step() end
   local function box(x,y,w,h,color)
     local b=badge.ui.box(root,w,h);b:set_pos(x,y)
     b:style({bg_color=color,border_width=0,pad_all=0,radius=0});return b

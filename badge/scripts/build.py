@@ -5,6 +5,15 @@ from cloud_snapshot import fetch_snapshot, lua_literal
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
+
+
+def compact_lua(source):
+    # Keep statement boundaries and string literals intact while avoiding a
+    # second large, indented source buffer during each on-device require().
+    return '\n'.join(line.lstrip() for line in source.splitlines()
+                     if line.strip() and not line.lstrip().startswith('--')) + '\n'
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--output', type=Path, default=root / 'badge/dist')
 parser.add_argument('--cloud-url', help='Build the USB cloud trading client with a dated public snapshot')
@@ -31,10 +40,7 @@ code = (root / 'badge/src' / source).read_text().replace('__MARKETS__', '\n'.joi
 snapshot = fetch_snapshot(args.cloud_url) if args.cloud_url else None
 code = code.replace('__CLOUD__', lua_literal(snapshot) if snapshot else 'nil')
 code = code.replace('__CLOUD_READER__', 'local readCloudFrame')
-# Only remove full-line comments, blank lines and leading indentation. Keep
-# literals and statement boundaries intact; smaller source reduces load buffers.
-code = '\n'.join(line.lstrip() for line in code.splitlines()
-                 if line.strip() and not line.lstrip().startswith('--')) + '\n'
+code = compact_lua(code)
 manifest = 'slug=goosey_base\nname=Goosey\nicon=GSY\napi=2\nheap_kb=96\nversion=0.10.2\nauthor=Goosey\n'
 out = args.output
 out.mkdir(parents=True, exist_ok=True)
@@ -47,7 +53,7 @@ if snapshot:
     for module in ('trade','cloud_reader','detail_reader'):
         module_code=(root / 'badge/src' / (module+'.lua')).read_text()
         if module=='cloud_reader': module_code+='\nreturn readCloudFrame\n'
-        (out / (module+'.lua')).write_text(module_code)
+        (out / (module+'.lua')).write_text(compact_lua(module_code))
     (out / 'snapshot.json').write_text(json.dumps(snapshot, indent=2))
 assert (out / 'goosey.lua').stat().st_size < 48 * 1024
 print(f'Built {len(snapshot["markets"]) if snapshot else len(markets)} markets; bundle {(out / "goosey.lua").stat().st_size} bytes')

@@ -22,6 +22,12 @@ for bad in [frame+'junk\n',frame.replace('END\t123','END\t124'),frame.replace('\
     assert reader(bad) is None
 many=dict(snapshot,markets=[dict(snapshot['markets'][0],slug=str(i),history=[[5000,j] for j in range(32)]) for i in range(4)])
 assert reader(mailbox_frame(many).decode()) is None
+maximum=dict(snapshot,markets=[dict(snapshot['markets'][0],slug=f'market-{i}',history=[[5000,j] for j in range(6)]) for i in range(16)])
+maximum_frame=mailbox_frame(maximum).decode()
+assert len(reader(maximum_frame)['markets'])==16
+maximum_step=reader(maximum_frame,True)
+for _ in range(16): assert maximum_step() is False
+assert len(maximum_step()['markets'])==16
 legacy='GS1\t7\t09/19 19:00 UTC\t1\nM\tone\tLegacy market?\t5000\t10\t09/20 18:30 UTC\tOPEN\t0\nEND\t7\n'
 legacy_market=reader(legacy)['markets'][1]
 assert legacy_market['category']=='Market' and legacy_market['shortTitle']=='Legacy market?' and legacy_market['acceptingOrders']
