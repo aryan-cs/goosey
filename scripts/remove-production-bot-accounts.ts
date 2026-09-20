@@ -311,7 +311,17 @@ export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
   }
   const openingSnapshots = input.snapshots.filter(snapshot => !usedSnapshots.has(snapshot.id));
   if (openingSnapshots.length !== 1 || openingSnapshots[0].yesProbabilityBps !== 5_000) fail("market must retain exactly one 50% opening snapshot outside executions");
-  const digest = createHash("sha256").update(json({ marketId: MARKET_ID, targetIds: [...targetIds].sort(), trades: ordered.map(t => [t.id, t.userId, t.version]), currentVersion: input.market.version, lastLegacyTradeId: LAST_LEGACY_TRADE_ID, firstDiscretizedTradeId: FIRST_DISCRETIZED_TRADE_ID })).digest("hex");
+  // Authorize the exact reviewed identities and legitimate history. Target-only
+  // trades are deliberately excluded so an already identified bot cannot race
+  // the build and invalidate cleanup; every such trade is still fully replayed,
+  // reconciled, and deleted inside the locked serializable transaction.
+  const digest = createHash("sha256").update(json({
+    marketId: MARKET_ID,
+    targetIds: [...targetIds].sort(),
+    survivingTrades: surviving.map(t => [t.id, t.userId, t.version]),
+    lastLegacyTradeId: LAST_LEGACY_TRADE_ID,
+    firstDiscretizedTradeId: FIRST_DISCRETIZED_TRADE_ID,
+  })).digest("hex");
   const expectedPositionIds = new Set(existingPositions.keys());
   if (input.positions.length !== expectedPositionIds.size || input.positions.some(position => !expectedPositionIds.has(position.userId))) fail("market contains a position not represented by its trade replay");
   return { nameById, targetIds, ordered, existingPositions, originalQuoteByTrade, surviving, replayPositions, replay, snapshotByTrade, notificationByTrade, digest, state, volumeMilli };
