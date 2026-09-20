@@ -13,7 +13,9 @@ prisma/dev.db-journal
 prisma/dev.db-shm
 prisma/dev.db-wal
 prisma/browser-e2e.db*
+/dev.db*
 tsconfig.tsbuildinfo
+tsconfig.*.tmp.tsbuildinfo
 *.log
 .DS_Store
 .playwright-cli/
