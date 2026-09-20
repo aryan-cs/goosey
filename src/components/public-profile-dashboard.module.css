@@ -31,7 +31,7 @@
 .filters { display: inline-flex; padding: 3px; background: var(--surface-muted); border-radius: 999px; }
 .filters button[aria-pressed="true"] { background: var(--surface-raised); box-shadow: var(--shadow-sm); }
 .chart { position: relative; height: 260px; margin-top: 22px; padding-left: 46px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 64px, var(--border-subtle) 65px); }
-.chart svg { display: block; width: 100%; height: 100%; overflow: visible; color: var(--yes); }
+.chartPlot > svg { display: block; width: 100%; height: 100%; overflow: visible; color: var(--yes); }
 .chartPlot { position: relative; height: 100%; outline: none; cursor: crosshair; touch-action: pan-y; }
 .chartPlot:focus-visible { border-radius: 8px; box-shadow: 0 0 0 2px var(--yes); }
 .line { fill: none; stroke: currentColor; stroke-width: 3; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
@@ -40,7 +40,6 @@
 .chartDot { position: absolute; z-index: 3; width: 10px; height: 10px; border: 2px solid var(--surface-raised); border-radius: 50%; background: var(--yes); box-shadow: 0 0 0 1px var(--yes); transform: translate(-50%, -50%); pointer-events: none; }
 .chartTooltip { position: absolute; z-index: 4; top: 10px; display: grid; gap: 2px; width: max-content; max-width: min(220px, 85%); padding: 9px 11px; color: var(--ink); background: var(--surface-overlay, var(--surface-raised)); border: 1px solid var(--border-subtle); border-radius: 10px; box-shadow: var(--shadow-md); transform: translateX(-50%); pointer-events: none; }
 .chartTooltip strong { display: flex; align-items: center; gap: 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
-.chartTooltip strong svg { flex: none; width: 14px; height: 14px; }
 .chartTooltip span, .chartTooltip small { color: var(--ink-muted); font-size: 10px; white-space: nowrap; }
 .axis { position: absolute; inset: 0 auto 0 0; display: flex; flex-direction: column; justify-content: space-between; width: 42px; padding: 2px 0 10px; color: var(--ink-muted); font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
 .chartEmpty { height: 260px; display: grid; place-items: center; align-content: center; gap: 8px; color: var(--ink-muted); }
