@@ -142,6 +142,7 @@ export async function verifyGooseyEscrowSnapshot(runtime: SolanaRuntime, input: 
  */
 export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowReadInput, options: {
   rpc?: EscrowReadRpc; signal?: AbortSignal; includeOrderBook?: boolean; includeResolution?: boolean; includeMarketTerms?: boolean;
+  minimumFinalizedSlot?: bigint;
 } = {}) {
   input = { ...input };
   runtime = { ...runtime };
@@ -152,10 +153,18 @@ export async function readGooseyEscrow(runtime: SolanaRuntime, input: EscrowRead
   signal.throwIfAborted();
   const rpc = options.rpc ?? createSolanaRpc(runtime.rpcUrl);
   const probe = await probeSolanaRuntime(runtime, rpc, signal);
+  if (options.minimumFinalizedSlot !== undefined
+    && (typeof options.minimumFinalizedSlot !== "bigint" || options.minimumFinalizedSlot < 0n
+      || options.minimumFinalizedSlot > (1n << 64n) - 1n)) {
+    throw new Error("Invalid minimum finalized escrow slot");
+  }
+  const probedSlot = BigInt(probe.finalizedSlot);
+  const minimumFinalizedSlot = options.minimumFinalizedSlot !== undefined
+    && options.minimumFinalizedSlot > probedSlot ? options.minimumFinalizedSlot : probedSlot;
   const addresses = await deriveGooseySeatAddresses({ ...input, programAddress: runtime.programAddress });
   const discovery = await rpc.getMultipleAccounts([addresses.market], { encoding: "base64", commitment: "finalized",
-    minContextSlot: BigInt(probe.finalizedSlot) }).send({ abortSignal: signal });
-  if (typeof discovery.context.slot !== "bigint" || discovery.context.slot < BigInt(probe.finalizedSlot) || discovery.value.length !== 1) {
+    minContextSlot: minimumFinalizedSlot }).send({ abortSignal: signal });
+  if (typeof discovery.context.slot !== "bigint" || discovery.context.slot < minimumFinalizedSlot || discovery.value.length !== 1) {
     throw new Error("Invalid escrow discovery snapshot");
   }
   const market = await marketData(discovery.value[0], runtime.programAddress);

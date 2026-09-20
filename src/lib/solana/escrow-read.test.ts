@@ -200,6 +200,17 @@ describe("finalized read orchestration (mocked RPC, not chain proof)", () => {
         { encoding: "base64", commitment: "finalized", minContextSlot: 11n }],
     ]);
   });
+  it("honors a stricter caller-provided finalized slot for post-transaction verification", async () => {
+    const f = await setup();
+    await expect(readGooseyEscrow(runtime, input, { rpc: f.rpc, minimumFinalizedSlot: 11n }))
+      .resolves.toMatchObject({ finalizedSlot: 12n });
+    const firstCall = f.getMultipleAccounts.mock.calls[0] as unknown as readonly [unknown, { minContextSlot: bigint }];
+    expect(firstCall[1]).toMatchObject({ minContextSlot: 11n });
+
+    const stale = await setup();
+    await expect(readGooseyEscrow(runtime, input, { rpc: stale.rpc, minimumFinalizedSlot: 12n }))
+      .rejects.toThrow("discovery snapshot");
+  });
   async function setupBook() {
     const f = await setup(), book = Buffer.alloc(69_720);
     book.set(Buffer.from("GOOSEYB1")); key(book, 8, f.p.market);

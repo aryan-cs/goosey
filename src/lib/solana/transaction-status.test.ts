@@ -32,7 +32,8 @@ describe("signed transaction tracking", () => {
     vi.useFakeTimers();
     const m = mock([response("processed"), response("confirmed"), response("finalized")]);
     const onObservation = vi.fn();
-    expect((await finish(trackTransactionStatus(m.rpc, { ...input, onObservation }))).status).toBe("finalized");
+    expect(await finish(trackTransactionStatus(m.rpc, { ...input, onObservation })))
+      .toMatchObject({ status: "finalized", executionSlot: 499n });
     expect(onObservation.mock.calls.map(([value]) => value.status)).toEqual(["submitted", "submitted", "confirmed", "finalized"]);
     for (const args of m.getSignatureStatuses.mock.calls) expect(args).toEqual([[sig], { searchTransactionHistory: true }]);
     expect(m.getBlockHeight).not.toHaveBeenCalled();
@@ -44,7 +45,8 @@ describe("signed transaction tracking", () => {
 
   it("reports a finalized execution error as failed", async () => {
     const error = { InstructionError: [0, { Custom: 1 }] };
-    expect(await trackTransactionStatus(mock([response("finalized", error)]).rpc, input)).toMatchObject({ status: "failed", error });
+    expect(await trackTransactionStatus(mock([response("finalized", error)]).rpc, input))
+      .toMatchObject({ status: "failed", executionSlot: 499n, error });
   });
 
   it("does not make a provisional fork error terminal", async () => {

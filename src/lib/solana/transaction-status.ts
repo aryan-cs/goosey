@@ -6,6 +6,9 @@ export type TransactionStatusResult = {
   status: TransactionStatus;
   signature: string;
   commitment?: "processed" | "confirmed" | "finalized";
+  /** Slot reported for this exact signature observation. Finalized results can
+   * use it as the lower bound for post-transaction account verification. */
+  executionSlot?: bigint;
   error?: unknown;
   /** Expiration proves the signed bytes cannot land now, not that an earlier
    * execution did not happen (RPC history may have been pruned). */
@@ -40,6 +43,7 @@ function parseStatus(response: unknown) {
     throw new Error("Malformed signature status");
   }
   return { contextSlot: response.context.slot, item: {
+    slot: item.slot,
     commitment: item.confirmationStatus as "processed" | "confirmed" | "finalized" | null,
     error: item.err,
   } };
@@ -89,8 +93,15 @@ export async function trackTransactionStatus(
   const classify = (item: ReturnType<typeof parseStatus>["item"]): TransactionStatusResult => {
     if (!item?.commitment) return result("unknown");
     const reached = item.commitment === "finalized" || (commitment === "confirmed" && item.commitment === "confirmed");
-    if (item.error !== null) return result(reached ? "failed" : "unknown", { commitment: item.commitment, error: item.error });
-    return result(item.commitment === "processed" ? "submitted" : item.commitment, { commitment: item.commitment });
+    if (item.error !== null) return result(reached ? "failed" : "unknown", {
+      commitment: item.commitment,
+      executionSlot: item.slot,
+      error: item.error,
+    });
+    return result(item.commitment === "processed" ? "submitted" : item.commitment, {
+      commitment: item.commitment,
+      executionSlot: item.slot,
+    });
   };
   try {
     input.onObservation?.(result("submitted"));
