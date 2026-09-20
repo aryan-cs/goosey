@@ -1,11 +1,11 @@
 {
-  "lastReviewedUpstreamRevision": "5f99195074bb1e9453b771aaa0162b45074700a8",
-  "reviewedAt": "2026-09-20T02:09:51.380532+00:00",
-  "outcome": "Reviewed parser preloading and detail alignment; current 13-market host build passes",
+  "lastReviewedUpstreamRevision": "a815560a0e955424b4c8d55e57baeebd1655069d",
+  "reviewedAt": "2026-09-20T03:48:37.194325+00:00",
+  "outcome": "Admin settlement-only upstream change reviewed; no badge adaptation required",
   "reviewedChanges": [
-    "Cloud parser loads before mailbox reads; detail parser loads before requesting detail data, reducing overlapping compiler and data allocations.",
-    "Module compaction preserves statements and literals; updated detail layout adapts chart height to wrapped titles.",
-    "Managed chain custody/transfer and public profile updates do not supply a supported badge wireless or chain-order interface. Synthetic trader history remains isolated testing data."
+    "Reviewed single-administrator resolution controls and Citadel payout script; these are website/operator functions, not participant badge features.",
+    "No badge sources, account/quote/trade APIs, public market payloads or history schemas changed. Existing server-authoritative balance refresh requires no client modification.",
+    "Did not execute settlement scripts, deployment build hooks, or production mutation checks."
   ],
-  "integrationStatus": "Cloud/trade, GS1/GS2 reader, GH2 detail reader, snapshot (12), gateway (5), wireless host (7) and save/sync checks pass; layout inspected. One serial badge is connected and owned by an existing Python process; did not interrupt it. Wireless dirty edits preserved, no second-device proof or resolved BLE memory blocker. No hardware, database or live-order mutations."
+  "integrationStatus": "Prior badge validation remains applicable; no app release or repeated tests needed for admin-only change. No serial badge currently connected. Wireless investigation edits remain untouched; native memory and second-device/authenticated round-trip blockers unchanged."
 }
