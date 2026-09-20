@@ -8,9 +8,9 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db, requireDatabaseStartup } from "../src/lib/db";
-import { requiredCollateralMilli } from "../src/lib/market-maker";
+import { probabilityYesBps, requiredCollateralMilli } from "../src/lib/market-maker";
 import { notificationFeathers } from "../src/lib/order-fill-notification";
-import { computeQuote } from "../src/lib/trading";
+import { computeQuote, type ComputedQuote } from "../src/lib/trading";
 
 const MARKET_ID = "cmu8tqf120002gm6k0gw5vxgl";
 const MARKET_SLUG = "htn-2026-all-toronto-team-wins";
@@ -37,6 +37,13 @@ const EXPECTED_ACTIVE = new Map([
   ["asdf17", "cmu91xtsb0000l504ny7nc28q"],
 ]);
 const INCIDENT_NAMES = new Set(EXPECTED_ACTIVE.keys());
+const BASIS_POINTS = 10_000n;
+const ROUNDING_RESERVE_MILLI = 0.25;
+// This reviewed execution was the first one after commit 47ec66c changed the
+// production quote arithmetic. Journal versions can have a nonzero base, so
+// the boundary is anchored to immutable production history, not an index.
+const FIRST_DISCRETIZED_TRADE_ID = "cmu91a8oi0009jo04b4pki8sp";
+const LAST_LEGACY_TRADE_ID = "cmu8y2mgs001ul304r2wp3t2e";
 
 type PositionState = {
   yesShares: number; noShares: number; netCostMilli: bigint;
@@ -70,7 +77,75 @@ function formerUsername(metadata: string): string | null {
     return typeof value.formerUsername === "string" ? value.formerUsername : null;
   } catch { return null; }
 }
-function applyPosition(state: PositionState, trade: Pick<ReplayTrade, "side" | "action" | "quantity">, quote: ReturnType<typeof computeQuote>) {
+
+/**
+ * Reproduces the LMSR arithmetic that was deployed when every incident trade
+ * executed. Commit 47ec66c later moved live quoting to differences between two
+ * discretized cost potentials; using that newer arithmetic here would alter
+ * legitimate historical executions by one milli-feather in some transitions.
+ */
+export function computeHistoricalQuote(
+  market: { yesShares: number; noShares: number; liquidityParameter: number; payoutMilli: bigint; feeBps: number },
+  side: "YES" | "NO",
+  action: "BUY" | "SELL",
+  quantity: number,
+): ComputedQuote {
+  if (!Number.isSafeInteger(quantity) || quantity < 1) fail("historical trade quantity is invalid");
+  if (!Number.isSafeInteger(market.liquidityParameter) || market.liquidityParameter < 1) fail("historical market liquidity is invalid");
+  if (!Number.isSafeInteger(market.feeBps) || market.feeBps < 0 || market.feeBps > Number(BASIS_POINTS)) fail("historical market fee is invalid");
+  const selected = side === "YES" ? market.yesShares : market.noShares;
+  if (action === "SELL" && quantity > selected) fail(`historical trade attempts to sell unavailable ${side} shares`);
+  const other = side === "YES" ? market.noShares : market.yesShares;
+  const before = (selected - other) / market.liquidityParameter;
+  const after = before + (action === "BUY" ? quantity : -quantity) / market.liquidityParameter;
+  const softplus = (value: number) => Math.max(value, 0) + Math.log1p(Math.exp(-Math.abs(value)));
+  const rawGross = Math.abs(market.liquidityParameter * (softplus(after) - softplus(before)) * Number(market.payoutMilli));
+  if (!Number.isFinite(rawGross) || rawGross < 0 || rawGross > Number.MAX_SAFE_INTEGER - 1) fail("historical trade value is outside the supported range");
+  const grossMilli = action === "BUY"
+    ? BigInt(Math.ceil(rawGross + ROUNDING_RESERVE_MILLI))
+    : BigInt(Math.max(0, Math.floor(rawGross - ROUNDING_RESERVE_MILLI)));
+  if (grossMilli <= 0n) fail("historical trade value rounds to zero");
+  const feeMilli = (grossMilli * BigInt(market.feeBps) + BASIS_POINTS - 1n) / BASIS_POINTS;
+  const totalDebitMilli = action === "BUY" ? grossMilli + feeMilli : undefined;
+  const netCreditMilli = action === "SELL" ? grossMilli - feeMilli : undefined;
+  if (netCreditMilli !== undefined && netCreditMilli <= 0n) fail("historical sell proceeds do not exceed the fee");
+  const direction = action === "BUY" ? quantity : -quantity;
+  const yesSharesAfter = market.yesShares + (side === "YES" ? direction : 0);
+  const noSharesAfter = market.noShares + (side === "NO" ? direction : 0);
+  const probability = (yesShares: number, noShares: number) => probabilityYesBps({
+    yesQuantity: yesShares,
+    noQuantity: noShares,
+    liquidity: market.liquidityParameter,
+    payoutMilli: market.payoutMilli,
+  });
+  return {
+    side, action, quantity, grossMilli, feeMilli,
+    ...(totalDebitMilli !== undefined ? { totalDebitMilli } : {}),
+    ...(netCreditMilli !== undefined ? { netCreditMilli } : {}),
+    averagePriceMilli: action === "BUY"
+      ? (grossMilli + BigInt(quantity) - 1n) / BigInt(quantity)
+      : grossMilli / BigInt(quantity),
+    probabilityYesBeforeBps: probability(market.yesShares, market.noShares),
+    probabilityYesAfterBps: probability(yesSharesAfter, noSharesAfter),
+    payoutMilli: market.payoutMilli,
+    yesSharesAfter,
+    noSharesAfter,
+  };
+}
+
+export function computeExecutionQuote(
+  market: Parameters<typeof computeHistoricalQuote>[0],
+  side: "YES" | "NO",
+  action: "BUY" | "SELL",
+  quantity: number,
+  useDiscretizedPotential: boolean,
+): ComputedQuote {
+  return useDiscretizedPotential
+    ? computeQuote(market, side, action, quantity)
+    : computeHistoricalQuote(market, side, action, quantity);
+}
+
+function applyPosition(state: PositionState, trade: Pick<ReplayTrade, "side" | "action" | "quantity">, quote: ComputedQuote) {
   const side = trade.side as "YES" | "NO";
   const action = trade.action as "BUY" | "SELL";
   const held = side === "YES" ? state.yesShares : state.noShares;
@@ -151,15 +226,26 @@ export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
     if (!journal) fail(`trade ${trade.id} has no journal`);
     return { ...trade, journal, version: parseVersion(journal.metadata) };
   }).sort((left, right) => left.version - right.version);
-  if (ordered.length !== input.trades.length || ordered.some((trade, index) => trade.version !== index)) fail("marketVersion chain is not a complete zero-based sequence");
-  if (input.market.version !== ordered.length) fail(`market version ${input.market.version} does not match ${ordered.length} executions`);
+  const baseVersion = ordered[0]?.version ?? input.market.version;
+  if (ordered.length !== input.trades.length || ordered.some((trade, index) => trade.version !== baseVersion + index)) fail("marketVersion chain is not a complete contiguous sequence");
+  if (input.market.version !== baseVersion + ordered.length) fail(`market version ${input.market.version} does not match base ${baseVersion} plus ${ordered.length} executions`);
+  const cutoverIndex = ordered.findIndex(trade => trade.id === FIRST_DISCRETIZED_TRADE_ID);
+  if (cutoverIndex < 0) fail(`reviewed quote-engine cutover trade ${FIRST_DISCRETIZED_TRADE_ID} is missing`);
+  if (cutoverIndex === 0 || ordered[cutoverIndex - 1].id !== LAST_LEGACY_TRADE_ID) fail("reviewed quote-engine cutover boundary changed");
 
   const existingPositions = new Map<string, PositionState>();
-  const originalQuoteByTrade = new Map<string, ReturnType<typeof computeQuote>>();
+  const originalQuoteByTrade = new Map<string, ComputedQuote>();
   let state = { yesShares: 0, noShares: 0 };
   let oldVolume = 0n;
-  for (const trade of ordered) {
-    const quote = computeQuote({ ...input.market, ...state }, trade.side as "YES" | "NO", trade.action as "BUY" | "SELL", trade.quantity);
+  for (const [index, trade] of ordered.entries()) {
+    const quoteInput = { ...input.market, ...state };
+    const side = trade.side as "YES" | "NO";
+    const action = trade.action as "BUY" | "SELL";
+    const quote = computeExecutionQuote(quoteInput, side, action, trade.quantity, index >= cutoverIndex);
+    if (index === cutoverIndex - 1 || index === cutoverIndex) {
+      const alternative = computeExecutionQuote(quoteInput, side, action, trade.quantity, index < cutoverIndex);
+      if (alternative.grossMilli === trade.amountMilli && alternative.feeMilli === trade.feeMilli) fail(`quote-engine cutover is not uniquely proven by boundary trade ${trade.id}`);
+    }
     originalQuoteByTrade.set(trade.id, quote);
     if (quote.grossMilli !== trade.amountMilli || quote.feeMilli !== trade.feeMilli ||
         quote.probabilityYesBeforeBps !== trade.priceBeforeBps || quote.probabilityYesAfterBps !== trade.priceAfterBps) {
@@ -193,14 +279,16 @@ export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
 
   const surviving = ordered.filter(trade => !targetIds.has(trade.userId));
   const replayPositions = new Map<string, PositionState>();
-  const replay = [] as Array<{ trade: ReplayTrade; quote: ReturnType<typeof computeQuote>; realizedDelta: bigint; version: number }>;
+  const replay = [] as Array<{ trade: ReplayTrade; quote: ComputedQuote; realizedDelta: bigint; version: number }>;
   state = { yesShares: 0, noShares: 0 };
   let volumeMilli = 0n;
-  for (const [version, trade] of surviving.entries()) {
-    const quote = computeQuote({ ...input.market, ...state }, trade.side as "YES" | "NO", trade.action as "BUY" | "SELL", trade.quantity);
+  for (const [replayIndex, trade] of surviving.entries()) {
+    // Preserve the pricing engine that was active when this surviving trade
+    // originally executed, even though removing bots gives it a new sequence.
+    const quote = computeExecutionQuote({ ...input.market, ...state }, trade.side as "YES" | "NO", trade.action as "BUY" | "SELL", trade.quantity, trade.version >= ordered[cutoverIndex].version);
     const position = replayPositions.get(trade.userId) ?? zeroPosition();
     const realizedDelta = applyPosition(position, trade, quote); replayPositions.set(trade.userId, position);
-    replay.push({ trade, quote, realizedDelta, version });
+    replay.push({ trade, quote, realizedDelta, version: baseVersion + replayIndex });
     state = { yesShares: quote.yesSharesAfter, noShares: quote.noSharesAfter };
     volumeMilli += quote.grossMilli;
   }
@@ -223,7 +311,7 @@ export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
   }
   const openingSnapshots = input.snapshots.filter(snapshot => !usedSnapshots.has(snapshot.id));
   if (openingSnapshots.length !== 1 || openingSnapshots[0].yesProbabilityBps !== 5_000) fail("market must retain exactly one 50% opening snapshot outside executions");
-  const digest = createHash("sha256").update(json({ marketId: MARKET_ID, targetIds: [...targetIds].sort(), trades: ordered.map(t => [t.id, t.userId, t.version]), currentVersion: input.market.version })).digest("hex");
+  const digest = createHash("sha256").update(json({ marketId: MARKET_ID, targetIds: [...targetIds].sort(), trades: ordered.map(t => [t.id, t.userId, t.version]), currentVersion: input.market.version, lastLegacyTradeId: LAST_LEGACY_TRADE_ID, firstDiscretizedTradeId: FIRST_DISCRETIZED_TRADE_ID })).digest("hex");
   const expectedPositionIds = new Set(existingPositions.keys());
   if (input.positions.length !== expectedPositionIds.size || input.positions.some(position => !expectedPositionIds.has(position.userId))) fail("market contains a position not represented by its trade replay");
   return { nameById, targetIds, ordered, existingPositions, originalQuoteByTrade, surviving, replayPositions, replay, snapshotByTrade, notificationByTrade, digest, state, volumeMilli };

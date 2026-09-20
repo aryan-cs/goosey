@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../src/lib/db", () => ({ db: {}, requireDatabaseStartup: vi.fn() }));
 import { computeQuote } from "../src/lib/trading";
 import { notificationFeathers } from "../src/lib/order-fill-notification";
-import { buildReplay } from "./remove-production-bot-accounts";
+import { buildReplay, computeExecutionQuote, computeHistoricalQuote } from "./remove-production-bot-accounts";
 
 const active = [
   ["test1", "cmu8wfl20000lic040xxx0dfm"], ["test11", "cmu8wrrxa000blb044szi94ys"],
@@ -24,20 +24,20 @@ function fixture() {
     payoutMilli: 100_000n, feeBps: 0, collateralAccountId: "collateral",
     collateralAccount: { id: "collateral", balanceMilli: 10_000_000n },
   };
-  const first = computeQuote({ ...market, yesShares: 0, noShares: 0 }, "YES", "BUY", 10);
+  const first = computeHistoricalQuote({ ...market, yesShares: 0, noShares: 0 }, "YES", "BUY", 10);
   const second = computeQuote({ ...market, yesShares: first.yesSharesAfter, noShares: first.noSharesAfter }, "NO", "BUY", 2);
   const at = [new Date("2026-09-19T20:00:00Z"), new Date("2026-09-19T20:01:00Z")];
   const trades = [
-    { id: "bot-trade", userId: active[0][1], marketId: market.id, side: "YES", action: "BUY", quantity: 10, amountMilli: first.grossMilli, feeMilli: first.feeMilli, priceBeforeBps: first.probabilityYesBeforeBps, priceAfterBps: first.probabilityYesAfterBps, idempotencyKey: "bot", createdAt: at[0] },
-    { id: "legit-trade", userId: "legitimate", marketId: market.id, side: "NO", action: "BUY", quantity: 2, amountMilli: second.grossMilli, feeMilli: second.feeMilli, priceBeforeBps: second.probabilityYesBeforeBps, priceAfterBps: second.probabilityYesAfterBps, idempotencyKey: "legit", createdAt: at[1] },
+    { id: "cmu8y2mgs001ul304r2wp3t2e", userId: active[0][1], marketId: market.id, side: "YES", action: "BUY", quantity: 10, amountMilli: first.grossMilli, feeMilli: first.feeMilli, priceBeforeBps: first.probabilityYesBeforeBps, priceAfterBps: first.probabilityYesAfterBps, idempotencyKey: "bot", createdAt: at[0] },
+    { id: "cmu91a8oi0009jo04b4pki8sp", userId: "legitimate", marketId: market.id, side: "NO", action: "BUY", quantity: 2, amountMilli: second.grossMilli, feeMilli: second.feeMilli, priceBeforeBps: second.probabilityYesBeforeBps, priceAfterBps: second.probabilityYesAfterBps, idempotencyKey: "legit", createdAt: at[1] },
   ];
   const journal = (trade: typeof trades[number], version: number) => {
-    const quote = trade.id === "bot-trade" ? first : second;
+    const quote = trade.id === "cmu8y2mgs001ul304r2wp3t2e" ? first : second;
     const account = (id: string, ownerType: string, ownerId: string, purpose: string) => ({ id, ownerType, ownerId, purpose, balanceMilli: 0n, allowsNegative: false, status: "ACTIVE", createdAt: at[0], updatedAt: at[0] });
     return ({
     id: `journal-${trade.id}`, type: "BUY", status: "POSTED", referenceType: "TRADE", referenceId: trade.id,
     idempotencyScope: "scope", idempotencyKey: trade.id, actorUserId: trade.userId,
-    metadata: JSON.stringify({ marketId: market.id, marketVersion: version }), createdAt: trade.createdAt, postedAt: trade.createdAt,
+    metadata: JSON.stringify({ marketId: market.id, marketVersion: 6 + version }), createdAt: trade.createdAt, postedAt: trade.createdAt,
     postings: [
       { id: `posting-user-${trade.id}`, journalEntryId: `journal-${trade.id}`, ledgerAccountId: `wallet-${trade.userId}`, amountMilli: -quote.totalDebitMilli!, createdAt: trade.createdAt, ledgerAccount: account(`wallet-${trade.userId}`, "USER", trade.userId, "USER_FEATHERS") },
       { id: `posting-collateral-${trade.id}`, journalEntryId: `journal-${trade.id}`, ledgerAccountId: "collateral", amountMilli: quote.grossMilli, createdAt: trade.createdAt, ledgerAccount: account("collateral", "MARKET", market.id, "COLLATERAL") },
@@ -54,7 +54,7 @@ function fixture() {
     noCostBasisMilli: userId === "legitimate" ? quote.totalDebitMilli! : 0n, realizedPnlMilli: 0n,
     reservedYesShares: 0, reservedNoShares: 0, createdAt: at[0], updatedAt: at[0] });
   return {
-    market: { ...market, yesShares: second.yesSharesAfter, noShares: second.noSharesAfter, volumeMilli: first.grossMilli + second.grossMilli, traderCount: 2, version: 2 },
+    market: { ...market, yesShares: second.yesSharesAfter, noShares: second.noSharesAfter, volumeMilli: first.grossMilli + second.grossMilli, traderCount: 2, version: 8 },
     users, audits: [], trades, journals: trades.map(journal),
     positions: [position(active[0][1], first), position("legitimate", second)],
     snapshots: [
@@ -71,16 +71,17 @@ describe("production bot cleanup replay", () => {
   it("removes reviewed identities and reprices surviving trades from the opening state", () => {
     const plan = buildReplay(fixture() as never);
     const expected = computeQuote({ ...fixture().market, yesShares: 0, noShares: 0 }, "NO", "BUY", 2);
-    expect(plan.ordered.map(trade => trade.id)).toEqual(["bot-trade", "legit-trade"]);
-    expect(plan.surviving.map(trade => trade.id)).toEqual(["legit-trade"]);
+    expect(plan.ordered.map(trade => trade.id)).toEqual(["cmu8y2mgs001ul304r2wp3t2e", "cmu91a8oi0009jo04b4pki8sp"]);
+    expect(plan.surviving.map(trade => trade.id)).toEqual(["cmu91a8oi0009jo04b4pki8sp"]);
     expect(plan.replay[0].quote.grossMilli).toBe(expected.grossMilli);
+    expect(plan.replay[0].version).toBe(6);
     expect(plan.state).toEqual({ yesShares: 0, noShares: 2 });
     expect(plan.volumeMilli).toBe(expected.grossMilli);
   });
 
   it("refuses a broken journal market-version chain", () => {
     const input = fixture();
-    input.journals[1].metadata = JSON.stringify({ marketVersion: 4 });
+    input.journals[1].metadata = JSON.stringify({ marketVersion: 10 });
     expect(() => buildReplay(input as never)).toThrow(/marketVersion chain/);
   });
 
@@ -88,5 +89,21 @@ describe("production bot cleanup replay", () => {
     const input = fixture();
     input.trades[0].amountMilli += 1n;
     expect(() => buildReplay(input as never)).toThrow(/does not reproduce/);
+  });
+
+  it("preserves the exact pre-47ec66c buy rounding used by production history", () => {
+    const market = { yesShares: 0, noShares: 0, liquidityParameter: 80, payoutMilli: 100_000n, feeBps: 0 };
+    const historical = computeHistoricalQuote(market, "NO", "BUY", 1);
+    const current = computeQuote(market, "NO", "BUY", 1);
+    expect(historical.grossMilli).toBe(50_157n);
+    expect(current.grossMilli).toBe(50_156n);
+  });
+
+  it("selects the deployed quote engine from the original journal version", () => {
+    const market = { yesShares: 0, noShares: 1, liquidityParameter: 40, payoutMilli: 100_000n, feeBps: 0 };
+    expect(computeExecutionQuote(market, "NO", "BUY", 1, false).grossMilli)
+      .toBe(computeHistoricalQuote(market, "NO", "BUY", 1).grossMilli);
+    expect(computeExecutionQuote(market, "NO", "BUY", 1, true).grossMilli)
+      .toBe(computeQuote(market, "NO", "BUY", 1).grossMilli);
   });
 });
