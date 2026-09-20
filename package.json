@@ -44,6 +44,7 @@
     "test:browser:server": "zsh scripts/browser-e2e-server.sh",
     "reconcile": "tsx scripts/reconcile.ts",
     "admin:create": "tsx scripts/create-admin.ts",
+    "accounts:cleanup-bots": "tsx scripts/remove-production-bot-accounts.ts",
     "worker:settlement": "tsx scripts/settlement-worker.ts",
     "worker:settlement:continuous": "tsx scripts/settlement-worker.ts --continuous",
     "test:worker": "vitest run src/lib/worker-health.test.ts src/lib/settlement-worker-service.test.ts src/app/api/ready/route.test.ts",

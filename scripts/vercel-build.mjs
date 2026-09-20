@@ -32,6 +32,16 @@ if (env.GOOSEY_REMOVE_TEST_ACCOUNTS) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+// Separate one-time September bot-incident cleanup. Preview is read-only; apply
+// requires the reviewed snapshot digest and exact confirmation inside the script.
+if (env.GOOSEY_BOT_CLEANUP_MODE) {
+  if (!["preview", "apply"].includes(env.GOOSEY_BOT_CLEANUP_MODE)) throw new Error("Invalid bot cleanup mode");
+  run("db:generate");
+  const result = spawnSync("node", ["--import", "tsx", "scripts/remove-production-bot-accounts.ts", ...(env.GOOSEY_BOT_CLEANUP_MODE === "apply" ? ["--apply"] : [])], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+  if (env.GOOSEY_BOT_CLEANUP_MODE === "apply") run("reconcile");
+}
+
 if (env.GOOSEY_VERIFY_LEADERBOARD === "1") {
   run("db:generate");
   const result = spawnSync("node", ["--import", "tsx", "scripts/verify-production-leaderboard.ts"], { env, stdio: "inherit" });
