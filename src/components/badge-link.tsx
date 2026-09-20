@@ -11,6 +11,7 @@ export function BadgeLink() {
   const [user, setUser] = useState<{ username: string } | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [message, setMessage] = useState("");
+  const [linkedUsername, setLinkedUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [linked, setLinked] = useState(false);
@@ -39,12 +40,12 @@ export function BadgeLink() {
   }, []);
 
   async function update(method: "POST" | "DELETE", body: { challenge: string } | { id: string }) {
-    setBusy(true);setMessage("");
+    setBusy(true);setMessage("");setLinkedUsername(null);
     try {
       const response = await fetch("/api/badge/link", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.message || "Could not update this badge.");
-      if (method === "POST") { setLinked(true);setMessage(`Linked to @${data.username}. Your badge will update in a few seconds.`); }
+      if (method === "POST") { setLinked(true);setLinkedUsername(data.username); }
       else if ("id" in body) { setDevices((items) => items.filter((device) => device.id !== body.id));setMessage("Badge access revoked."); }
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not update this badge."); }
     finally { setBusy(false); }
@@ -62,6 +63,7 @@ export function BadgeLink() {
       </> : !linked ? <p>Start the USB gateway and open the link it shows to connect a badge.</p> : null}
       {devices.length > 0 && <><h2>Linked badges</h2>{devices.map((device) => <div className={styles.device} key={device.id}><p>{device.code} · expires {new Date(device.expiresAt).toLocaleDateString()}</p><button className="button button-secondary" disabled={busy} onClick={() => void update("DELETE", { id: device.id })}>Revoke {device.code}</button></div>)}</>}
     </>}
+    {linkedUsername && <p role="status">Linked to <UserProfileLink username={linkedUsername}>@{linkedUsername}</UserProfileLink>. Your badge will update in a few seconds.</p>}
     {message && <p role="status">{message}</p>}
     <p>The badge needs its USB gateway running to trade. No password is stored in the shared badge app.</p>
   </section>;

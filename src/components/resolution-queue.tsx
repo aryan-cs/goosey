@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { UserProfileLink } from "./user-profile-link";
 
 type Proposal = {
   id: string;
@@ -171,7 +172,7 @@ export function ResolutionQueue({
           <div className="report-list">
             {proposals.map((proposal) => (
               <article className="report-item" key={proposal.id}>
-                <header><strong>{proposal.outcome} · {proposal.market.title}</strong><span>proposed by @{proposal.proposer.username}</span></header>
+                <header><strong>{proposal.outcome} · {proposal.market.title}</strong><span>proposed by <UserProfileLink username={proposal.proposer.username}>@{proposal.proposer.username}</UserProfileLink></span></header>
                 <p>{proposal.reason}</p>
                 <small>Evidence: {proposal.evidence}</small>
                 <footer>

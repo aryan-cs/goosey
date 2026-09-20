@@ -8,6 +8,7 @@ import { FeatherIcon } from "@/components/brand";
 import { EmptyState } from "@/components/states";
 import { initials } from "@/lib/initials";
 import styles from "./public-profile-dashboard.module.css";
+import { UserProfileLink } from "./user-profile-link";
 
 type Point = { timestamp: string; value: number };
 type Position = { id: string; marketSlug: string; marketTitle: string; marketStatus: string; side: "YES" | "NO"; quantity: number; averagePrice: number; probability: number | null; value: string; pnl: string; pnlPositive: boolean };
@@ -82,7 +83,7 @@ export function PublicProfileDashboard(props: PublicProfileDashboardProps) {
   return <div className={styles.dashboard}>
     <div className={styles.overview}>
       <section className={styles.identityCard} aria-labelledby="profile-name">
-        <div className={styles.identity}><div className={styles.avatar} aria-hidden="true">{initials(props.identity.displayName)}</div><div><h1 id="profile-name">{props.identity.displayName}</h1><p>@{props.identity.username}</p></div></div>
+        <div className={styles.identity}><div className={styles.avatar} aria-hidden="true">{initials(props.identity.displayName)}</div><div><h1 id="profile-name">{props.identity.displayName}</h1><p><UserProfileLink username={props.identity.username}>@{props.identity.username}</UserProfileLink></p></div></div>
         {props.identity.bio && <p className={styles.bio}>{props.identity.bio}</p>}
         <p className={styles.joined}><CalendarDays /> Joined {new Date(props.identity.joinedAt).toLocaleDateString("en-CA", { month: "long", year: "numeric", timeZone: "America/Toronto" })}</p>
         <dl className={styles.metrics}>

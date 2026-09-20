@@ -95,7 +95,7 @@ export async function loadPublicProfile(
   username: string,
 ): Promise<PublicProfileData | null> {
   const user = await tx.user.findFirst({
-    where: { username: username.toLowerCase(), role: "USER", status: "ACTIVE" },
+    where: { username: username.toLowerCase(), role: { in: ["USER", "ADMIN"] }, status: "ACTIVE" },
     select: {
       id: true,
       username: true,

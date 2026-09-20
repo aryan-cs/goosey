@@ -16,6 +16,7 @@ describe("PublicProfileDashboard", () => {
     }));
 
     expect(html).toContain("@test20");
+    expect(html).toContain('href="/users/test20"');
     expect(html).toContain("Portfolio value");
     expect(html).toContain("Available balance");
     expect(html).toContain("Will Goosey ship?");

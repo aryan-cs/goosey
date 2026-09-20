@@ -111,7 +111,7 @@ describe("legacy server page SQL query boundaries (mocked reads)", () => {
   it("filters a public trading profile to active users and published database markets", async () => {
     await UserProfilePage({ params: Promise.resolve({ username: "PROFILE" }) });
     const query = state.user.findFirst.mock.calls[0][0];
-    expect(query.where).toEqual({ username: "profile", role: "USER", status: "ACTIVE" });
+    expect(query.where).toEqual({ username: "profile", role: { in: ["USER", "ADMIN"] }, status: "ACTIVE" });
     expect(query.select.positions.where.market).toEqual({ ...boundary, status: { not: "DRAFT" } });
     expect(state.trade.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ market: { ...boundary, status: { not: "DRAFT" } } }) }));
     expect(state.orderFill.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ market: { ...boundary, status: { not: "DRAFT" } } }) }));
