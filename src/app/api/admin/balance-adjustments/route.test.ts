@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   principal: { id: "admin-1", role: "ADMIN", status: "ACTIVE" },
-  readJsonObject: vi.fn(), debitUserBalance: vi.fn(), findUnique: vi.fn(),
+  readJsonObject: vi.fn(), debitUserBalance: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(),
 }));
 
 vi.mock("@/lib/admin-service", async () => {
@@ -24,7 +24,7 @@ vi.mock("@/lib/market-service", () => {
     requireUser: vi.fn(async () => mocks.principal), consumeRateLimit: vi.fn(), parseIdempotencyKey: vi.fn(() => "balance-adjustment-key-1"),
     jsonResponse: vi.fn((value: unknown, init?: ResponseInit) => Response.json(value, init)),
     apiErrorResponse: vi.fn((error: unknown) => { const value = error as { status?: number; code?: string; message?: string }; return Response.json({ error: { code: value.code, message: value.message } }, { status: value.status ?? 500 }); }),
-    prisma: { user: { findUnique: mocks.findUnique } },
+    prisma: { user: { findUnique: mocks.findUnique, findMany: mocks.findMany } },
   };
 });
 
@@ -39,6 +39,7 @@ describe("admin balance adjustment route authorization", () => {
     vi.clearAllMocks(); mocks.principal = { id: "admin-1", role: "ADMIN", status: "ACTIVE" };
     mocks.readJsonObject.mockResolvedValue({ username: "bubbly", amountMilli: 3_000_000n, reason: "Reverse event credit", principalTreatment: "REVERSE_GRANT" });
     mocks.debitUserBalance.mockResolvedValue({ journalId: "journal-1", username: "bubbly", balanceMilli: 48_570n, replayed: false });
+    mocks.findMany.mockResolvedValue([]);
   });
   afterEach(() => { delete process.env.GOOSEY_OPERATOR_API_TOKEN; delete process.env.GOOSEY_OPERATOR_ACTOR_USERNAME; });
 
@@ -59,5 +60,13 @@ describe("admin balance adjustment route authorization", () => {
     const response = await POST(request(`Bearer ${"b".repeat(43)}`));
     expect(response.status).toBe(201);
     expect(mocks.debitUserBalance).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: "operator-admin", sessionRequest: undefined }));
+  });
+
+  it("uses the sole active administrator when a stale configured username no longer resolves", async () => {
+    process.env.GOOSEY_OPERATOR_API_TOKEN = "c".repeat(43); process.env.GOOSEY_OPERATOR_ACTOR_USERNAME = "stale-admin";
+    mocks.findUnique.mockResolvedValue(null); mocks.findMany.mockResolvedValue([{ id: "only-active-admin" }]);
+    const response = await POST(request(`Bearer ${"c".repeat(43)}`));
+    expect(response.status).toBe(201);
+    expect(mocks.debitUserBalance).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: "only-active-admin" }));
   });
 });

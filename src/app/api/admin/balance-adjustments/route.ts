@@ -13,9 +13,11 @@ async function actor(request: NextRequest): Promise<{ id: string; session: boole
     if (!token || !configured || !constantTimeEqual(token, configured)) throw new ApiError(401, "OPERATOR_AUTHENTICATION_REQUIRED", "Valid operator authentication is required.");
     const username = canonicalizeUsername(process.env.GOOSEY_OPERATOR_ACTOR_USERNAME);
     if (!username) throw new ApiError(503, "OPERATOR_NOT_CONFIGURED", "The operator actor is not configured.");
-    const administrator = await prisma.user.findUnique({ where: { username }, select: { id: true, role: true, status: true } });
-    if (!administrator || administrator.role !== "ADMIN" || administrator.status !== "ACTIVE") throw new ApiError(503, "OPERATOR_NOT_CONFIGURED", "The configured operator actor is unavailable.");
-    return { id: administrator.id, session: false };
+    const configuredActor = await prisma.user.findUnique({ where: { username }, select: { id: true, role: true, status: true } });
+    if (configuredActor?.role === "ADMIN" && configuredActor.status === "ACTIVE") return { id: configuredActor.id, session: false };
+    const activeAdministrators = await prisma.user.findMany({ where: { role: "ADMIN", status: "ACTIVE" }, orderBy: { id: "asc" }, take: 2, select: { id: true } });
+    if (activeAdministrators.length !== 1) throw new ApiError(503, "OPERATOR_NOT_CONFIGURED", "The configured operator actor is unavailable and there is not exactly one active administrator.");
+    return { id: activeAdministrators[0].id, session: false };
   }
   const user = await requireUser(request, true); assertAdmin(user); return { id: user.id, session: true };
 }
