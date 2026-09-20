@@ -51,9 +51,13 @@ async function enabledRuntime(signal: AbortSignal, expected?: SolanaRuntime) {
 }
 
 export type WalletAccountProps = { runtime: SolanaRuntime; wallet: Adapter; snapshot: BrowserWalletSnapshot };
-type WalletContent = { renderAccount?: (props: WalletAccountProps) => ReactNode };
+export type WalletDisconnectedProps = { runtime: SolanaRuntime };
+type WalletContent = {
+  renderAccount?: (props: WalletAccountProps) => ReactNode;
+  renderDisconnected?: (props: WalletDisconnectedProps) => ReactNode;
+};
 
-export function SolanaWallet({ renderAccount }: WalletContent = {}) {
+export function SolanaWallet({ renderAccount, renderDisconnected }: WalletContent = {}) {
   const [runtime, setRuntime] = useState<SolanaRuntime | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -67,10 +71,11 @@ export function SolanaWallet({ renderAccount }: WalletContent = {}) {
   if (!runtime) return <section className={styles.panel} aria-label="Wallet availability">
     {error ? <><p role="alert">{error}</p><button className="button button-secondary" onClick={() => { setError(null); setAttempt(value => value + 1); }}>Check availability</button></> : <p role="status">Verifying the on-chain wallet connection…</p>}
   </section>;
-  return <WalletConnection runtime={runtime} key={runtimeKey(runtime)} renderAccount={renderAccount} />;
+  return <WalletConnection runtime={runtime} key={runtimeKey(runtime)} renderAccount={renderAccount}
+    renderDisconnected={renderDisconnected} />;
 }
 
-function WalletConnection({ runtime, renderAccount }: { runtime: SolanaRuntime } & WalletContent) {
+function WalletConnection({ runtime, renderAccount, renderDisconnected }: { runtime: SolanaRuntime } & WalletContent) {
   const [connection, setConnection] = useState<{ wallet: Adapter; snapshot: BrowserWalletSnapshot } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -115,6 +120,7 @@ function WalletConnection({ runtime, renderAccount }: { runtime: SolanaRuntime }
         </>}
       </>}
     </section>
+    {connection?.snapshot.status !== "connected" && renderDisconnected?.({ runtime })}
     {connection?.snapshot.account && connection.snapshot.status === "connected" && <div className={styles.root} key={`${connection.snapshot.generation}:${connection.snapshot.account.address}`}>{renderAccount ? renderAccount({ runtime, wallet: connection.wallet, snapshot: connection.snapshot }) : <WalletAccount runtime={runtime} wallet={connection.wallet} snapshot={connection.snapshot} />}</div>}
   </div>;
 }

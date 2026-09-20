@@ -9,7 +9,7 @@ import { dispatchManagedCancellationCommand } from "@/lib/solana/managed-cancell
 import { dispatchManagedEscrowDepositCommand } from "@/lib/solana/managed-escrow-dispatcher";
 import { dispatchManagedOrderCommand } from "@/lib/solana/managed-order-dispatcher";
 import { dispatchManagedSeatRegistrationCommand } from "@/lib/solana/managed-seat-dispatcher";
-import { dispatchManagedTransferCommand } from "@/lib/solana/managed-transfer-dispatcher";
+import { dispatchManagedFeatherTransferCommand } from "@/lib/solana/managed-transfer-dispatcher";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 
 export const MANAGED_COMMAND_OPERATIONS = [
@@ -137,7 +137,7 @@ function dispatchForOperation(operation: ManagedCommandOperation, dependencies: 
   if (operation === "DEPOSIT_ESCROW") return dependencies.dispatchEscrow ?? dispatchManagedEscrowDepositCommand;
   if (operation === "PLACE_ORDER") return dependencies.dispatchOrder ?? dispatchManagedOrderCommand;
   if (operation === "CANCEL_ORDER") return dependencies.dispatchCancellation ?? dispatchManagedCancellationCommand;
-  return dependencies.dispatchTransfer ?? dispatchManagedTransferCommand;
+  return dependencies.dispatchTransfer ?? dispatchManagedFeatherTransferCommand;
 }
 
 function classifiedStatus(result: PublicChainCommandStatus): Pick<ManagedCommandWorkerCycleResult,
