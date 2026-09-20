@@ -352,7 +352,19 @@ async function assertTransactionReconciles(tx: Parameters<Parameters<typeof db.$
   for (const account of accounts) {
     const posted = account.postings.filter(posting => posting.journalEntry.status === "POSTED").reduce((sum, posting) => sum + posting.amountMilli, 0n);
     if (posted !== account.balanceMilli) fail(`post-cleanup ledger account ${account.id} cache differs from postings`);
-    if (!account.allowsNegative && account.balanceMilli < 0n) fail(`post-cleanup ledger account ${account.id} is negative`);
+    if (!account.allowsNegative && account.balanceMilli < 0n) fail(`post-cleanup ledger account is negative: ${json({
+      id: account.id,
+      ownerType: account.ownerType,
+      ownerId: account.ownerId,
+      purpose: account.purpose,
+      balanceMilli: account.balanceMilli,
+      postings: account.postings.map(posting => ({
+        id: posting.id,
+        journalEntryId: posting.journalEntryId,
+        amountMilli: posting.amountMilli,
+        status: posting.journalEntry.status,
+      })),
+    })}`);
     if (account.ownerType === "USER" && account.ownerId && account.purpose === "USER_FEATHERS") accountByOwner.set(account.ownerId, account);
   }
   for (const user of users) if (accountByOwner.get(user.id)?.balanceMilli !== user.balanceMilli) fail(`post-cleanup user ${user.id} differs from wallet`);
