@@ -455,6 +455,20 @@ async function applyCleanup() {
     await tx.journalEntry.deleteMany({ where: { id: { in: grants.map(grant => grant.id) } } });
     const remainingJournals = await tx.journalEntry.count({ where: { actorUserId: { in: targetIds } } });
     if (remainingJournals) fail("target journal activity remains after reviewed removal");
+    const remainingWalletPostings = await tx.ledgerPosting.findMany({
+      where: { ledgerAccount: { ownerType: "USER", ownerId: { in: targetIds } } },
+      select: {
+        id: true,
+        ledgerAccount: { select: { ownerId: true } },
+        journalEntry: {
+          select: {
+            id: true, type: true, referenceType: true, referenceId: true,
+            idempotencyScope: true, idempotencyKey: true, actorUserId: true,
+          },
+        },
+      },
+    });
+    if (remainingWalletPostings.length) fail(`target wallet postings remain after reviewed removal: ${json(remainingWalletPostings)}`);
     await tx.ledgerAccount.deleteMany({ where: { ownerType: "USER", ownerId: { in: targetIds } } });
     const deviceRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT id FROM "RegistrationDevice" WHERE "userId" IN (${Prisma.join(targetIds)})`);
     const deviceIds = deviceRows.map(device => device.id);
