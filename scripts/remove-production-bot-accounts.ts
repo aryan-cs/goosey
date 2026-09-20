@@ -311,14 +311,14 @@ export function buildReplay(input: Awaited<ReturnType<typeof loadIncident>>) {
   }
   const openingSnapshots = input.snapshots.filter(snapshot => !usedSnapshots.has(snapshot.id));
   if (openingSnapshots.length !== 1 || openingSnapshots[0].yesProbabilityBps !== 5_000) fail("market must retain exactly one 50% opening snapshot outside executions");
-  // Authorize the exact reviewed identities and legitimate history. Target-only
-  // trades are deliberately excluded so an already identified bot cannot race
-  // the build and invalidate cleanup; every such trade is still fully replayed,
-  // reconciled, and deleted inside the locked serializable transaction.
+  // Authorize the exact reviewed identities and fixed engine boundary. Trades
+  // are deliberately excluded so activity during the deployment cannot race
+  // cleanup. Every current execution is still reproduced exactly, and every
+  // non-target execution is preserved and repriced inside the locked serializable
+  // transaction; newly discovered identities are never added to the delete set.
   const digest = createHash("sha256").update(json({
     marketId: MARKET_ID,
     targetIds: [...targetIds].sort(),
-    survivingTrades: surviving.map(t => [t.id, t.userId, t.version]),
     lastLegacyTradeId: LAST_LEGACY_TRADE_ID,
     firstDiscretizedTradeId: FIRST_DISCRETIZED_TRADE_ID,
   })).digest("hex");
