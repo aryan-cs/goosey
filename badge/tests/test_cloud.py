@@ -78,7 +78,7 @@ for index,market in enumerate(source['markets']):
     load_detail(market,1000+index,points,current=5050 if index==0 else None,
                 sampled_from=41 if index==0 else None,downsampled=index==0)
     compact_close=market['closes'].replace(' UTC','Z')
-    has('1H');has(compact_close);has('Vol '+market['volume'])
+    has(compact_close);has('Vol '+market['volume'])
     if index==0:
         # Coherent history owns the headline. Half-percent values round up and
         # the displayed NO value is the exact complement of displayed YES.
@@ -86,16 +86,19 @@ for index,market in enumerate(source['markets']):
         market_title=next(w for w in g.widgets.values() if not w.hide and w.x==10 and w.y==36)
         probability=next(w for w in g.widgets.values() if not w.hide and w.text=='51%' and w.x==212)
         change=next(w for w in g.widgets.values() if not w.hide and w.text.startswith('+1 pts'))
+        yes_label=next(w for w in g.widgets.values() if not w.hide and w.text=='YES  51%')
+        no_label=next(w for w in g.widgets.values() if not w.hide and w.text=='NO  49%')
         volume=next(w for w in g.widgets.values() if not w.hide and w.text=='Vol '+market['volume'])
         market_status=next(w for w in g.widgets.values() if not w.hide and w.text=='[Open]')
         close_label=next(w for w in g.widgets.values() if not w.hide and w.text=='Closes\n'+compact_close)
         title_lines=market_title.text.split('\n')
         assert (market_title.w,market_title.styles['text_font'])==(300,16) and len(title_lines)<=2
         assert (probability.y,probability.w,probability.styles['text_font'])==(100,98,24)
-        forecast=next(w for w in g.widgets.values() if not w.hide and w.text=='Current Forecast')
         assert (change.x,change.y,change.w,change.styles['text_align'])==(10,36+18*len(title_lines),200,'left')
         assert change.text=='+1 pts in 1H' and change.y+14<=90
-        assert (forecast.x,forecast.y,forecast.w,forecast.styles['text_font'],forecast.styles['text_align'])==(200,82,110,14,'right')
+        assert (yes_label.x,yes_label.y,yes_label.w,yes_label.styles['text_font'],yes_label.styles['text_align'])==(7,212,149,16,'center')
+        assert (no_label.x,no_label.y,no_label.w,no_label.styles['text_font'],no_label.styles['text_align'])==(164,212,149,16,'center')
+        assert not any(w.text=='Current Forecast' for w in g.widgets.values() if not w.hide)
         assert (volume.x,volume.y,volume.w)==(212,139,98)
         assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(212,157,98,'right')
         assert market_status.styles['text_color']==0x267a35
@@ -126,8 +129,11 @@ assert g.files['appdata/request.txt'] in (None,'')
 # Real selected-market mailbox histories, not the catalog frame, drive charts.
 for generation,points in ((2000,[]),(2001,[[5000,1234567890000]])):
     press('A');load_detail(source['markets'][0],generation,points)
-    expected='No Earlier Price | 1H' if points else 'No Probability History Yet'
-    has(expected);assert ' pts' not in expected
+    if points:
+        assert 'No Earlier Price' not in g.visible() and 'No Probability History Yet' not in g.visible()
+        assert ' pts in 1H' not in g.visible()
+    else: has('No Probability History Yet')
+    assert 'Current Forecast' not in g.visible()
     snapshot('cloud-empty' if not points else 'cloud-single');press('B')
 # Bracketed terminal states stay distinct from the right-aligned close field.
 closed=json.loads(json.dumps(source));closed['markets'][0]['status']='CLOSED';load(closed,3000);tick(g.clock+2000);press('A')

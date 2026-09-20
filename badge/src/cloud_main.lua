@@ -163,9 +163,8 @@ local function render()
     local movement=#h>1 and wholePoints(h[#h][1]-h[1][1]) or nil
     local changeText=movement and string.format("%+d pts in 1H",movement)
       or not detail and "Loading 1H History..."
-      or #h==1 and "No Earlier Price | 1H" or "No Probability History Yet"
+      or #h==0 and "No Probability History Yet" or ""
     text(3,changeText,10,36+titleLines*18,200,14,"left",movement and (movement<0 and C.down or C.up) or C.muted)
-    text(4,"Current Forecast",200,82,110,14,"right",C.muted)
     text(2,tostring(wholePercent(currentBps)).."%",212,100,98,24,"right")
     text(7,"Vol "..m.volume,212,139,98,14,"right")
     track:hidden(false);midline:hidden(false)
@@ -187,8 +186,8 @@ local function render()
     stamp:set_pos(212,174);stamp:set_size(98,31);stamp:set_text("Closes\n"..m.closes:gsub(" UTC$","Z"))
     focus(side==1 and 7 or 164,207,149,28)
     local yes=wholePercent(currentBps)
-    text(9,"YES  "..yes.."%",18,212,132,16)
-    text(10,"NO  "..(100-yes).."%",176,212,132,16)
+    text(9,"YES  "..yes.."%",7,212,149,16,"center")
+    text(10,"NO  "..(100-yes).."%",164,212,149,16,"center")
   elseif page=="settings" then
     local options={"Return to Markets","Account Info"}
     for i=1,2 do text(i,options[i],18,54+(i-1)*46,285,18) end

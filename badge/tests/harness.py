@@ -70,7 +70,8 @@ def render(widgets,path):
                 # Conservative horizontal bound; actual LVGL fonts still require hardware QA.
                 assert d.textlength(line,font=font)<=int(w.w)+1,(path.name,line,d.textlength(line,font=font),w.w)
                 assert y+j*(int(s.text_font or 14)+2)+int(s.text_font or 14)<=240
-                dx=int(w.w)-d.textlength(line,font=font) if s.text_align=='right' else 0
+                width=d.textlength(line,font=font)
+                dx=(int(w.w)-width)/2 if s.text_align=='center' else int(w.w)-width if s.text_align=='right' else 0
                 d.text((x+dx,y+j*(int(s.text_font or 14)+2)),line,font=font,fill=rgb(s.text_color or 0xffffff))
     im.resize((640,480)).save(path)
 
