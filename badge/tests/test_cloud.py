@@ -95,7 +95,7 @@ for index,market in enumerate(source['markets']):
         assert (change.x,change.y,change.w,change.styles['text_align'])==(10,36+18*len(title_lines),190,'left')
         assert change.text.endswith(' | Sampled 1H') and change.y+14<=90
         assert (volume.x,volume.y,volume.w)==(212,139,98)
-        assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(212,157,98,'left')
+        assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(212,157,98,'right')
         assert market_status.styles['text_color']==0x267a35
         assert (close_label.x,close_label.y,close_label.w,close_label.h,close_label.styles['text_align'])==(212,174,98,31,'right')
         assert volume.y+14 < market_status.y and market_status.y+14 < close_label.y
@@ -129,7 +129,7 @@ for generation,points in ((2000,[]),(2001,[[5000,1234567890000]])):
 # Bracketed terminal states stay distinct from the right-aligned close field.
 closed=json.loads(json.dumps(source));closed['markets'][0]['status']='CLOSED';load(closed,3000);tick(g.clock+2000);press('A')
 closed_status=next(w for w in g.widgets.values() if not w.hide and w.text=='[Closed]')
-assert (closed_status.x,closed_status.y,closed_status.styles['text_color'])==(212,157,0x4f6b3e)
+assert (closed_status.x,closed_status.y,closed_status.w,closed_status.styles['text_align'],closed_status.styles['text_color'])==(212,157,98,'right',0x4f6b3e)
 has('Closes\n'+closed['markets'][0]['closes'].replace(' UTC','Z'));press('B')
 # Reopening cannot trust a cached account frame as a fresh login.
 g.on_exit();g.fresh();has('Reconnecting...')
