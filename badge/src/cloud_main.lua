@@ -1,6 +1,6 @@
 local cloud={markets={},capturedAt="",rangeStart=nil,rangeEnd=nil}
 __CLOUD_READER__
-local readDetailFrame=require("detail_reader")
+local readDetailFrame
 local trade,qr,uiRoot,pendingCloud,refreshSlug
 local C={bg=0xc5d99b,panel=0x91ad65,text=0x1c3524,muted=0x4f6b3e,up=0x267a35,down=0xa23d2b}
 local page,selected,side,setting="list",1,1,1
@@ -85,6 +85,7 @@ local function refreshDetail()
   if type(data)~="string" then return false end
   local generation=data:match("^GH2\t(%d+)\t")
   if not generation or generation==detailGeneration then return false end
+  if not readDetailFrame then readDetailFrame=require("detail_reader") end
   local nextDetail=readDetailFrame(data)
   if not nextDetail or nextDetail.slug~=m.slug then return false end
   detail=nextDetail;detailGeneration=generation
@@ -101,6 +102,7 @@ local function refresh(initial)
     end
     local data=badge.fs.read("appdata/market_snapshot.txt")
     if type(data)=="string" and cloud.generation and data:match("^GS[12]\t(%d+)\t")==cloud.generation then return false end
+    if not readCloudFrame then readCloudFrame=require("cloud_reader") end
     pendingCloud=readCloudFrame(data,true)
     return false
   end

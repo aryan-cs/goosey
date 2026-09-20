@@ -30,7 +30,7 @@ source = 'cloud_main.lua' if args.cloud_url else 'main.lua'
 code = (root / 'badge/src' / source).read_text().replace('__MARKETS__', '\n'.join(rows))
 snapshot = fetch_snapshot(args.cloud_url) if args.cloud_url else None
 code = code.replace('__CLOUD__', lua_literal(snapshot) if snapshot else 'nil')
-code = code.replace('__CLOUD_READER__', 'local readCloudFrame=require("cloud_reader")' if snapshot else 'local readCloudFrame=nil')
+code = code.replace('__CLOUD_READER__', 'local readCloudFrame')
 # Only remove full-line comments, blank lines and leading indentation. Keep
 # literals and statement boundaries intact; smaller source reduces load buffers.
 code = '\n'.join(line.lstrip() for line in code.splitlines()

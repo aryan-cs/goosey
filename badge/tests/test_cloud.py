@@ -4,6 +4,7 @@ import json,sys
 sys.path.insert(0,str(root/'badge/scripts'))
 from cloud_snapshot import detail_mailbox_frame,mailbox_frame
 assert 'for word in s:gmatch("%S+") do\nif #word' not in code
+assert code.splitlines()[1:3] == ['local readCloudFrame', 'local readDetailFrame']
 source=json.loads((output/'snapshot.json').read_text())
 g.saved['paper_v2']='1,76543,2,1,0,0,0,0,0,0,0,0,0,0'
 g.saved['username_v1']='old_local'
