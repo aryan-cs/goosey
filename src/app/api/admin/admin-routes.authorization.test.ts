@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   principal: { id: "user-attacker", role: "USER", status: "ACTIVE" },
   readJsonObject: vi.fn(),
   acceptManagedMarketProvisioning: vi.fn(),
+  acceptManagedResolutionCommand: vi.fn(),
+  acceptManagedResolutionProposal: vi.fn(),
+  acceptManagedResolutionApproval: vi.fn(),
   transitionAdminMarket: vi.fn(),
   createResolutionProposal: vi.fn(),
   approveResolutionProposal: vi.fn(),
@@ -43,6 +46,8 @@ vi.mock("@/lib/market-service", () => {
     consumeRateLimit: vi.fn().mockResolvedValue(undefined),
     prisma: {
       registrationInvite: { findMany: mocks.registrationInviteFindMany },
+      market: { findUnique: vi.fn() },
+      marketResolutionProposal: { findUnique: vi.fn() },
       user: { findUnique: vi.fn() },
       $transaction: mocks.transaction,
     },
@@ -75,6 +80,14 @@ vi.mock("@/lib/solana/managed-market-provisioning-service", () => ({
 }));
 vi.mock("@/lib/solana/managed-market-provisioning-dispatcher", () => ({
   dispatchManagedMarketProvisioningCommand: vi.fn(),
+}));
+vi.mock("@/lib/solana/managed-resolution-service", () => ({
+  acceptManagedResolutionCommand: mocks.acceptManagedResolutionCommand,
+  acceptManagedResolutionProposal: mocks.acceptManagedResolutionProposal,
+  acceptManagedResolutionApproval: mocks.acceptManagedResolutionApproval,
+}));
+vi.mock("@/lib/solana/managed-resolution-dispatcher", () => ({
+  dispatchManagedResolutionCommand: vi.fn(),
 }));
 vi.mock("@/lib/settlement-service", () => ({
   getSettlementRun: mocks.getSettlementRun,
@@ -160,6 +173,9 @@ describe("hostile admin route authorization", () => {
     expect(responses.map((response) => response.status)).toEqual(Array(15).fill(403));
     expect(mocks.readJsonObject).not.toHaveBeenCalled();
     expect(mocks.acceptManagedMarketProvisioning).not.toHaveBeenCalled();
+    expect(mocks.acceptManagedResolutionCommand).not.toHaveBeenCalled();
+    expect(mocks.acceptManagedResolutionProposal).not.toHaveBeenCalled();
+    expect(mocks.acceptManagedResolutionApproval).not.toHaveBeenCalled();
     expect(mocks.transitionAdminMarket).not.toHaveBeenCalled();
     expect(mocks.createResolutionProposal).not.toHaveBeenCalled();
     expect(mocks.approveResolutionProposal).not.toHaveBeenCalled();
