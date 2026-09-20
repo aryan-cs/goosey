@@ -269,8 +269,9 @@ async function run(options: MatchedTradeOptions) {
         return !!account.value && Buffer.from(account.value.data[0], "base64").readBigUInt64LE(112) === BigInt(primary.allowance);
       } });
     activeStage = "register-counterparty-seat";
-    const registration = await buildRegisterSeatInstruction({ programAddress: PROGRAM_ADDRESS, marketId, seats, wallet: taker });
-    await exactTransaction({ kind: "counterparty-seat-registration", file: path.join(receipts, "counterparty-seat-registration.json"), runtime, payer: taker,
+    const registration = await buildRegisterSeatInstruction({ programAddress: PROGRAM_ADDRESS,
+      marketId, seats, wallet: taker, rentPayer: admin });
+    await exactTransaction({ kind: "counterparty-seat-registration", file: path.join(receipts, "counterparty-seat-registration.json"), runtime, payer: admin,
       instructions: [registration.instruction], signal, complete: async () => (await readGooseyEscrow(runtime, { marketId, wallet: taker.address }, { signal })).seat !== null });
     const beforeDeposit = await readGooseyEscrow(runtime, { marketId, wallet: taker.address }, { signal }); assert(beforeDeposit.seat);
     activeStage = "deposit-counterparty-feathers";

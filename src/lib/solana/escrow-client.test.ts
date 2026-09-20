@@ -15,7 +15,7 @@ const max = (1n << 64n) - 1n;
 const hex = (bytes: ArrayLike<number>) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 const createInput = () => ({ programAddress, marketId, admin, seats, seatsRentLamports: 1_234_567n,
   payoutMilli: 100_000n, feeBps: 250, closesAt: 2_000_000_000n, resolvesAt: 2_000_000_001n });
-const walletInput = () => ({ programAddress, marketId, wallet, seats: seats.address });
+const walletInput = () => ({ programAddress, marketId, wallet, rentPayer: admin, seats: seats.address });
 
 describe("escrow client instruction contract", () => {
   it("derives fixed PDA/ATA vectors with exact large market ID", async () => {
@@ -73,13 +73,14 @@ describe("escrow client instruction contract", () => {
     await expect(buildCreateMarketInstructions({ ...createInput(), marketId: 0n, payoutMilli: 2n, feeBps: 0 })).resolves.toBeDefined();
   });
 
-  it("registers the signing wallet as account payer, no invented seat index or nonce", async () => {
+  it("registers the wallet while a distinct sponsor pays locator rent", async () => {
     const plan = await buildRegisterSeatInstruction(walletInput());
     expect(hex(plan.instruction.data)).toBe("aad7f54006fc2974");
     expect(plan.instruction.accounts.map((meta) => [meta.address, meta.role])).toEqual([
-      [wallet.address, 3], [plan.config, 0], [plan.enrollment, 0], [plan.market, 0], [seats.address, 1], [plan.locator, 1], [SYSTEM_PROGRAM_ADDRESS, 0],
+      [wallet.address, 2], [admin.address, 3], [plan.config, 0], [plan.enrollment, 0], [plan.market, 0],
+      [seats.address, 1], [plan.locator, 1], [SYSTEM_PROGRAM_ADDRESS, 0],
     ]);
-    expect(getSignersFromInstruction(plan.instruction)).toEqual([wallet]);
+    expect(getSignersFromInstruction(plan.instruction)).toEqual([wallet, admin]);
   });
 
   it.each([["deposit", buildDepositInstruction, "f223c68952e1f2b6"], ["withdraw", buildWithdrawInstruction, "b712469c946da122"]] as const)(
@@ -124,6 +125,7 @@ describe("escrow client instruction contract", () => {
     }
     await expect(buildCreateMarketInstructions({ ...createInput(), seats: { address: seats.address } as TransactionSigner })).rejects.toThrow();
     await expect(buildRegisterSeatInstruction({ ...walletInput(), wallet: { address: wallet.address } as TransactionSigner })).rejects.toThrow();
+    await expect(buildRegisterSeatInstruction({ ...walletInput(), rentPayer: wallet })).rejects.toThrow(/distinct/);
     await expect(buildWithdrawInstruction({ ...walletInput(), seats: "bad" as typeof seats.address, amount: 1n, expectedNonce: 0n })).rejects.toThrow();
     await expect(deriveGooseyMarketAddresses({ programAddress: "bad" as typeof programAddress, marketId })).rejects.toThrow();
   });

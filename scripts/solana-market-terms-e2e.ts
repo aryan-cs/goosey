@@ -231,7 +231,7 @@ injection are refused.`);
   }
   async function registerAndDeposit(market: Market, actorIndex: number, amount: bigint) {
     const registered = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: market.marketId,
-      wallet: actors[actorIndex], seats: market.seats });
+      wallet: actors[actorIndex], rentPayer: admin, seats: market.seats });
     await execute(`register market ${market.marketId} actor ${actorIndex}`, [registered.instruction]);
     watched.add(registered.locator);
     const deposited = await buildDepositInstruction({ programAddress: PROGRAM, marketId: market.marketId,
@@ -240,7 +240,7 @@ injection are refused.`);
   }
   async function registerReviewerAndDeposit(market: Market, amount: bigint) {
     const registered = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: market.marketId,
-      wallet: reviewers[0], seats: market.seats });
+      wallet: reviewers[0], rentPayer: admin, seats: market.seats });
     await execute(`register market ${market.marketId} designated reviewer`, [registered.instruction]);
     watched.add(registered.locator);
     const deposited = await buildDepositInstruction({ programAddress: PROGRAM, marketId: market.marketId,

@@ -483,9 +483,10 @@ async function run(options: LocalBootstrapOptions) {
     activeBootstrapStage = "participant-seat-and-deposit";
     const snapshot = await readGooseyEscrow(runtime, { marketId: BigInt(state.marketId), wallet: participant.address }, { signal, includeMarketTerms: true });
     assert(snapshot.marketTerms?.sealed && snapshot.marketTerms.acceptanceBits === 3 && snapshot.resolution?.phase === 0 && snapshot.orderBook);
-    const registration = await buildRegisterSeatInstruction({ programAddress: runtime.programAddress, marketId: BigInt(state.marketId), seats, wallet: participant });
+    const registration = await buildRegisterSeatInstruction({ programAddress: runtime.programAddress,
+      marketId: BigInt(state.marketId), seats, wallet: participant, rentPayer: admin });
     await exactTransaction({ kind: "participant-seat-registration", file: path.join(receipts, "participant-seat-registration.json"), runtime,
-      payer: participant, instructions: [registration.instruction], signal, complete: async () => {
+      payer: admin, instructions: [registration.instruction], signal, complete: async () => {
         const value = await readGooseyEscrow(runtime, { marketId: BigInt(state.marketId), wallet: participant.address }, { signal }); return value.seat !== null;
       } });
     const depositAmount = BigInt(state.allowance) / 2n;

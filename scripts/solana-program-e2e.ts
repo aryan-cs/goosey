@@ -359,10 +359,12 @@ async function main() {
     await execute(`shipping builder creates market ${item.id}, large seats account and PDA ATA vault`, built.instructions);
   }
   function register(item: MarketFixture, owner = wallet, enrollmentAddress = first.record) {
-    return instruction("register_seat", [signer(owner), ro(config), ro(enrollmentAddress), ro(item.market), rw(item.seats.address), rw(item.locator), ro(SYSTEM_PROGRAM_ADDRESS)]);
+    return instruction("register_seat", [signer(owner, false), signer(admin), ro(config), ro(enrollmentAddress),
+      ro(item.market), rw(item.seats.address), rw(item.locator), ro(SYSTEM_PROGRAM_ADDRESS)]);
   }
   await execute("foreign wallet cannot register another enrollment", [register(book, attacker)], 2006, marketWatch);
-  const clientSeat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: book.id, wallet, seats: book.seats.address });
+  const clientSeat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: book.id,
+    wallet, rentPayer: admin, seats: book.seats.address });
   assert.equal(clientSeat.locator, book.locator);
   await execute("shipping builder registers wallet seat with zero initial cash", [clientSeat.instruction]);
   await execute("duplicate registration cannot allocate another seat", [register(book)], /already in use|already initialized/i, marketWatch);

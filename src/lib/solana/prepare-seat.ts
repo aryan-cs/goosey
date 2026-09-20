@@ -10,7 +10,7 @@ import { resolveSolanaRuntime, type SolanaRuntime } from "./runtime";
 import type { PreparedWalletTransaction } from "./wallet-transaction";
 
 export type PrepareMarketSeatInput = {
-  runtime: SolanaRuntime; sender: TransactionSigner; marketId: bigint; signal?: AbortSignal;
+  runtime: SolanaRuntime; sender: TransactionSigner; rentPayer?: TransactionSigner; marketId: bigint; signal?: AbortSignal;
 };
 
 /** Unsigned seat registration only. Registration is permanent and the program
@@ -20,10 +20,14 @@ export type PrepareMarketSeatInput = {
  * No ATA creation, grant, deposit, signing, sending or funding is performed.
  */
 export async function prepareMarketSeat(input: PrepareMarketSeatInput) {
-  const supplied = { ...input.runtime }, sender = input.sender, marketId = input.marketId;
+  const supplied = { ...input.runtime }, sender = input.sender, rentPayer = input.rentPayer, marketId = input.marketId;
   if (typeof marketId !== "bigint" || marketId < 0n || marketId > (1n << 64n) - 1n) throw new Error("Invalid market ID");
   assertIsTransactionSigner(sender);
+  if (!rentPayer) throw new Error("A distinct server-managed seat rent payer is required");
+  assertIsTransactionSigner(rentPayer);
   const senderAddress = address(sender.address), signal = input.signal ?? AbortSignal.timeout(15_000);
+  const rentPayerAddress = address(rentPayer.address);
+  if (senderAddress === rentPayerAddress) throw new Error("Seat wallet and rent payer must be distinct signers");
   const runtime = resolveSolanaRuntime({ GOOSEY_SOLANA_CLUSTER: supplied.cluster, GOOSEY_SOLANA_RPC_URL: supplied.rpcUrl,
     GOOSEY_SOLANA_PROGRAM_ID: supplied.programAddress, GOOSEY_SOLANA_GENESIS_HASH: supplied.genesisHash });
   signal.throwIfAborted();
@@ -37,7 +41,8 @@ export async function prepareMarketSeat(input: PrepareMarketSeatInput) {
     throw new Error("Missing or mismatched verified seat snapshot");
   }
   if (!Array.isArray(snapshot.orderBook.seatReserves) || snapshot.orderBook.seatReserves.length >= 256) throw new Error("Market seat capacity unavailable");
-  const plan = await buildRegisterSeatInstruction({ programAddress: runtime.programAddress, marketId, wallet: sender, seats: snapshot.seats });
+  const plan = await buildRegisterSeatInstruction({ programAddress: runtime.programAddress, marketId,
+    wallet: sender, rentPayer, seats: snapshot.seats });
   const [{ book }, { terms }, [resolution]] = await Promise.all([
     deriveGooseyBookAddress(runtime.programAddress, plan.market),
     deriveGooseyMarketTermsAddresses({ programAddress: runtime.programAddress, marketId }),
@@ -78,8 +83,8 @@ export async function prepareMarketSeat(input: PrepareMarketSeatInput) {
     || typeof latest.value.lastValidBlockHeight !== "bigint" || latest.value.lastValidBlockHeight < 0n) throw new Error("Invalid or stale finalized blockhash response");
   const lifetime = { blockhash: blockhash(latest.value.blockhash), lastValidBlockHeight: latest.value.lastValidBlockHeight };
   signal.throwIfAborted();
-  if (sender.address !== senderAddress) throw new Error("Wallet changed during seat preparation");
-  const message = pipe(createTransactionMessage({ version: 0 }), tx => setTransactionMessageFeePayerSigner(sender, tx),
+  if (sender.address !== senderAddress || rentPayer.address !== rentPayerAddress) throw new Error("Seat signer changed during preparation");
+  const message = pipe(createTransactionMessage({ version: 0 }), tx => setTransactionMessageFeePayerSigner(rentPayer, tx),
     tx => setTransactionMessageLifetimeUsingBlockhash(lifetime, tx), tx => appendTransactionMessageInstructions([plan.instruction], tx));
   const prepared = { message, sender: senderAddress, cluster: runtime.cluster, genesisHash: runtime.genesisHash } satisfies PreparedWalletTransaction;
   return { ...prepared, market: plan.market, seats: plan.seats, enrollment: plan.enrollment, locator: plan.locator,

@@ -118,8 +118,11 @@ pub struct CreateMarket<'info> {
 
 #[derive(Accounts)]
 pub struct RegisterSeat<'info> {
-    #[account(mut)]
     pub wallet: Signer<'info>,
+    /// Distinct server-managed sponsor that pays locator rent. The wallet still
+    /// signs the participant action but never needs SOL.
+    #[account(mut, constraint = rent_payer.key() != wallet.key() @ GooseyError::InvalidAuthority)]
+    pub rent_payer: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
     #[account(seeds = [b"enrollment", config.key().as_ref(), wallet.key().as_ref()], bump = enrollment.bump,
@@ -129,7 +132,7 @@ pub struct RegisterSeat<'info> {
     pub market: Account<'info, Market>,
     #[account(mut)]
     pub seats: AccountLoader<'info, Seats>,
-    #[account(init, payer = wallet, seeds = [b"seat", market.key().as_ref(), wallet.key().as_ref()],
+    #[account(init, payer = rent_payer, seeds = [b"seat", market.key().as_ref(), wallet.key().as_ref()],
         bump, space = 8 + SeatLocator::INIT_SPACE)]
     pub locator: Account<'info, SeatLocator>,
     pub system_program: Program<'info, System>,

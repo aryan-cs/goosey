@@ -56,6 +56,7 @@ describe("managed order dispatcher", () => {
       now: () => new Date("2026-09-20T00:00:01Z"), loadParticipant: vi.fn(async () => createNoopSigner(PARTICIPANT)),
       ensureProvisioned: vi.fn(async () => ({ status: "ready" as const, operation: null, walletAddress: PARTICIPANT,
         chainId: "solana:localnet" as const, genesisHash: GENESIS, finalizedSlot: 1n })),
+      ensureSeat: vi.fn(async () => ({ status: "PROJECTED" } as never)),
       loadSponsor: vi.fn(async () => createNoopSigner(SPONSOR)), prepare: vi.fn(async () => ({ signed,
         market: SPONSOR, book: SPONSOR, expectedNonce: 0n, observedSlot: 1n, bookRevision: 1n })), submit,
       track: vi.fn(async () => ({ status: "finalized" as const, signature: signed.signature })) });

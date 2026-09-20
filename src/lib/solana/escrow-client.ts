@@ -106,13 +106,19 @@ export type EscrowWalletInput = EscrowMarketInput & {
   /** Read from the actual Market account; the program checks has_one = seats. */
   seats: Address;
 };
-export async function buildRegisterSeatInstruction(input: EscrowWalletInput) {
+export type RegisterSeatInput = EscrowWalletInput & {
+  /** Distinct signer that funds SeatLocator rent and normally also pays the transaction fee. */
+  rentPayer: TransactionSigner;
+};
+export async function buildRegisterSeatInstruction(input: RegisterSeatInput) {
   const programAddress = address(input.programAddress);
-  const wallet = signerMeta(input.wallet, true);
+  const wallet = signerMeta(input.wallet, false);
+  const rentPayer = signerMeta(input.rentPayer, true);
+  if (wallet.address === rentPayer.address) throw new Error("Seat wallet and rent payer must be distinct signers");
   const seats = address(input.seats);
   const addresses = await deriveGooseySeatAddresses({ programAddress, marketId: input.marketId, wallet: wallet.address });
   const instruction = { programAddress,
-    accounts: [wallet, ro(addresses.config), ro(addresses.enrollment), ro(addresses.market), rw(seats), rw(addresses.locator), ro(SYSTEM_PROGRAM_ADDRESS)],
+    accounts: [wallet, rentPayer, ro(addresses.config), ro(addresses.enrollment), ro(addresses.market), rw(seats), rw(addresses.locator), ro(SYSTEM_PROGRAM_ADDRESS)],
     data: await encode("register_seat"),
   } satisfies Instruction;
   return { ...addresses, seats, instruction };

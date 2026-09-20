@@ -171,7 +171,8 @@ refunds, authorization, expiry/close, slot reuse, replay and transaction rollbac
     for (const key of [created.market, created.seats, created.vault, book]) watched.add(key);
     const m = { ...created, marketId, closesAt, book };
     for (const [i, wallet] of actors.entries()) {
-      const seat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId, wallet, seats: m.seats });
+      const seat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId,
+        wallet, rentPayer: admin, seats: m.seats });
       await execute(`register market${marketId} seat${i}`, [seat.instruction]); watched.add(seat.locator);
       const deposit = await buildDepositInstruction({ programAddress: PROGRAM, marketId, wallet, seats: m.seats,
         amount: marketId === 1n ? 5_000_000n : 1_000_000n, expectedNonce: 0n });
@@ -291,7 +292,8 @@ refunds, authorization, expiry/close, slot reuse, replay and transaction rollbac
       await admissionCase("fund reviewer locator rent only", reviewers.map(reviewer => getTransferSolInstruction({
         source: admin, destination: reviewer.address, amount: 10_000_000n })));
       for (const [i, reviewer] of reviewers.entries()) {
-        const seat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId, wallet: reviewer, seats: m.seats });
+        const seat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId,
+          wallet: reviewer, rentPayer: admin, seats: m.seats });
         await admissionCase(`register zero-position reviewer seat ${i}`, [seat.instruction]); watched.add(seat.locator);
         const order = await buildPlaceOrderInstruction({ programAddress: PROGRAM, marketId, seats: m.seats, wallet: reviewer,
           expectedNonce: 0n, action: "BUY", outcome: "YES", price: 1n, quantity: 1n, timeInForce: "GTC", selfTrade: "CANCEL_AGGRESSOR", touches: 16 });

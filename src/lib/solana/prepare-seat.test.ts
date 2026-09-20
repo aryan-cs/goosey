@@ -14,8 +14,10 @@ vi.mock("@solana/kit", async original => ({ ...await original<typeof import("@so
 }) }));
 const runtime = { cluster: "localnet" as const, rpcUrl: "http://127.0.0.1:18999/", programAddress: address("CgEGAD3EGLm63YaSx58sRiNPQmmxg8RqvqcxE3xThX8Q"), genesisHash: "Bax5P2GmYBb2P6UjJFmEVys7cpRzY4A85ncAJqtgvSsm" };
 const wallet: Address = address("EnKKVxU5bicr61K8gNsUAAj6ibYDXLWUdXi6KKFyA47W");
+const sponsor: Address = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const seats = address("SysvarRent111111111111111111111111111111111");
-const input = () => ({ runtime: { ...runtime }, sender: { address: wallet, signTransactions: mocks.sign }, marketId: 7n });
+const input = () => ({ runtime: { ...runtime }, sender: { address: wallet, signTransactions: mocks.sign },
+  rentPayer: { address: sponsor, signTransactions: mocks.sign }, marketId: 7n });
 async function snapshot() {
   const a = await deriveGooseySeatAddresses({ programAddress: runtime.programAddress, marketId: 7n, wallet });
   const { book } = await deriveGooseyBookAddress(runtime.programAddress, a.market);
@@ -38,11 +40,12 @@ beforeEach(async () => { vi.resetAllMocks(); mocks.read.mockResolvedValue(await 
   mocks.genesis.mockResolvedValue(runtime.genesisHash); mocks.latest.mockResolvedValue({ context: { slot: 502n }, value: { blockhash: blockhash(runtime.genesisHash), lastValidBlockHeight: 900n } }); });
 afterEach(() => expect(mocks.sign).not.toHaveBeenCalled());
 describe("seat preparation with mocked reader/RPC and shipping instruction builder", () => {
-  it("prepares only canonical registration, sole wallet signer, finalized monotonic reads", async () => {
+  it("prepares canonical registration with distinct wallet and rent sponsor", async () => {
     const i=input(), result=await prepareMarketSeat(i); const contract: PreparedWalletTransaction=result;
-    const plan=await buildRegisterSeatInstruction({ programAddress: runtime.programAddress, marketId:7n, wallet:i.sender, seats });
+    const plan=await buildRegisterSeatInstruction({ programAddress: runtime.programAddress, marketId:7n,
+      wallet:i.sender, rentPayer:i.rentPayer, seats });
     expect(contract.message.version).toBe(0); expect(result.message.instructions).toEqual([plan.instruction]);
-    expect(getSignersFromTransactionMessage(result.message)).toEqual([i.sender]); expect(result.message.feePayer.address).toBe(wallet);
+    expect(getSignersFromTransactionMessage(result.message)).toEqual([i.rentPayer, i.sender]); expect(result.message.feePayer.address).toBe(sponsor);
     expect(result).toMatchObject({ observedSlot:500n,enrollmentSlot:501n,blockhashSlot:502n, market:plan.market, locator:plan.locator });
     expect(mocks.read).toHaveBeenCalledWith(runtime,{marketId:7n,wallet},expect.objectContaining({includeResolution:true,includeMarketTerms:true}));
     expect(mocks.account.mock.calls[0][0]).toEqual([plan.enrollment,{encoding:"base64",commitment:"finalized",minContextSlot:500n}]);
@@ -82,6 +85,6 @@ describe("seat preparation with mocked reader/RPC and shipping instruction build
   it("propagates reader failures, respects abort and wallet changes",async()=>{
     mocks.read.mockRejectedValueOnce(new Error("RPC down"));await expect(prepareMarketSeat(input())).rejects.toThrow("RPC down");
     const controller=new AbortController();controller.abort();await expect(prepareMarketSeat({...input(),signal:controller.signal})).rejects.toThrow();
-    const i=input();mocks.genesis.mockImplementationOnce(()=>{i.sender.address=seats;return runtime.genesisHash;});await expect(prepareMarketSeat(i)).rejects.toThrow("Wallet changed");
+    const i=input();mocks.genesis.mockImplementationOnce(()=>{i.sender.address=seats;return runtime.genesisHash;});await expect(prepareMarketSeat(i)).rejects.toThrow("signer changed");
   });
 });

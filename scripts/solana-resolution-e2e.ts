@@ -282,7 +282,8 @@ configuration, account injection and validator resets are refused.`);
     const { book } = await deriveGooseyBookAddress(PROGRAM, created.market);
     for (const key of [created.market, created.seats, created.vault, book]) watched.add(key);
     for (const [index, wallet] of actors.entries()) {
-      const registered = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId, wallet, seats: created.seats });
+      const registered = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId,
+        wallet, rentPayer: admin, seats: created.seats });
       await execute(`register ${outcome} seat ${index}`, [registered.instruction]);
       watched.add(registered.locator);
       const deposit = await buildDepositInstruction({ programAddress: PROGRAM, marketId, wallet, seats: created.seats,

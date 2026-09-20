@@ -272,7 +272,8 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   for (const key of [market.market, market.seats, market.vault, book, resolution]) watched.add(key);
   const locators: Address[] = [];
   for (const [i, wallet] of actors.entries()) {
-    const seat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: 1n, wallet, seats: market.seats });
+    const seat = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: 1n,
+      wallet, rentPayer: admin, seats: market.seats });
     await execute(`register actual wallet seat ${i}`, [seat.instruction]);
     locators.push(seat.locator); watched.add(seat.locator);
   }
@@ -760,7 +761,8 @@ Resolution initialization is tested; no cancellation/replacement/settlement life
   watched.add(shortResolution.resolution);
   await execute("close-boundary resolution freezes independent reviewers before trading", [shortResolution.instruction]);
   for (let i = 0; i < 2; i++) {
-    const registered = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: shortId, wallet: actors[i], seats: shortMarket.seats });
+    const registered = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId: shortId,
+      wallet: actors[i], rentPayer: admin, seats: shortMarket.seats });
     watched.add(registered.locator);
     await execute(`close-boundary register already-enrolled wallet ${i}`, [registered.instruction]);
   }

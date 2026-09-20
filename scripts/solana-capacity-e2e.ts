@@ -215,7 +215,7 @@ distinct real makers at the maximum work bound with accounting conservation.`);
     for (const entry of deposits) {
       const wallet = participants[entry.participant]!;
       const registration = await buildRegisterSeatInstruction({ programAddress: PROGRAM, marketId,
-        wallet, seats: created.seats });
+        wallet, rentPayer: admin, seats: created.seats });
       await execute(`register market${marketId} participant${entry.participant}`, [registration.instruction]);
       watched.add(registration.locator);
       const deposit = await buildDepositInstruction({ programAddress: PROGRAM, marketId, wallet,

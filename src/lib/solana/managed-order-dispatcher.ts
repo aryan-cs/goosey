@@ -9,6 +9,7 @@ import { type SignedWireInput } from "@/lib/solana/chain-command";
 import { PrismaChainCommandStore, type PublicChainCommandStatus, type StoredChainCommand } from "@/lib/solana/chain-command-store";
 import { loadAppManagedSolanaSigner } from "@/lib/solana/custody-service";
 import { ensureManagedFeatherAccountReady } from "@/lib/solana/managed-account-readiness";
+import { ensureManagedSeatRegistration } from "@/lib/solana/managed-seat-dispatcher";
 import { managedOrderRequestSchema } from "@/lib/solana/managed-order-service";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 import { loadSolanaSponsorSigner } from "@/lib/solana/sponsor-service";
@@ -36,6 +37,7 @@ type Dependencies = Readonly<{
   now?: () => Date;
   owner?: string;
   ensureProvisioned?: typeof ensureManagedFeatherAccountReady;
+  ensureSeat?: typeof ensureManagedSeatRegistration;
   loadParticipant?: typeof loadAppManagedSolanaSigner;
   loadSponsor?: typeof loadSolanaSponsorSigner;
   prepare?: typeof prepareSponsoredOrder;
@@ -139,6 +141,17 @@ export async function dispatchManagedOrderCommand(
       signal: dependencies.signal,
     });
     if (readiness.status !== "ready") throw new Error("Managed feather account is still provisioning");
+    const seat = await (dependencies.ensureSeat ?? ensureManagedSeatRegistration)({
+      userId: command.identity.actorId,
+      marketSlug: request.marketSlug,
+    }, {
+      database: dependencies.database,
+      env,
+      signal: dependencies.signal,
+    });
+    if (seat.status !== "PROJECTED" && seat.status !== "FINALIZED") {
+      throw new Error("Managed market seat registration is not finalized");
+    }
     const [participant, sponsor] = await Promise.all([
       (dependencies.loadParticipant ?? loadAppManagedSolanaSigner)(command.identity.actorId, env),
       (dependencies.loadSponsor ?? loadSolanaSponsorSigner)(env),
