@@ -1,11 +1,11 @@
 {
-  "lastReviewedUpstreamRevision": "429e8489952c66c19e3a79691c715211060d8d95",
-  "reviewedAt": "2026-09-20T01:17:35.409849+00:00",
-  "outcome": "Verified teammate GS2 cards, GH2 history and cold-start changes with current 13-market production catalog",
+  "lastReviewedUpstreamRevision": "5f99195074bb1e9453b771aaa0162b45074700a8",
+  "reviewedAt": "2026-09-20T02:09:51.380532+00:00",
+  "outcome": "Reviewed parser preloading and detail alignment; current 13-market host build passes",
   "reviewedChanges": [
-    "Reviewed full-width title wrapping, compact cards, right-aligned status, exact history domains and coherent probability snapshots.",
-    "Authenticated native HTTPS snapshot endpoint is available but stock Lua still lacks HTTPS; do not treat it as wireless transport.",
-    "Public catalog now supports chain-backed markets; badge quote/trade integration is still database-only. Do not route chain orders through legacy badge quote endpoints or infer SQL balance as chain collateral. Managed signing work does not remove this integration boundary."
+    "Cloud parser loads before mailbox reads; detail parser loads before requesting detail data, reducing overlapping compiler and data allocations.",
+    "Module compaction preserves statements and literals; updated detail layout adapts chart height to wrapped titles.",
+    "Managed chain custody/transfer and public profile updates do not supply a supported badge wireless or chain-order interface. Synthetic trader history remains isolated testing data."
   ],
-  "integrationStatus": "Snapshot (12), gateway (5), wireless (7), cloud/trade, GS1/GS2 reader, GH2 detail reader, legacy app and save/sync checks pass; host layout inspected. No serial badge connected. Native BLE headroom and real two-device authenticated transport remain unresolved. Dirty wireless edits preserved. No hardware, live orders, migrations or production data changes."
+  "integrationStatus": "Cloud/trade, GS1/GS2 reader, GH2 detail reader, snapshot (12), gateway (5), wireless host (7) and save/sync checks pass; layout inspected. One serial badge is connected and owned by an existing Python process; did not interrupt it. Wireless dirty edits preserved, no second-device proof or resolved BLE memory blocker. No hardware, database or live-order mutations."
 }
