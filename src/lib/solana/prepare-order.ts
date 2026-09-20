@@ -4,6 +4,7 @@ import {
 } from "@solana/kit";
 import { readGooseyEscrow } from "./escrow-read";
 import { buildPlaceOrderInstruction, type ChainOrderInput } from "./exchange-client";
+import { buyOrderReserve } from "./order-reserve";
 import type { SolanaRuntime } from "./runtime";
 
 export const ORDER_COMPUTE_UNIT_LIMIT = 1_400_000;
@@ -56,8 +57,11 @@ export async function prepareOrder(input: PrepareOrderInput) {
     || orderBook.payoutMilli !== marketState.payoutMilli || orderBook.feeBps !== marketState.feeBps) throw new Error("Order snapshot bindings changed");
   // New place_order starts chain_notional=0. This is a conservative full-limit
   // reserve check even for IOC/FOK, not a prediction of matching price/improvement.
-  const principal = order.price * order.quantity;
-  const requiredCash = order.action === "BUY" ? principal + (principal * BigInt(marketState.feeBps) + 9999n) / 10000n : 0n;
+  const requiredCash = order.action === "BUY" ? buyOrderReserve({
+    limitPriceMilli: order.price,
+    quantity: order.quantity,
+    feeBps: marketState.feeBps,
+  }).requiredCash : 0n;
   const availablePosition = order.outcome === "YES" ? seat.yes - seat.reservedYes : seat.no - seat.reservedNo;
   if (order.action === "BUY" && seat.availableCash < requiredCash) throw new Error("Insufficient finalized available escrow cash for limit reserve");
   if (order.action === "SELL" && availablePosition < order.quantity) throw new Error("Insufficient finalized unreserved outcome positions");
