@@ -77,7 +77,8 @@ for index,market in enumerate(source['markets']):
     if index==0: points=[[5000,1234567880000],[6123,1234568790000],[5050,1234570590000]]
     load_detail(market,1000+index,points,current=5050 if index==0 else None,
                 sampled_from=41 if index==0 else None,downsampled=index==0)
-    has('Sampled 1H' if index==0 else 'Past 1 Hour');has(market['closes']);has('Vol '+market['volume'])
+    compact_close=market['closes'].replace(' UTC','Z')
+    has('Sampled 1H' if index==0 else 'Past 1 Hour');has(compact_close);has('Vol '+market['volume'])
     if index==0:
         # Coherent history owns the headline. Half-percent values round up and
         # the displayed NO value is the exact complement of displayed YES.
@@ -87,16 +88,18 @@ for index,market in enumerate(source['markets']):
         change=next(w for w in g.widgets.values() if not w.hide and w.text.startswith('+1 pts'))
         volume=next(w for w in g.widgets.values() if not w.hide and w.text=='Vol '+market['volume'])
         market_status=next(w for w in g.widgets.values() if not w.hide and w.text=='[Open]')
-        close_label=next(w for w in g.widgets.values() if not w.hide and w.text=='Closes '+market['closes'])
+        close_label=next(w for w in g.widgets.values() if not w.hide and w.text=='Closes\n'+compact_close)
         title_lines=market_title.text.split('\n')
         assert (market_title.w,market_title.styles['text_font'])==(300,16) and len(title_lines)<=2
         assert (probability.y,probability.w,probability.styles['text_font'])==(100,98,24)
         assert (change.x,change.y,change.w,change.styles['text_align'])==(10,36+18*len(title_lines),190,'left')
         assert change.text.endswith(' | Sampled 1H') and change.y+14<=90
         assert (volume.x,volume.y,volume.w)==(212,139,98)
-        assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(10,186,90,'left')
+        assert (market_status.x,market_status.y,market_status.w,market_status.styles['text_align'])==(212,157,98,'left')
         assert market_status.styles['text_color']==0x267a35
-        assert (close_label.x,close_label.y,close_label.w,close_label.styles['text_align'])==(100,186,210,'right')
+        assert (close_label.x,close_label.y,close_label.w,close_label.h,close_label.styles['text_align'])==(212,174,98,31,'right')
+        assert volume.y+14 < market_status.y and market_status.y+14 < close_label.y
+        assert close_label.y+close_label.h < 207
         assert not any('Open  Closes' in w.text for w in g.widgets.values() if not w.hide)
         ticks=[w for w in g.widgets.values() if not w.hide and w.text.endswith('%') and w.x==7]
         assert [w.text for w in ticks]==['100%','50%','0%']
@@ -126,8 +129,8 @@ for generation,points in ((2000,[]),(2001,[[5000,1234567890000]])):
 # Bracketed terminal states stay distinct from the right-aligned close field.
 closed=json.loads(json.dumps(source));closed['markets'][0]['status']='CLOSED';load(closed,3000);tick(g.clock+2000);press('A')
 closed_status=next(w for w in g.widgets.values() if not w.hide and w.text=='[Closed]')
-assert (closed_status.x,closed_status.y,closed_status.styles['text_color'])==(10,186,0x4f6b3e)
-has('Closes '+closed['markets'][0]['closes']);press('B')
+assert (closed_status.x,closed_status.y,closed_status.styles['text_color'])==(212,157,0x4f6b3e)
+has('Closes\n'+closed['markets'][0]['closes'].replace(' UTC','Z'));press('B')
 # Reopening cannot trust a cached account frame as a fresh login.
 g.on_exit();g.fresh();has('Reconnecting...')
 assert 'Waiting for connection' not in g.visible()
