@@ -155,7 +155,7 @@ function newestFirst(left: TradeHistoryItem, right: TradeHistoryItem): number {
 export async function loadTradeHistory(
   tx: Prisma.TransactionClient,
   userId: string,
-  input: { limit: number; cursor?: TradeHistoryCursor },
+  input: { limit: number; cursor?: TradeHistoryCursor; marketWhere?: Prisma.MarketWhereInput },
 ): Promise<{ items: TradeHistoryItem[]; nextCursor: string | null }> {
   const limit = input.limit ?? 30;
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
@@ -164,14 +164,14 @@ export async function loadTradeHistory(
   const cursor = input.cursor ? validateCursor(input.cursor) : undefined;
   const [legacyRows, fillRows] = await Promise.all([
     tx.trade.findMany({
-      where: { market: DATABASE_MARKET_FILTER, userId, ...sourceBoundary("LMSR", cursor) },
+      where: { market: input.marketWhere ?? DATABASE_MARKET_FILTER, userId, ...sourceBoundary("LMSR", cursor) },
       select: legacySelect,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
     }),
     tx.orderFill.findMany({
       where: {
-        market: DATABASE_MARKET_FILTER,
+        market: input.marketWhere ?? DATABASE_MARKET_FILTER,
         OR: [{ makerOrder: { userId } }, { takerOrder: { userId } }],
         ...sourceBoundary("ORDER_BOOK", cursor),
       },

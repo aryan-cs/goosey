@@ -2,14 +2,14 @@ import { DATABASE_MARKET_FILTER } from "./market-backend";
 import type { Prisma } from "@prisma/client";
 
 /** Counts executions, not submitted orders or contracts. Call inside a read snapshot. */
-export async function loadTradingActivity(tx: Prisma.TransactionClient, userIds: readonly string[]) {
+export async function loadTradingActivity(tx: Prisma.TransactionClient, userIds: readonly string[], marketWhere: Prisma.MarketWhereInput = DATABASE_MARKET_FILTER) {
   const ids = [...new Set(userIds)];
   const result = new Map(ids.map((id) => [id, { trades: 0, marketsTraded: 0 }]));
   if (!ids.length) return result;
   const [legacy, orders] = await Promise.all([
-    tx.trade.groupBy({ by: ["userId", "marketId"], where: { market: DATABASE_MARKET_FILTER, userId: { in: ids } }, _count: { _all: true } }),
+    tx.trade.groupBy({ by: ["userId", "marketId"], where: { market: marketWhere, userId: { in: ids } }, _count: { _all: true } }),
     tx.marketOrder.findMany({
-      where: { market: DATABASE_MARKET_FILTER, userId: { in: ids }, filledQuantity: { gt: 0 } },
+      where: { market: marketWhere, userId: { in: ids }, filledQuantity: { gt: 0 } },
       select: { userId: true, marketId: true, _count: { select: { makerFills: true, takerFills: true } } },
     }),
   ]);
