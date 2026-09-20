@@ -362,12 +362,13 @@ async function testResolutionApproval(
   creator: UserRecord,
   proposer: UserRecord,
   resolver: UserRecord,
-  exposedResolver: UserRecord,
   participant: Participant,
   losingParticipant: Participant,
 ): Promise<void> {
-  const created = await createMarket(creator, "two-person-resolution");
+  const created = await createMarket(creator, "single-admin-resolution");
   const marketId = created.market.id;
+  // A participant can become an admin after trading; settlement must still work.
+  await db.user.update({ where: { id: participant.user.id }, data: { role: "USER" } });
   await trade({
     userId: participant.user.id,
     marketId,
@@ -392,7 +393,9 @@ async function testResolutionApproval(
     quantity: 4,
     key: `settlement-loser-no-${suffix}`,
   });
+  await db.user.update({ where: { id: participant.user.id }, data: { role: "ADMIN" } });
   await closeMarket(marketId);
+  await db.market.update({ where: { id: marketId }, data: { status: "OPEN" } });
   const [winnerBeforeSettlement, loserBeforeSettlement] = await Promise.all([
     db.user.findUniqueOrThrow({ where: { id: participant.user.id } }),
     db.user.findUniqueOrThrow({ where: { id: losingParticipant.user.id } }),
@@ -406,24 +409,13 @@ async function testResolutionApproval(
   await expectApiError(
     () =>
       createResolutionProposal({
-        actorUserId: participant.user.id,
+        actorUserId: losingParticipant.user.id,
         marketId,
         idempotencyKey: `user-proposal-${suffix}`,
         resolution,
       }),
     "ADMIN_REQUIRED",
   );
-  await expectApiError(
-    () =>
-      createResolutionProposal({
-        actorUserId: creator.id,
-        marketId,
-        idempotencyKey: `creator-proposal-${suffix}`,
-        resolution,
-      }),
-    "CREATOR_CANNOT_PROPOSE",
-  );
-
   const proposal = await createResolutionProposal({
     actorUserId: proposer.id,
     marketId,
@@ -458,48 +450,6 @@ async function testResolutionApproval(
       }),
     "PROPOSAL_PENDING",
   );
-  await expectApiError(
-    () =>
-      approveResolutionProposal({
-        actorUserId: proposer.id,
-        proposalId: proposal.proposal.id,
-        idempotencyKey: `self-approve-${suffix}`,
-      }),
-    "SELF_APPROVAL_FORBIDDEN",
-  );
-  await expectApiError(
-    () =>
-      approveResolutionProposal({
-        actorUserId: creator.id,
-        proposalId: proposal.proposal.id,
-        idempotencyKey: `creator-approve-${suffix}`,
-      }),
-    "CREATOR_CANNOT_RESOLVE",
-  );
-
-  await db.trade.create({
-    data: {
-      userId: exposedResolver.id,
-      marketId,
-      side: "YES",
-      action: "BUY",
-      quantity: 1,
-      amountMilli: 1n,
-      priceBeforeBps: 5_000,
-      priceAfterBps: 5_001,
-      idempotencyKey: `exposure-fixture-${suffix}`,
-    },
-  });
-  await expectApiError(
-    () =>
-      approveResolutionProposal({
-        actorUserId: exposedResolver.id,
-        proposalId: proposal.proposal.id,
-        idempotencyKey: `exposed-approve-${suffix}`,
-      }),
-    "RESOLVER_CONFLICT",
-  );
-
   const approval = await approveResolutionProposal({
     actorUserId: resolver.id,
     proposalId: proposal.proposal.id,
@@ -669,7 +619,7 @@ async function testResolutionApproval(
   expectEqual(loserSettlement.payoutMilli, 0n, "losing-only position must settle to zero");
   expectEqual(loserSettlement.journalEntryId, null, "zero payout must not create an empty financial journal");
   expectEqual(proposalAfter.status, "APPROVED", "settled proposal must be approved");
-  expectEqual(proposalAfter.approverId, resolver.id, "approval must record the distinct resolver");
+  expectEqual(proposalAfter.approverId, resolver.id, "approval must record the administrator");
   expectEqual(notifications.length, 2, "each settled participant must receive exactly one notification");
   expectEqual(resolutionAudits.length, 1, "settlement retries must not duplicate resolution audit events");
 }
@@ -681,6 +631,7 @@ async function testRejectedProposal(
 ): Promise<void> {
   const created = await createMarket(creator, "rejected-resolution");
   await closeMarket(created.market.id);
+  await db.market.update({ where: { id: created.market.id }, data: { status: "PAUSED" } });
   const proposal = await createResolutionProposal({
     actorUserId: proposer.id,
     marketId: created.market.id,
@@ -691,17 +642,8 @@ async function testRejectedProposal(
       evidence: "Integration runner rejection assertion",
     },
   });
-  await expectApiError(
-    () =>
-      rejectResolutionProposal({
-        actorUserId: proposer.id,
-        proposalId: proposal.proposal.id,
-        note: "Self review is forbidden.",
-      }),
-    "SELF_APPROVAL_FORBIDDEN",
-  );
   const rejected = await rejectResolutionProposal({
-    actorUserId: resolver.id,
+    actorUserId: proposer.id,
     proposalId: proposal.proposal.id,
     note: "Evidence is insufficient for settlement.",
   });
@@ -824,11 +766,10 @@ async function testMultiBatchSettlement(
 }
 
 async function main() {
-  const [creator, proposer, resolver, exposedResolver] = await Promise.all([
+  const [creator, proposer, resolver] = await Promise.all([
     createAdmin("creator"),
     createAdmin("proposer"),
     createAdmin("resolver"),
-    createAdmin("exposed_resolver"),
   ]);
   const [participant, outsider, losingParticipant] = await Promise.all([
     createParticipant("participant"),
@@ -837,11 +778,11 @@ async function main() {
   ]);
 
   await testMixedSideCostBasis(creator, participant, outsider);
+  const participatingAdmin = await db.user.update({ where: { id: participant.user.id }, data: { role: "ADMIN" } });
   await testResolutionApproval(
-    creator,
-    proposer,
-    resolver,
-    exposedResolver,
+    participatingAdmin,
+    participatingAdmin,
+    participatingAdmin,
     participant,
     losingParticipant,
   );
@@ -857,7 +798,7 @@ async function main() {
         "mixed-side-cost-basis",
         "partial-and-full-sells",
         "trade-idempotency-and-authorization",
-        "two-person-resolution-authorization",
+        "single-admin-creator-trader-resolution",
         "proposal-idempotency",
         "exact-settlement-and-terminal-replay",
         "proposal-rejection",

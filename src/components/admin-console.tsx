@@ -7,8 +7,8 @@ type AdminMarket = { id: string; title: string; status: string; resolution: stri
 type LifecycleAction = "pause" | "resume" | "close" | "resolve";
 const lifecycleActions: Record<string, Array<{ value: LifecycleAction; label: string }>> = {
   DRAFT: [{ value: "close", label: "Close" }],
-  OPEN: [{ value: "pause", label: "Pause" }, { value: "close", label: "Close" }],
-  PAUSED: [{ value: "resume", label: "Resume" }, { value: "close", label: "Close" }],
+  OPEN: [{ value: "pause", label: "Pause" }, { value: "close", label: "Close" }, { value: "resolve", label: "Resolve expired market" }],
+  PAUSED: [{ value: "resume", label: "Resume" }, { value: "close", label: "Close" }, { value: "resolve", label: "Resolve expired market" }],
   CLOSED: [{ value: "resolve", label: "Propose resolution" }],
 };
 const newKey = () => crypto.randomUUID();
@@ -92,7 +92,7 @@ export function AdminConsole({ markets }: { markets: AdminMarket[] }) {
         const { status, resolution, version } = result.market;
         setMarketUpdates((current) => ({ ...current, [marketId]: { status, resolution, version } }));
       }
-      setMessage(action === "resolve" ? "Resolution proposed. A different eligible administrator must approve it before settlement." : `Market ${action === "pause" ? "paused" : action === "resume" ? "reopened" : "closed"}.`);
+      setMessage(action === "resolve" ? "Resolution proposed. Confirm it below with your administrator password to pay all positions." : `Market ${action === "pause" ? "paused" : action === "resume" ? "reopened" : "closed"}.`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Request failed."); }
     finally {
       // Also recover authoritative state after a lost response or version conflict.

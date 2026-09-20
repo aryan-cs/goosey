@@ -11,6 +11,13 @@ function run(script) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
+// Owner-authorized exact-market settlement; absent on ordinary builds.
+if (env.GOOSEY_CITADEL_SETTLEMENT) {
+  run("db:generate");
+  const result = spawnSync("node", ["--import", "tsx", "scripts/settle-citadel.ts"], { env, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
 // One-off, explicitly requested publication, guarded by destination and backup.
 // This is build-only configuration; ordinary deploys do not publish records.
 if (env.GOOSEY_CEREMONY_RELEASE_MODE) {

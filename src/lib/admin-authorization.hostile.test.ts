@@ -204,142 +204,19 @@ describe("hostile admin service authorization", () => {
     })).rejects.toMatchObject({ status: 409, code: "PROPOSAL_ALREADY_REVIEWED" });
   });
 
-  it("forbids creator proposal and proposer self-approval before settlement mutation", async () => {
-    const creatorTx = {
-      user: { findUnique: vi.fn().mockResolvedValue(activeAdmin(ADMIN_A)) },
-      marketResolutionProposal: { findUnique: vi.fn().mockResolvedValue(null) },
-      market: { findUnique: vi.fn().mockResolvedValue({ id: MARKET_ID, executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: ADMIN_A }) },
-    };
-    runWith(creatorTx);
-    await expect(createResolutionProposal({
-      actorUserId: ADMIN_A,
-      marketId: MARKET_ID,
-      idempotencyKey: KEY,
-      resolution: { outcome: "NO", reason: "The creator must not decide this result.", evidence: "Source record" },
-    })).rejects.toMatchObject({ status: 403, code: "CREATOR_CANNOT_PROPOSE" });
-
+  it("still rejects a creator's self-approval before the market is eligible", async () => {
     const runCreate = vi.fn();
     runWith({
       user: { findUnique: vi.fn().mockResolvedValue(activeAdmin(ADMIN_A)) },
-      marketResolutionProposal: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "proposal-self",
-          proposerId: ADMIN_A,
-          marketId: MARKET_ID,
-          outcome: "YES",
-          reason: "Self approval must fail.",
-          evidence: "Source record",
-          status: "PENDING",
-          settlementRun: null,
-          market: { executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: "different-admin" },
-        }),
-      },
+      marketResolutionProposal: { findUnique: vi.fn().mockResolvedValue({
+        id: "proposal-self", proposerId: ADMIN_A, marketId: MARKET_ID, outcome: "YES",
+        reason: "Owner confirms the result", evidence: "Source", status: "PENDING",
+        market: { executionBackend: "DATABASE", collateralAccountId: "collateral", createdById: ADMIN_A, status: "OPEN" },
+      }) },
       marketSettlementRun: { create: runCreate },
     });
-    await expect(approveResolutionProposal({
-      actorUserId: ADMIN_A,
-      proposalId: "proposal-self",
-      idempotencyKey: KEY,
-    })).rejects.toMatchObject({ status: 403, code: "SELF_APPROVAL_FORBIDDEN" });
-    expect(runCreate).not.toHaveBeenCalled();
-  });
-
-  it("forbids the market creator from serving as the resolution approver", async () => {
-    const runCreate = vi.fn();
-    runWith({
-      user: { findUnique: vi.fn().mockResolvedValue(activeAdmin(ADMIN_A)) },
-      marketResolutionProposal: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "proposal-creator-review",
-          proposerId: "different-proposer",
-          marketId: MARKET_ID,
-          outcome: "YES",
-          reason: "Independent review is required.",
-          evidence: "Source record",
-          status: "PENDING",
-          settlementRun: null,
-          market: { executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: ADMIN_A },
-        }),
-      },
-      marketSettlementRun: { create: runCreate },
-    });
-
-    await expect(approveResolutionProposal({
-      actorUserId: ADMIN_A,
-      proposalId: "proposal-creator-review",
-      idempotencyKey: KEY,
-    })).rejects.toMatchObject({ status: 403, code: "CREATOR_CANNOT_RESOLVE" });
-    expect(runCreate).not.toHaveBeenCalled();
-  });
-
-  it("forbids an administrator with legacy trading exposure from proposing a result", async () => {
-    const proposalCreate = vi.fn();
-    runWith({
-      user: { findUnique: vi.fn().mockResolvedValue(activeAdmin(ADMIN_A)) },
-      market: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: MARKET_ID,
-          executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: "different-admin",
-          status: "CLOSED",
-          closesAt: new Date(Date.now() - 7_200_000),
-          resolvesAt: new Date(Date.now() - 3_600_000),
-        }),
-      },
-      trade: { count: vi.fn().mockResolvedValue(1) },
-      orderFill: { count: vi.fn().mockResolvedValue(0) },
-      marketResolutionProposal: {
-        findUnique: vi.fn().mockResolvedValue(null),
-        findFirst: vi.fn().mockResolvedValue(null),
-        create: proposalCreate,
-      },
-    });
-
-    await expect(createResolutionProposal({
-      actorUserId: ADMIN_A,
-      marketId: MARKET_ID,
-      idempotencyKey: KEY,
-      resolution: { outcome: "YES", reason: "A trader cannot propose this outcome.", evidence: "Source record" },
-    })).rejects.toMatchObject({ status: 403, code: "PROPOSER_CONFLICT" });
-    expect(proposalCreate).not.toHaveBeenCalled();
-  });
-
-  it("forbids an administrator with CLOB exposure from approving settlement", async () => {
-    const marketClaim = vi.fn();
-    const runCreate = vi.fn();
-    runWith({
-      user: { findUnique: vi.fn().mockResolvedValue(activeAdmin(ADMIN_B)) },
-      marketResolutionProposal: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "proposal-trader-review",
-          proposerId: ADMIN_A,
-          marketId: MARKET_ID,
-          outcome: "NO",
-          reason: "An exposed reviewer must be rejected.",
-          evidence: "Source record",
-          status: "PENDING",
-          settlementRun: null,
-          market: {
-            id: MARKET_ID,
-            version: 3,
-            executionBackend: "DATABASE", collateralAccountId: "collateral_hostile", createdById: "different-admin",
-            status: "CLOSED",
-            closesAt: new Date(Date.now() - 7_200_000),
-            resolvesAt: new Date(Date.now() - 3_600_000),
-          },
-        }),
-      },
-      trade: { count: vi.fn().mockResolvedValue(0) },
-      orderFill: { count: vi.fn().mockResolvedValue(1) },
-      market: { updateMany: marketClaim },
-      marketSettlementRun: { create: runCreate },
-    });
-
-    await expect(approveResolutionProposal({
-      actorUserId: ADMIN_B,
-      proposalId: "proposal-trader-review",
-      idempotencyKey: KEY,
-    })).rejects.toMatchObject({ status: 403, code: "RESOLVER_CONFLICT" });
-    expect(marketClaim).not.toHaveBeenCalled();
+    await expect(approveResolutionProposal({ actorUserId: ADMIN_A, proposalId: "proposal-self", idempotencyKey: KEY }))
+      .rejects.toMatchObject({ code: "MARKET_NOT_RESOLVABLE" });
     expect(runCreate).not.toHaveBeenCalled();
   });
 });

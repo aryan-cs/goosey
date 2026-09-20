@@ -77,7 +77,6 @@ type CreateMarketInput = Omit<ParsedCreateMarketInput, "pricingModel"> & {
 };
 type ResolutionInput = z.infer<typeof resolutionSchema>;
 type LifecycleAction = "PAUSE" | "RESUME" | "CLOSE";
-type ResolutionConflictCode = "PROPOSER_CONFLICT" | "RESOLVER_CONFLICT";
 
 async function treasuryAccount(tx: Prisma.TransactionClient) {
   return tx.ledgerAccount.upsert({
@@ -105,31 +104,6 @@ export async function requireActiveAdmin(tx: Prisma.TransactionClient, actorUser
   });
   if (!actor || actor.role !== "ADMIN" || actor.status !== "ACTIVE") {
     throw new ApiError(403, "ADMIN_REQUIRED", "An active administrator account is required.");
-  }
-}
-
-export async function assertNoResolutionTradingExposure(
-  tx: Pick<Prisma.TransactionClient, "trade" | "orderFill">,
-  userId: string,
-  marketId: string,
-  conflictCode: ResolutionConflictCode,
-): Promise<void> {
-  const [legacyTradeCount, orderFillCount] = await Promise.all([
-    tx.trade.count({ where: { userId, marketId } }),
-    tx.orderFill.count({
-      where: {
-        marketId,
-        OR: [
-          { makerOrder: { is: { userId } } },
-          { takerOrder: { is: { userId } } },
-        ],
-      },
-    }),
-  ]);
-
-  if (legacyTradeCount > 0 || orderFillCount > 0) {
-    const role = conflictCode === "PROPOSER_CONFLICT" ? "propose its result" : "resolve it";
-    throw new ApiError(403, conflictCode, `An administrator who traded this market cannot ${role}.`);
   }
 }
 
@@ -403,10 +377,7 @@ export async function createResolutionProposal(input: {
     let market = await tx.market.findUnique({ where: { id: input.marketId } });
     if (!market) throw new ApiError(404, "MARKET_NOT_FOUND", "Market not found.");
     assertDatabaseFinancialMarket(market);
-    if (market.createdById === input.actorUserId) {
-      throw new ApiError(403, "CREATOR_CANNOT_PROPOSE", "A market creator cannot propose its resolution.");
-    }
-    if (market.status === "OPEN" && market.closesAt <= operationAt) {
+    if (["OPEN", "PAUSED"].includes(market.status) && market.closesAt <= operationAt) {
       market = await tx.market.update({
         where: { id: market.id },
         data: { status: "CLOSED", acceptingOrders: false, version: { increment: 1 } },
@@ -417,10 +388,7 @@ export async function createResolutionProposal(input: {
     if (market.status !== "CLOSED" || market.closesAt > operationAt || market.resolvesAt > operationAt) {
       throw new ApiError(409, "MARKET_NOT_RESOLVABLE", "The market is not yet eligible for resolution.");
     }
-    const [, pending] = await Promise.all([
-      assertNoResolutionTradingExposure(tx, input.actorUserId, market.id, "PROPOSER_CONFLICT"),
-      tx.marketResolutionProposal.findFirst({ where: { marketId: market.id, status: "PENDING" } }),
-    ]);
+    const pending = await tx.marketResolutionProposal.findFirst({ where: { marketId: market.id, status: "PENDING" } });
     if (pending) throw new ApiError(409, "PROPOSAL_PENDING", "This market already has a pending resolution proposal.");
     await assertDanceResolution(tx, market, input.resolution.outcome);
     const proposal = await tx.marketResolutionProposal.create({
@@ -441,7 +409,6 @@ export async function rejectResolutionProposal(input: { actorUserId: string; pro
     const proposal = await tx.marketResolutionProposal.findUnique({ where: { id: input.proposalId }, include: { market: true } });
     if (!proposal) throw new ApiError(404, "PROPOSAL_NOT_FOUND", "Resolution proposal not found.");
     assertDatabaseFinancialMarket(proposal.market);
-    if (proposal.proposerId === input.actorUserId) throw new ApiError(403, "SELF_APPROVAL_FORBIDDEN", "A proposer cannot review their own proposal.");
     if (proposal.status !== "PENDING") throw new ApiError(409, "PROPOSAL_ALREADY_REVIEWED", "This proposal has already been reviewed.");
     const updated = await tx.marketResolutionProposal.update({ where: { id: proposal.id }, data: { status: "REJECTED", pendingKey: null, approverId: input.actorUserId, reviewNote: input.note, decidedAt: operationAt } });
     await tx.auditLog.create({ data: { actorUserId: input.actorUserId, action: "MARKET_RESOLUTION_REJECTED", entityType: "MARKET_RESOLUTION_PROPOSAL", entityId: proposal.id, metadata: jsonStringify({ note: input.note }) } });
@@ -484,12 +451,6 @@ export async function approveResolutionProposal(input: { actorUserId: string; pr
     if (proposal.status !== "PENDING") {
       throw new ApiError(409, "PROPOSAL_ALREADY_REVIEWED", "This proposal has already been reviewed.");
     }
-    if (proposal.proposerId === input.actorUserId) {
-      throw new ApiError(403, "SELF_APPROVAL_FORBIDDEN", "A proposer cannot approve their own proposal.");
-    }
-    if (proposal.market.createdById === input.actorUserId) {
-      throw new ApiError(403, "CREATOR_CANNOT_RESOLVE", "A market creator cannot resolve their own market.");
-    }
     if (
       proposal.market.status !== "CLOSED" ||
       proposal.market.closesAt > operationAt ||
@@ -497,13 +458,6 @@ export async function approveResolutionProposal(input: { actorUserId: string; pr
     ) {
       throw new ApiError(409, "MARKET_NOT_RESOLVABLE", "The market is not eligible for resolution approval.");
     }
-    await assertNoResolutionTradingExposure(
-      tx,
-      input.actorUserId,
-      proposal.marketId,
-      "RESOLVER_CONFLICT",
-    );
-
     await assertDanceResolution(tx, proposal.market, proposal.outcome);
     const totalPositions = await tx.position.count({
       where: {
