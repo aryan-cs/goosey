@@ -17,14 +17,14 @@ account(1);g.fresh();has('Reconnecting...');assert 'Waiting for connection' not 
 reconnecting=next(w for w in g.widgets.values() if w.text=='Reconnecting...')
 assert reconnecting.y==110 and reconnecting.styles['text_align']=='center'
 assert lua.eval('require("trade").pairing_challenge()') is None;snapshot('trade-link')
-account(2);tick(2000);has('Account Linked');has('@badge_test');has('1000.00 feathers');assert 'Balance ' not in g.visible();snapshot('trade-account-linked')
-press('A','A','A');has('BUY YES');press('UP');has('x2');snapshot('trade-amount')
+account(2);tick(2000);has('Account Linked');has('@badge_test');has('1000.00 feathers');has('A: Continue   B: Markets');assert 'Balance ' not in g.visible();snapshot('trade-account-linked')
+press('A','A','A');has('BUY YES');has('Review Trade');press('UP');has('x2');snapshot('trade-amount')
 press('A');has('Getting a live quote');assert '\tQUOTE\t' in g.files['appdata/request.txt']
-response('QUOTE');tick(4000);has('Pay 50.001');snapshot('trade-review')
+response('QUOTE');tick(4000);has('Pay 50.001');has('Confirm Trade');snapshot('trade-review')
 press('A');has('Trade Submitted');assert '\tTRADE\t' in g.files['appdata/request.txt']
 saved=g.files['appdata/request.txt'];press('A','A','B','START');assert g.files['appdata/request.txt']==saved
 # Reopening never drops a confirmed order; cached account is not trusted fresh.
-g.on_exit();g.fresh();has('Account offline');has('USB required');press('A','A');has('Trade Submitted')
+g.on_exit();g.fresh();has('Account Offline');has('USB Required');press('A','A');has('Trade Submitted')
 response('PENDING',message='Waiting for receipt');tick(6000);has('Waiting for receipt');snapshot('trade-pending')
 response('DONE');tick(8000);has('Trade complete');assert g.files['appdata/request.txt']=='';snapshot('trade-receipt')
 account(3);tick(10000);press('B','A','A');response('QUOTE',ttl=1);tick(12000);tick(14000);has('Quote expired')

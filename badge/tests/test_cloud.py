@@ -26,11 +26,11 @@ def load_detail(market,generation,points):
     tick(g.clock+2000)
     tick(g.clock+2000)
 
-g.fresh();has('Reconnecting...');has('Account offline');has('USB required')
+g.fresh();has('Reconnecting...');has('Account Offline');has('USB Required')
 texts=[w.text for w in g.widgets.values() if not w.hide and w.text]
 assert 'Account' not in texts
-offline=next(w for w in g.widgets.values() if w.text=='Account offline')
-usb=next(w for w in g.widgets.values() if w.text=='USB required')
+offline=next(w for w in g.widgets.values() if w.text=='Account Offline')
+usb=next(w for w in g.widgets.values() if w.text=='USB Required')
 assert (offline.x,offline.y,offline.w)==(10,7,125)
 assert (usb.x,usb.y,usb.w)==(135,1,175) and usb.styles['text_align']=='right'
 assert 'Waiting for connection' not in g.visible()
@@ -40,7 +40,8 @@ assert '765.43' not in g.visible() and '@old_local' not in g.visible()
 g.files['appdata/account.txt']=f'GA1\t1\t{challenge}\tREADY\tbadge_test\t1000000\tEND\n'
 load(source,100)
 has('@badge_test · 1000.00 feathers');press('A');has('Markets')
-press('START');has('Account Info');assert 'Linked account' not in g.visible();assert 'Trade selected market' not in g.visible()
+press('START');has('Return to Markets');has('Account Info');has('USB Account and Market Sync')
+assert 'Return to markets' not in g.visible();assert 'Linked account' not in g.visible();assert 'Trade selected market' not in g.visible()
 settings_box=next(w for w in g.widgets.values() if w.kind=='box' and not w.hide and w.styles['border_width']==1)
 assert settings_box.y==47
 press('DOWN');assert settings_box.y==93;snapshot('cloud-settings');press('A')
@@ -70,7 +71,7 @@ for index,market in enumerate(source['markets']):
     points=[[market['probability'],1234567880000]]
     if index==0: points=[[50,1234567880000],[61.23,1234575090000],[market['probability'],1234578690000]]
     load_detail(market,1000+index,points)
-    has('Past 4 hours');has(market['closes']);has('Vol '+market['volume'])
+    has('Past 4 Hours');has(market['closes']);has('Vol '+market['volume'])
     if index==0:
         has(f"{market['probability']-50:+.0f} pts")
         probability=next(w for w in g.widgets.values() if not w.hide and w.text==f"{market['probability']:.0f}%" and w.x==212)
@@ -92,7 +93,7 @@ assert g.files['appdata/request.txt'] in (None,'')
 # Real selected-market mailbox histories, not the catalog frame, drive charts.
 for generation,points in ((2000,[]),(2001,[[50,1234567890000]])):
     press('A');load_detail(source['markets'][0],generation,points)
-    if not points:has('No history')
+    if not points:has('No History')
     snapshot('cloud-empty' if not points else 'cloud-single');press('B')
 # Reopening cannot trust a cached account frame as a fresh login.
 g.on_exit();g.fresh();has('Reconnecting...')

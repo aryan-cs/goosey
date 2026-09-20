@@ -117,7 +117,7 @@ local function render()
   header:set_pos(10,7);header:set_size(78,22)
   status:set_pos(88,7);status:set_size(222,18)
   header:set_text(({list="Markets",detail="Market",settings="Settings",link="Account"})[page])
-  status:set_text(lastRx and badge.sys.ms()-lastRx<45000 and "USB updated" or "Saved snapshot")
+  status:set_text(lastRx and badge.sys.ms()-lastRx<45000 and "USB Updated" or "Saved Snapshot")
   stamp:set_text(cloud.capturedAt)
   if trade then
     local user,balance,offline=trade.header()
@@ -125,10 +125,10 @@ local function render()
     elseif offline then status:set_text(user);stamp:set_text("")
     else status:set_text(accountSummary(user,balance));stamp:set_text("") end
   end
-  if page=="link" and trade.pairing_challenge() then header:set_text("Sign in");status:set_text("");stamp:set_text("") end
+  if page=="link" and trade.pairing_challenge() then header:set_text("Sign In");status:set_text("");stamp:set_text("") end
   local m=cloud.markets[selected]
   if not m and (page=="list" or page=="detail") then
-    text(1,"Loading markets",10,70,300,20);return
+    text(1,"Loading Markets",10,70,300,20);return
   end
   if page=="list" then
     local first=math.floor((selected-1)/3)*3+1
@@ -149,8 +149,8 @@ local function render()
     text(2,string.format("%.0f%%",m.probability),212,87,98,24,"right")
     local h=detail and detail.slug==m.slug and detail.history or {}
     local change=#h>0 and h[#h][1]-h[1][1] or nil
-    local changeText=change and string.format("%+.0f pts",change) or (detail and "No history" or "Loading 4H")
-    text(3,changeText.."\nPast 4 hours",212,120,98,14,"right",change and (change<0 and C.down or C.up) or C.muted)
+    local changeText=change and string.format("%+.0f pts",change) or (detail and "No History" or "Loading 4H")
+    text(3,changeText.."\nPast 4 Hours",212,120,98,14,"right",change and (change<0 and C.down or C.up) or C.muted)
     text(7,"Vol "..m.volume,212,158,98,14,"right")
     track:hidden(false);midline:hidden(false)
     local low,high=100,0
@@ -177,10 +177,10 @@ local function render()
     text(9,string.format("YES  %.0f%%",m.probability),18,212,132,16)
     text(10,string.format("NO  %.0f%%",100-m.probability),176,212,132,16)
   elseif page=="settings" then
-    local options={"Return to markets","Account Info"}
+    local options={"Return to Markets","Account Info"}
     for i=1,2 do text(i,options[i],18,54+(i-1)*46,285,18) end
     focus(7,47+(setting-1)*46,307,39)
-    text(5,"USB account and market sync",10,211,300,14)
+    text(5,"USB Account and Market Sync",10,211,300,14)
   else
     local pair=trade.pairing_challenge()
     local hasQR=pair and badge.fs.read("appdata/qr_challenge.txt")==pair

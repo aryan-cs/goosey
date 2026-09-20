@@ -133,7 +133,7 @@ while rereading market_snapshot.txt. The app now reads a small generation marker
 before opening an unchanged market file. Both USB publishers write that marker
 only after the complete frame. Snapshot validation is incremental (one market per
 tick), releases the previous in-memory catalog before reading its replacement, and remains
-bounded. The UI briefly shows Loading markets during replacement; the database
+bounded. The UI briefly shows Loading Markets during replacement; the database
 and on-device snapshot file remain intact, and account/trade state is separate.
 Catalog refreshes no longer retain every market's chart. Opening a market requests
 up to 32 real observations from the same four-hour history API as the web UI, in a

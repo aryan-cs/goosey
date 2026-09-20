@@ -41,7 +41,7 @@ function T.init()
 end
 function T.header()
   if fresh() then return "@"..T.name,balanceMoney(T.balance).." feathers",false end
-  return "Account offline","USB required",true
+  return "Account Offline","USB Required",true
 end
 function T.open(slug,side,title)
   if request and request[4]=="TRADE" then T.phase="pending";return end
@@ -120,7 +120,7 @@ function T.draw(text,wrap,hasQR)
     text(1,"Account Linked",10,55,300,22)
     text(2,"@"..T.name,10,100,300,20)
     text(3,balanceMoney(T.balance).." feathers",10,138,300,18)
-    text(4,"A: continue   B: markets",10,205,300,14)
+    text(4,"A: Continue   B: Markets",10,205,300,14)
   elseif T.phase=="account" then
     if hasQR then
       text(1,"Scan to Sign In",10,47,300,18,"center")
@@ -134,11 +134,11 @@ function T.draw(text,wrap,hasQR)
     if T.phase=="edit" then
       text(3,"Amount: "..T.qty.." contracts",10,135,300,18)
       text(4,"Buy / Sell",10,169,300,16)
-      text(5,"Review trade",10,208,300,18)
+      text(5,"Review Trade",10,208,300,18)
     else
       text(3,(T.action=="BUY" and "Pay " or "Receive ")..money(bound),10,132,300,20)
       text(4,"Fee "..money(fee).." included",10,165,300,14)
-      text(5,"Confirm trade",10,207,300,18)
+      text(5,"Confirm Trade",10,207,300,18)
     end
   else
     text(1,T.phase=="pending" and "Trade Submitted" or T.phase=="wait" and "Live Quote" or "Trade",10,48,300,22)
