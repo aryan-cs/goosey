@@ -32,26 +32,26 @@ export function MarketSettlementStatus({
   const content = state === "recorded"
     ? {
         icon: <CheckCircle2 aria-hidden="true" />,
-        title: "Recorded on Solana",
-        detail: `Finalized settlement record at slot ${attestation!.slot}.`,
+        title: "Settlement recorded",
+        detail: "The final result has a verified settlement record.",
       }
     : state === "pending"
       ? {
           icon: <Clock3 aria-hidden="true" />,
           title: "Settlement record pending",
-          detail: "This market is complete. Its Solana settlement record is still pending.",
+          detail: "This market is complete. Its settlement record is still pending.",
         }
       : {
           icon: <ShieldCheck aria-hidden="true" />,
-          title: "Settles on Solana",
-          detail: "When this market is decided, Goosey records the settlement on Solana.",
+          title: "Verified settlement",
+          detail: "When this market is decided, Goosey records the final result.",
         };
 
-  return <aside className={`${styles.status} ${styles[state]}`} aria-label="Solana settlement status">
+  return <aside className={`${styles.status} ${styles[state]}`} aria-label="Settlement status">
     {content.icon}
     <div>
       <strong>{content.title}</strong>
-      <p>{content.detail} Feathers are free play money; no cryptocurrency moves through your account.</p>
+      <p>{content.detail} Feathers are free play money with no cash value.</p>
     </div>
   </aside>;
 }

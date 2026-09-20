@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { FeatherIcon } from "./brand";
+import { ManagedTransferForm } from "./managed-transfer-form";
 import { formatFeathers } from "@/lib/feather-format";
 import styles from "./solana-portfolio.module.css";
 
@@ -203,13 +204,13 @@ function StateAction({ kind, retry }: { kind: ReadErrorKind; retry: () => void }
 }
 
 function WalletCard({ wallet }: { wallet: Extract<SolanaPortfolioData, { status: "linked" }>["wallet"] }) {
-  return <article className={`${styles.card} ${styles.walletCard}`}>
+  return <><article className={`${styles.card} ${styles.walletCard}`}>
     <div className={styles.cardHeading}><div><span className={styles.eyebrow}>Account balance</span><h3>Feathers ready to use</h3></div></div>
     {wallet.balance.status === "available" ? <>
       <strong className={styles.walletAmount}><FeatherIcon /> {formatFeatherAmount(wallet.balance.amount)}</strong>
       {wallet.balance.accountStatus === "absent" && <p className={styles.note}>No feathers are available in your account yet.</p>}
     </> : <div className={styles.inlineUnavailable} role="status"><strong>Balance unavailable</strong><p>Market positions may still be shown below. This balance is not treated as zero.</p></div>}
-  </article>;
+  </article>{wallet.balance.status === "available" && <ManagedTransferForm availableMilli={wallet.balance.amount} />}</>;
 }
 
 function MarketCard({ item, nowMs }: { item: AvailableMarket | UnavailableMarket; nowMs: number }) {

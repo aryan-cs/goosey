@@ -5,7 +5,7 @@ import styles from "./rules.module.css";
 export default function RulesPage() {
   return <div className="page-shell reading-page">
     <header className="page-header"><span className="eyebrow">Rules and disclosures</span><h1>How Goosey works 🪿</h1><p>These rules explain account responsibilities, play-money markets, and the terms that apply when you use Goosey.</p></header>
-    <section><h2><BookOpen /> Feathers, not dollars</h2><p>Your feathers are just for fun. You can&apos;t buy them, cash them out, or send them to anyone outside Goosey.</p></section>
+    <section><h2><BookOpen /> Feathers, not dollars</h2><p>Feathers are free play money with no cash value. You can send them to another Goosey user by username, but you can&apos;t buy them, cash them out, or redeem them for money, property, or prizes.</p></section>
     <section><h2>Pick a side</h2><p>Think it&apos;ll happen? Bet YES. Think it won&apos;t? Bet NO. Every market has a deadline and rules for deciding who wins.</p></section>
     <section><h2>Watch the odds move</h2><p>Prices change as people trade. They show what everyone thinks might happen, not what will happen.</p></section>
     <section><h2><Scale /> Market settlement</h2><p>If you&apos;re right, each winning contract credits 100 play-money feathers. If a market is voided, each contract credits 50 play-money feathers.</p></section>
