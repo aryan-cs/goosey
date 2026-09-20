@@ -27,6 +27,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/security", () => ({
   InvalidOriginError: class InvalidOriginError extends Error {},
+  RegistrationDeviceInUseError: class RegistrationDeviceInUseError extends Error {},
   RateLimitError: class RateLimitError extends Error {
     readonly retryAfterSeconds = 1;
   },
