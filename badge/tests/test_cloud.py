@@ -42,6 +42,11 @@ load(source,100)
 has('@badge_test · 1000.00 feathers');press('A');has('Markets')
 first=source['markets'][0]
 has(first['category'].upper());has('Vol '+first['volume']);has(first['closes'].replace(' UTC','Z'))
+close_text=first['closes'].replace(' UTC','Z')
+title_and_close=next(w for w in g.widgets.values() if not w.hide and w.text.endswith('\n'+close_text))
+volume=next(w for w in g.widgets.values() if not w.hide and w.text=='Vol '+first['volume'])
+assert (title_and_close.x,title_and_close.y)==(15,61)
+assert (volume.x,volume.y)==(15,112)
 visible_lines=[w for w in g.widgets.values() if not w.hide and w.kind=='line']
 assert len(visible_lines)==2
 selected_box=next(w for w in g.widgets.values() if w.kind=='box' and not w.hide and w.styles['border_width']==1)

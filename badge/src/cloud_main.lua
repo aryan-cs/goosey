@@ -16,6 +16,22 @@ local function wrap(s,limit)
   end
   return out..line
 end
+local function wrapCard(s)
+  local lines={"",""}
+  local current=1
+  local overflow=false
+  for word in s:gmatch("%S+") do
+    local candidate=lines[current]=="" and word or lines[current].." "..word
+    if #candidate<=24 then lines[current]=candidate
+    elseif current==1 then current=2;lines[current]=word
+    else overflow=true;break end
+  end
+  if overflow then
+    while #lines[2]>21 do lines[2]=lines[2]:match("^(.*)%s+%S+$") or lines[2]:sub(1,21) end
+    lines[2]=lines[2].."..."
+  end
+  return lines[2]=="" and lines[1] or lines[1].."\n"..lines[2]
+end
 local function text(i,s,x,y,w,size,align,color)
   local l=labels[i]
   l:set_pos(x,y);l:set_size(w,240-y)
@@ -126,8 +142,8 @@ local function render()
         local y=40+row*98
         local base=row*5
         text(base+1,string.upper(item.category or "Market"),15,y+5,168,14)
-        text(base+2,wrap(item.shortTitle or item.title,24),15,y+24,166,14)
-        text(base+3,"Vol "..item.volume.."  |  "..compactClose(item.closes),15,y+70,226,14)
+        text(base+2,wrapCard(item.shortTitle or item.title).."\n"..compactClose(item.closes),15,y+21,166,14)
+        text(base+3,"Vol "..item.volume,15,y+72,226,14)
         text(base+4,string.format("%.0f%%",item.probability),250,y+7,60,22,"right")
         local change=item.changeBps and item.changeBps/100 or nil
         text(base+5,change and string.format("%+.0f pts",change) or "-- pts",242,y+39,68,14,"right",change and (change<0 and C.down or C.up) or C.muted)
