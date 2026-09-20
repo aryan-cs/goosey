@@ -1,6 +1,6 @@
 // Explicit operator-requested additional grant. Never runs on ordinary builds.
 import assert from 'node:assert/strict';
-const key='ajajoo-additional-4000-20260919-01';
+const key='ajajoo-additional-4000-20260919-02';
 assert.equal(process.env.GOOSEY_ACCOUNT_GRANT,key);
 assert.equal(process.env.VERCEL_ENV,'production');
 assert.equal(process.env.APP_URL,'https://getgoosey.vercel.app');
