@@ -15,7 +15,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const migrations = ["20260919210000_solana_wallet_links", "20260919220000_solana_event_journal",
   "20260919230000_solana_ingestion_visits", "20260919234000_solana_coverage_rotations",
   "20260919235000_app_managed_solana_custody", "20260920000000_chain_commands",
-  "20260920001000_registration_devices", "20260920002000_solana_provisioning_checkpoints"] as const;
+  "20260920001000_registration_devices", "20260920002000_solana_provisioning_checkpoints",
+  "20260920004000_solana_chain_mutation_lanes"] as const;
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
 type Entry = { type: string; name: string; tbl_name: string; sql: string | null };
 const schema = "SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type COLLATE BINARY,name COLLATE BINARY";
@@ -101,7 +102,7 @@ export async function upgradeSolanaSqlite(source: string, backupPath: string) {
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
     const { values } = parseArgs({ options: { source: { type: "string" }, backup: { type: "string" }, help: { type: "boolean" } }, strict: true, allowPositionals: false });
-    if (values.help) console.log("Usage: node --import tsx scripts/solana-upgrade-sqlite.ts --source /absolute/app.db --backup /absolute/new-backup.db\nApplies the reviewed additive wallet-link/event-journal/visits/coverage-rotation/custody/command/registration-device/provisioning upgrades; notification-preference upgrades are outside scope. Existing WAL required. Backup precedes BEGIN IMMEDIATE; lock acquisition waits at most 3 seconds and the whole schema/check transaction is bounded to 20 seconds. WAL readers continue; writers can receive SQLITE_BUSY if their timeout expires. Stop writers briefly if that interruption is unacceptable. No financial DML. Exact reviewed DDL is required; partial/drifted schemas need explicit repair. Backup predates concurrent writes: never auto-restore it over live state. A failed upgrade retains the new backup, if already created; retry requires another new backup path.");
+    if (values.help) console.log("Usage: node --import tsx scripts/solana-upgrade-sqlite.ts --source /absolute/app.db --backup /absolute/new-backup.db\nApplies the reviewed additive wallet-link/event-journal/visits/coverage-rotation/custody/command/registration-device/provisioning/mutation-lane upgrades; notification-preference upgrades are outside scope. Existing WAL required. Backup precedes BEGIN IMMEDIATE; lock acquisition waits at most 3 seconds and the whole schema/check transaction is bounded to 20 seconds. WAL readers continue; writers can receive SQLITE_BUSY if their timeout expires. Stop writers briefly if that interruption is unacceptable. No financial DML. Exact reviewed DDL is required; partial/drifted schemas need explicit repair. Backup predates concurrent writes: never auto-restore it over live state. A failed upgrade retains the new backup, if already created; retry requires another new backup path.");
     else {
       if (!values.source || !values.backup) throw new Error("Explicit --source and --backup required.");
       console.log(JSON.stringify(await upgradeSolanaSqlite(values.source, values.backup)));

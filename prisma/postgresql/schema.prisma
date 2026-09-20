@@ -171,6 +171,26 @@ model SolanaProvisioningCheckpoint {
   @@index([userId], map: "SolanaProvisioningCheckpoint_user_idx")
 }
 
+/// One durable serialization lane for every deployment, wallet, and market.
+/// Automatic seat, funding, and order mutations must hold its fenced lease.
+model SolanaChainMutationLane {
+  id                String    @id @default(cuid())
+  genesisHash       String
+  programAddress    String
+  walletAddress     String
+  chainMarketId     String
+  revision          Int       @default(0)
+  leaseOwner        String?
+  leaseTokenHash    String?
+  leaseEpoch        Int       @default(0)
+  leaseExpiresAt    DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([genesisHash, programAddress, walletAddress, chainMarketId], map: "SolanaMutationLane_identity_key")
+  @@index([leaseExpiresAt], map: "SolanaMutationLane_expiry_idx")
+}
+
 /// Durable application intent for one sponsored Solana operation. Deployment and
 /// request identity are immutable; workers mutate execution state only with a
 /// revision CAS and a hashed lease fence.

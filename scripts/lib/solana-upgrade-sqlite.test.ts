@@ -22,7 +22,8 @@ const migration = (name: string) => readFile(path.resolve("prisma/sqlite-upgrade
 const names = ["20260919210000_solana_wallet_links", "20260919220000_solana_event_journal",
   "20260919230000_solana_ingestion_visits", "20260919234000_solana_coverage_rotations",
   "20260919235000_app_managed_solana_custody", "20260920000000_chain_commands",
-  "20260920001000_registration_devices", "20260920002000_solana_provisioning_checkpoints"];
+  "20260920001000_registration_devices", "20260920002000_solana_provisioning_checkpoints",
+  "20260920004000_solana_chain_mutation_lanes"];
 describe("additive Solana SQLite upgrade (real disposable databases)", () => {
   it("applies every reviewed Solana migration atomically, preserves exact cash, backs up old schema and rechecks completed schemas", async () => {
     const f = await fixture();
@@ -97,7 +98,7 @@ describe("additive Solana SQLite upgrade (real disposable databases)", () => {
       child.stdin.write("BEGIN; SELECT 'reader-before:' || count(*) FROM sqlite_master WHERE type='table' AND name LIKE 'Solana%';\n"); await wait("reader-before:0");
       await upgradeSolanaSqlite(f.source, f.backup);
       child.stdin.write("SELECT 'reader-still:' || count(*) FROM sqlite_master WHERE type='table' AND name LIKE 'Solana%'; COMMIT; SELECT 'reader-after:' || count(*) FROM sqlite_master WHERE type='table' AND name LIKE 'Solana%'; INSERT INTO User VALUES ('after',20); SELECT 'after-ready';\n"); await wait("after-ready");
-      expect(output).toContain("reader-still:0"); expect(output).toContain("reader-after:9");
+      expect(output).toContain("reader-still:0"); expect(output).toContain("reader-after:10");
       expect(await sql(f.source, "SELECT count(*) FROM User")).toBe("3");
       expect(await sql(f.backup, "SELECT count(*) FROM User")).toBe("2");
     } finally { child.stdin.end(); const kill = setTimeout(() => child.kill("SIGKILL"), 1000); await done; clearTimeout(kill); }
