@@ -4,7 +4,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ApiError, apiErrorResponse, jsonResponse, requireUser } from "@/lib/market-service";
 import { ChainCommandNotFoundError, PrismaChainCommandStore } from "@/lib/solana/chain-command-store";
+import { dispatchManagedAmendmentCommand } from "@/lib/solana/managed-amendment-dispatcher";
 import { dispatchManagedCancellationCommand } from "@/lib/solana/managed-cancellation-dispatcher";
+import { dispatchManagedMarketProvisioningCommand } from "@/lib/solana/managed-market-provisioning-dispatcher";
 import { dispatchManagedOrderCommand } from "@/lib/solana/managed-order-dispatcher";
 import { dispatchManagedFeatherTransferCommand } from "@/lib/solana/managed-transfer-dispatcher";
 
@@ -16,6 +18,8 @@ const redispatchableCancellationStatuses = new Set([...redispatchableOrderStatus
 const recoveryDispatchers = {
   CANCEL_ORDER: dispatchManagedCancellationCommand,
   PLACE_ORDER: dispatchManagedOrderCommand,
+  PROVISION_MARKET: dispatchManagedMarketProvisioningCommand,
+  REPLACE_ORDER: dispatchManagedAmendmentCommand,
   TRANSFER_FEATHERS: dispatchManagedFeatherTransferCommand,
 } as const;
 
@@ -40,10 +44,15 @@ export async function GET(
     if (command.identity.actorId !== user.id) {
       throw new ApiError(404, "COMMAND_NOT_FOUND", "Order status not found.");
     }
+    if (command.identity.operation === "PROVISION_MARKET" && user.role !== "ADMIN") {
+      throw new ApiError(404, "COMMAND_NOT_FOUND", "Order status not found.");
+    }
     const status = await store.publicStatus(id);
     const dispatch = recoveryDispatchers[command.identity.operation as keyof typeof recoveryDispatchers];
     const redispatchableStatuses = command.identity.operation === "CANCEL_ORDER"
+      || command.identity.operation === "REPLACE_ORDER"
       || command.identity.operation === "TRANSFER_FEATHERS"
+      || command.identity.operation === "PROVISION_MARKET"
       ? redispatchableCancellationStatuses : redispatchableOrderStatuses;
     if (dispatch && redispatchableStatuses.has(status.status)) {
       // Status polling is also the crash-recovery trigger. Fenced dispatch and

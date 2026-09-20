@@ -39,6 +39,7 @@ describe("managed Solana command worker", () => {
       owner: "worker-restarted",
       now: () => now,
       dispatchOrder,
+      dispatchMarket: vi.fn(),
       dispatchSeat: vi.fn(),
       dispatchEscrow: vi.fn(),
     });
@@ -49,8 +50,8 @@ describe("managed Solana command worker", () => {
     expect(dispatchOrder).toHaveBeenCalledWith("order_12345678", expect.objectContaining({
       database: {}, env, owner: "worker-restarted",
     }));
-    expect(queue.findMany).toHaveBeenCalledTimes(5);
-    expect(queue.findMany.mock.calls[2]?.[0]).toEqual(expect.objectContaining({
+    expect(queue.findMany).toHaveBeenCalledTimes(6);
+    expect(queue.findMany.mock.calls[3]?.[0]).toEqual(expect.objectContaining({
       where: expect.objectContaining({ cluster: "localnet", genesisHash: GENESIS,
         programAddress: PROGRAM, operation: "PLACE_ORDER" }),
       take: 25,
@@ -70,6 +71,7 @@ describe("managed Solana command worker", () => {
       database: {} as never,
       env,
       now: () => now,
+      dispatchMarket: vi.fn(),
       dispatchSeat: vi.fn(),
       dispatchEscrow: vi.fn(),
       dispatchOrder: vi.fn(),
@@ -94,7 +96,7 @@ describe("managed Solana command worker", () => {
     const dispatchOrder = vi.fn(async () => { events.push("order"); return { status: "FINALIZED" } as never; });
 
     const result = await runManagedCommandWorkerCycle({ queue: queue as never, database: {} as never,
-      env, now: () => now, dispatchSeat, dispatchEscrow, dispatchOrder });
+      env, now: () => now, dispatchMarket: vi.fn(), dispatchSeat, dispatchEscrow, dispatchOrder });
 
     expect(events).toEqual(["seat", "escrow", "order"]);
     expect(result.completed).toBe(3);
@@ -114,7 +116,7 @@ describe("managed Solana command worker", () => {
       return { status: "FINALIZED" } as never;
     });
     const dependencies = { queue: queue as never, database: {} as never, env, now: () => now,
-      dispatchOrder, dispatchSeat: vi.fn(), dispatchEscrow: vi.fn() };
+      dispatchOrder, dispatchMarket: vi.fn(), dispatchSeat: vi.fn(), dispatchEscrow: vi.fn() };
     const first = runManagedCommandWorkerCycle({ ...dependencies, owner: "worker-one" });
     const second = runManagedCommandWorkerCycle({ ...dependencies, owner: "worker-two" });
     await vi.waitFor(() => expect(dispatchOrder).toHaveBeenCalledTimes(2));
@@ -139,14 +141,14 @@ describe("managed Solana command worker", () => {
     const sleep = vi.fn(async () => undefined);
     const running = runManagedCommandWorker({ signal: controller.signal, queue: queue as never,
       database: {} as never, env, now: () => now, dispatchOrder,
-      dispatchSeat: vi.fn(), dispatchEscrow: vi.fn(), sleep });
+      dispatchMarket: vi.fn(), dispatchSeat: vi.fn(), dispatchEscrow: vi.fn(), sleep });
     await vi.waitFor(() => expect(dispatchOrder).toHaveBeenCalledOnce());
-    expect(queue.findMany).toHaveBeenCalledTimes(5);
+    expect(queue.findMany).toHaveBeenCalledTimes(6);
     finish();
     await running;
 
     expect(dispatchOrder).toHaveBeenCalledOnce();
-    expect(queue.findMany).toHaveBeenCalledTimes(5);
+    expect(queue.findMany).toHaveBeenCalledTimes(6);
     expect(sleep).not.toHaveBeenCalled();
   });
 
@@ -166,9 +168,35 @@ describe("managed Solana command worker", () => {
       env, now: () => now, retryCooldownMs: 9_000 });
     const query = queue.findMany.mock.calls[0]?.[0] as unknown as { where: { AND: unknown[] } };
     expect(query.where.AND).toContainEqual({ OR: [
+      { status: { in: ["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED", "UNKNOWN"] } },
+      { status: "FAILED_RETRYABLE", updatedAt: { lte: new Date("2026-09-20T00:09:51Z") } },
+    ] });
+    const participantQuery = queue.findMany.mock.calls[1]?.[0] as unknown as { where: { AND: unknown[] } };
+    expect(participantQuery.where.AND).toContainEqual({ OR: [
       { status: { in: ["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED"] } },
       { status: "FAILED_RETRYABLE", updatedAt: { lte: new Date("2026-09-20T00:09:51Z") } },
     ] });
+  });
+
+  it.each(["SIGNED", "UNKNOWN"])("resumes %s market provisioning before dependent participant commands", async marketStatus => {
+    const queue = queueFor({
+      PROVISION_MARKET: [candidate("market_12345678", "PROVISION_MARKET", marketStatus)],
+      REGISTER_SEAT: [candidate("seat_12345678", "REGISTER_SEAT")],
+      PLACE_ORDER: [candidate("order_12345678", "PLACE_ORDER")],
+    });
+    const events: string[] = [];
+    const dispatchMarket = vi.fn(async () => { events.push("market"); return { status: "PROJECTED" } as never; });
+    const dispatchSeat = vi.fn(async () => { events.push("seat"); return { status: "PROJECTED" } as never; });
+    const dispatchOrder = vi.fn(async () => { events.push("order"); return { status: "UNKNOWN" } as never; });
+    const result = await runManagedCommandWorkerCycle({ queue: queue as never, database: {} as never,
+      env, now: () => now, dispatchMarket, dispatchSeat, dispatchEscrow: vi.fn(), dispatchOrder });
+
+    expect(events).toEqual(["market", "seat", "order"]);
+    expect(dispatchMarket).toHaveBeenCalledWith("market_12345678", expect.any(Object));
+    expect(result).toEqual(expect.objectContaining({ selected: 3, attempted: 3, completed: 2, uncertain: 1 }));
+    expect(queue.findMany.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      where: expect.objectContaining({ operation: "PROVISION_MARKET" }),
+    }));
   });
 
   it("caps polling backoff and reports only a bounded error type", async () => {

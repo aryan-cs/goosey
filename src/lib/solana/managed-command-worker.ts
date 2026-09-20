@@ -7,12 +7,14 @@ import { ChainCommandConflictError } from "@/lib/solana/chain-command-state";
 import type { PublicChainCommandStatus } from "@/lib/solana/chain-command-store";
 import { dispatchManagedCancellationCommand } from "@/lib/solana/managed-cancellation-dispatcher";
 import { dispatchManagedEscrowDepositCommand } from "@/lib/solana/managed-escrow-dispatcher";
+import { dispatchManagedMarketProvisioningCommand } from "@/lib/solana/managed-market-provisioning-dispatcher";
 import { dispatchManagedOrderCommand } from "@/lib/solana/managed-order-dispatcher";
 import { dispatchManagedSeatRegistrationCommand } from "@/lib/solana/managed-seat-dispatcher";
 import { dispatchManagedFeatherTransferCommand } from "@/lib/solana/managed-transfer-dispatcher";
 import { resolveSolanaRuntime } from "@/lib/solana/runtime";
 
 export const MANAGED_COMMAND_OPERATIONS = [
+  "PROVISION_MARKET",
   "REGISTER_SEAT",
   "DEPOSIT_ESCROW",
   "PLACE_ORDER",
@@ -81,6 +83,7 @@ type CycleDependencies = Readonly<{
   shouldStop?: () => boolean;
   perOperationBatchSize?: number;
   retryCooldownMs?: number;
+  dispatchMarket?: Dispatch;
   dispatchSeat?: Dispatch;
   dispatchEscrow?: Dispatch;
   dispatchOrder?: Dispatch;
@@ -133,6 +136,7 @@ export function managedCommandWorkerConfigFromEnvironment(
 }
 
 function dispatchForOperation(operation: ManagedCommandOperation, dependencies: CycleDependencies): Dispatch {
+  if (operation === "PROVISION_MARKET") return dependencies.dispatchMarket ?? dispatchManagedMarketProvisioningCommand;
   if (operation === "REGISTER_SEAT") return dependencies.dispatchSeat ?? dispatchManagedSeatRegistrationCommand;
   if (operation === "DEPOSIT_ESCROW") return dependencies.dispatchEscrow ?? dispatchManagedEscrowDepositCommand;
   if (operation === "PLACE_ORDER") return dependencies.dispatchOrder ?? dispatchManagedOrderCommand;
@@ -155,7 +159,8 @@ function classifiedStatus(result: PublicChainCommandStatus): Pick<ManagedCommand
 }
 
 /**
- * Processes a bounded, child-first snapshot of durable commands. Selection is
+ * Processes a bounded, dependency-first snapshot of durable commands. Market
+ * provisioning precedes participant seat, escrow, and order commands. Selection is
  * advisory: each dispatcher must still win its own revision/lease CAS before
  * it can prepare, journal, or submit a transaction.
  */
@@ -181,6 +186,9 @@ export async function runManagedCommandWorkerCycle(
 
   for (const operation of MANAGED_COMMAND_OPERATIONS) {
     if (shouldStop()) break;
+    const immediatelyDispatchable = operation === "PROVISION_MARKET"
+      ? [...NON_RETRYABLE_STARTS, "UNKNOWN"]
+      : NON_RETRYABLE_STARTS;
     const rows = await queue.findMany({
       where: {
         cluster: runtime.cluster,
@@ -190,7 +198,7 @@ export async function runManagedCommandWorkerCycle(
         AND: [
           { OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: startedAt } }] },
           { OR: [
-            { status: { in: NON_RETRYABLE_STARTS } },
+            { status: { in: immediatelyDispatchable } },
             { status: "FAILED_RETRYABLE", updatedAt: { lte: retryBefore } },
           ] },
         ],

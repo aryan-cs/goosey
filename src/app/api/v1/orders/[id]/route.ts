@@ -4,6 +4,8 @@ import { z } from "zod";
 import { readJsonObject } from "@/lib/http";
 import { cancelOrder, replaceOrder } from "@/lib/order-exchange";
 import { ApiError, apiErrorResponse, jsonResponse, parseIdempotencyKey, requireUser } from "@/lib/market-service";
+import { dispatchManagedAmendmentCommand } from "@/lib/solana/managed-amendment-dispatcher";
+import { acceptManagedAmendment } from "@/lib/solana/managed-amendment-service";
 import { dispatchManagedCancellationCommand } from "@/lib/solana/managed-cancellation-dispatcher";
 import { acceptManagedCancellation, parseManagedCancellationReference } from "@/lib/solana/managed-cancellation-service";
 
@@ -85,6 +87,17 @@ export async function PATCH(
     }
     const body = replaceSchema.parse(await readJsonObject(request));
     const user = await requireUser(request, true);
+    const managedReference = parseManagedCancellationReference(id);
+    if (managedReference) {
+      const result = await acceptManagedAmendment({ userId: user.id, orderReference: managedReference,
+        idempotencyKey, expectedVersion: version, request: body });
+      after(async () => {
+        await dispatchManagedAmendmentCommand(result.command.id).catch(() => {
+          console.error("Managed amendment dispatch failed; the durable command remains recoverable.", result.command.id);
+        });
+      });
+      return privateNoStore(jsonResponse(result, { status: 202 }));
+    }
     const result = await replaceOrder({
       userId: user.id,
       authRequest: request,

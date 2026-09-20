@@ -5,7 +5,7 @@ import { assertMutationSession } from "@/lib/mutation-session";
 const mocks = vi.hoisted(() => ({
   principal: { id: "user-attacker", role: "USER", status: "ACTIVE" },
   readJsonObject: vi.fn(),
-  createAdminMarket: vi.fn(),
+  acceptManagedMarketProvisioning: vi.fn(),
   transitionAdminMarket: vi.fn(),
   createResolutionProposal: vi.fn(),
   approveResolutionProposal: vi.fn(),
@@ -61,7 +61,7 @@ vi.mock("@/lib/admin-service", async () => {
     createMarketSchema: { parse: vi.fn((value: unknown) => value) },
     lifecycleReasonSchema: { parse: vi.fn((value: unknown) => value) },
     resolutionSchema: { parse: vi.fn((value: unknown) => value) },
-    createAdminMarket: mocks.createAdminMarket,
+    createAdminMarket: vi.fn(),
     transitionAdminMarket: mocks.transitionAdminMarket,
     createResolutionProposal: mocks.createResolutionProposal,
     approveResolutionProposal: mocks.approveResolutionProposal,
@@ -70,6 +70,12 @@ vi.mock("@/lib/admin-service", async () => {
 });
 
 vi.mock("@/lib/http", () => ({ readJsonObject: mocks.readJsonObject }));
+vi.mock("@/lib/solana/managed-market-provisioning-service", () => ({
+  acceptManagedMarketProvisioning: mocks.acceptManagedMarketProvisioning,
+}));
+vi.mock("@/lib/solana/managed-market-provisioning-dispatcher", () => ({
+  dispatchManagedMarketProvisioningCommand: vi.fn(),
+}));
 vi.mock("@/lib/settlement-service", () => ({
   getSettlementRun: mocks.getSettlementRun,
   processSettlementRun: mocks.processSettlementRun,
@@ -153,7 +159,7 @@ describe("hostile admin route authorization", () => {
 
     expect(responses.map((response) => response.status)).toEqual(Array(15).fill(403));
     expect(mocks.readJsonObject).not.toHaveBeenCalled();
-    expect(mocks.createAdminMarket).not.toHaveBeenCalled();
+    expect(mocks.acceptManagedMarketProvisioning).not.toHaveBeenCalled();
     expect(mocks.transitionAdminMarket).not.toHaveBeenCalled();
     expect(mocks.createResolutionProposal).not.toHaveBeenCalled();
     expect(mocks.approveResolutionProposal).not.toHaveBeenCalled();

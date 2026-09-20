@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(), load: vi.fn(), publicStatus: vi.fn(), after: vi.fn(), dispatch: vi.fn(),
-  cancelDispatch: vi.fn(), transferDispatch: vi.fn(),
+  cancelDispatch: vi.fn(), amendmentDispatch: vi.fn(), transferDispatch: vi.fn(),
+  marketDispatch: vi.fn(),
 }));
 vi.mock("next/server", async () => {
   const actual = await vi.importActual<typeof import("next/server")>("next/server");
@@ -22,6 +23,10 @@ vi.mock("@/lib/solana/chain-command-store", async () => {
 });
 vi.mock("@/lib/solana/managed-order-dispatcher", () => ({ dispatchManagedOrderCommand: mocks.dispatch }));
 vi.mock("@/lib/solana/managed-cancellation-dispatcher", () => ({ dispatchManagedCancellationCommand: mocks.cancelDispatch }));
+vi.mock("@/lib/solana/managed-market-provisioning-dispatcher", () => ({
+  dispatchManagedMarketProvisioningCommand: mocks.marketDispatch,
+}));
+vi.mock("@/lib/solana/managed-amendment-dispatcher", () => ({ dispatchManagedAmendmentCommand: mocks.amendmentDispatch }));
 vi.mock("@/lib/solana/managed-transfer-dispatcher", () => ({
   dispatchManagedFeatherTransferCommand: mocks.transferDispatch,
 }));
@@ -38,7 +43,9 @@ beforeEach(() => {
   mocks.after.mockImplementation((callback: () => unknown) => callback());
   mocks.dispatch.mockResolvedValue({ status: "FINALIZED" });
   mocks.cancelDispatch.mockResolvedValue({ status: "FINALIZED" });
+  mocks.amendmentDispatch.mockResolvedValue({ status: "FINALIZED" });
   mocks.transferDispatch.mockResolvedValue({ status: "FINALIZED" });
+  mocks.marketDispatch.mockResolvedValue({ status: "FINALIZED" });
 });
 
 describe("GET /api/v1/commands/[id]", () => {
@@ -104,4 +111,32 @@ describe("GET /api/v1/commands/[id]", () => {
       expect(mocks.transferDispatch).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["SIGNED", "UNKNOWN"])("reconciles an atomic managed amendment in %s", async status => {
+    mocks.load.mockResolvedValue({ identity: { actorId: "user_12345678", operation: "REPLACE_ORDER" } });
+    mocks.publicStatus.mockResolvedValue({ id: "cmd_12345678", status });
+    await GET(request, context);
+    expect(mocks.amendmentDispatch).toHaveBeenCalledWith("cmd_12345678");
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(mocks.cancelDispatch).not.toHaveBeenCalled();
+  });
+
+  it.each(["SIGNED", "UNKNOWN"])("lets only the originating active administrator reconcile market provisioning in %s", async status => {
+    mocks.requireUser.mockResolvedValueOnce({ id: "admin_12345678", role: "ADMIN", status: "ACTIVE" });
+    mocks.load.mockResolvedValue({ identity: { actorId: "admin_12345678", operation: "PROVISION_MARKET" } });
+    mocks.publicStatus.mockResolvedValue({ id: "cmd_12345678", status });
+    const response = await GET(request, context);
+    expect(response.status).toBe(200);
+    expect(mocks.marketDispatch).toHaveBeenCalledWith("cmd_12345678");
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("hides market-provisioning status from the originating user after administrator access is removed", async () => {
+    mocks.requireUser.mockResolvedValueOnce({ id: "admin_12345678", role: "USER", status: "ACTIVE" });
+    mocks.load.mockResolvedValue({ identity: { actorId: "admin_12345678", operation: "PROVISION_MARKET" } });
+    const response = await GET(request, context);
+    expect(response.status).toBe(404);
+    expect(mocks.publicStatus).not.toHaveBeenCalled();
+    expect(mocks.marketDispatch).not.toHaveBeenCalled();
+  });
 });

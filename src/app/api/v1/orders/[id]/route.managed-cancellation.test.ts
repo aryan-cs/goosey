@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(), parseIdempotencyKey: vi.fn(), cancelOrder: vi.fn(), replaceOrder: vi.fn(),
-  acceptCancellation: vi.fn(), dispatchCancellation: vi.fn(), after: vi.fn(),
+  acceptCancellation: vi.fn(), dispatchCancellation: vi.fn(), acceptAmendment: vi.fn(),
+  dispatchAmendment: vi.fn(), after: vi.fn(),
 }));
 
 vi.mock("next/server", async () => {
@@ -23,9 +24,11 @@ vi.mock("@/lib/solana/managed-cancellation-service", async () => {
 vi.mock("@/lib/solana/managed-cancellation-dispatcher", () => ({
   dispatchManagedCancellationCommand: mocks.dispatchCancellation,
 }));
+vi.mock("@/lib/solana/managed-amendment-service", () => ({ acceptManagedAmendment: mocks.acceptAmendment }));
+vi.mock("@/lib/solana/managed-amendment-dispatcher", () => ({ dispatchManagedAmendmentCommand: mocks.dispatchAmendment }));
 
 import { encodeManagedCancellationReference } from "@/lib/solana/managed-cancellation-service";
-import { DELETE } from "./route";
+import { DELETE, PATCH } from "./route";
 
 function request(id: string, version?: number) {
   const headers = new Headers({ "Idempotency-Key": "cancel-request-123" });
@@ -42,6 +45,41 @@ beforeEach(() => {
   mocks.parseIdempotencyKey.mockReturnValue("cancel-request-123");
   mocks.after.mockImplementation((callback: () => unknown) => callback());
   mocks.dispatchCancellation.mockResolvedValue({ status: "FINALIZED" });
+  mocks.dispatchAmendment.mockResolvedValue({ status: "FINALIZED" });
+});
+
+describe("PATCH /api/v1/orders/[id] managed amendment", () => {
+  it("accepts one durable atomic replacement through the ordinary endpoint", async () => {
+    const id = encodeManagedCancellationReference({ marketSlug: "market-one", orderId: "42" });
+    mocks.acceptAmendment.mockResolvedValue({ accepted: true, pending: true,
+      command: { id: "cmd_replace_123", status: "ACCEPTED" } });
+    const input = request(id, 9);
+    const patchRequest = new NextRequest(input.request.url, { method: "PATCH", headers: {
+      "Content-Type": "application/json", "Idempotency-Key": "replace-request-123", "If-Match": "order-version-9",
+    }, body: JSON.stringify({ clientOrderId: "replacement-123", limitPriceMilli: "450", quantity: 3,
+      postOnly: false, selfTradePrevention: "CANCEL_AGGRESSOR", cancelOnPause: true }) });
+    mocks.parseIdempotencyKey.mockReturnValue("replace-request-123");
+    const response = await PATCH(patchRequest, input.context);
+    expect(response.status).toBe(202);
+    expect(mocks.acceptAmendment).toHaveBeenCalledWith({ userId: "user_12345678",
+      orderReference: { marketSlug: "market-one", orderId: "42" }, idempotencyKey: "replace-request-123",
+      expectedVersion: 9, request: expect.objectContaining({ limitPriceMilli: "450", postOnly: false }) });
+    expect(mocks.dispatchAmendment).toHaveBeenCalledWith("cmd_replace_123");
+    expect(mocks.replaceOrder).not.toHaveBeenCalled();
+  });
+
+  it("preserves the database replacement path", async () => {
+    mocks.replaceOrder.mockResolvedValue({ accepted: true, order: { orderId: "database_order_123" } });
+    const input = request("database_order_123", 3);
+    const patchRequest = new NextRequest(input.request.url, { method: "PATCH", headers: {
+      "Content-Type": "application/json", "Idempotency-Key": "replace-request-123", "If-Match": "order-version-3",
+    }, body: JSON.stringify({ clientOrderId: "replacement-123", limitPriceMilli: "450", quantity: 3 }) });
+    mocks.parseIdempotencyKey.mockReturnValue("replace-request-123");
+    const response = await PATCH(patchRequest, input.context);
+    expect(response.status).toBe(200);
+    expect(mocks.replaceOrder).toHaveBeenCalledOnce();
+    expect(mocks.acceptAmendment).not.toHaveBeenCalled();
+  });
 });
 
 describe("DELETE /api/v1/orders/[id] managed cancellation", () => {
