@@ -38,6 +38,18 @@ const EXPECTED_ACTIVE = new Map([
   ["arsonistduck", "cmu8wmj39001wlj04fv4b75dg"],
 ]);
 const INCIDENT_NAMES = new Set(EXPECTED_ACTIVE.keys());
+const EXPECTED_OPERATOR_ADJUSTMENTS = new Map([
+  ["cmu92l6280001uzrpnyej2bwq", {
+    type: "ADMIN_BALANCE_ADJUSTMENT",
+    scope: "ADMIN_BALANCE_ADJUSTMENT",
+    key: "set-arsonistduck-balance-13-20260919-01a0bab8-001",
+  }],
+  ["cmu92u4640000gm3o9hri9dsp", {
+    type: "OPERATOR_ADJUSTMENT",
+    scope: "OPERATOR_GRANT",
+    key: "arsonistduck-set-13-20260919-01",
+  }],
+]);
 const BASIS_POINTS = 10_000n;
 const ROUNDING_RESERVE_MILLI = 0.25;
 // This reviewed execution was the first one after commit 47ec66c changed the
@@ -453,6 +465,27 @@ async function applyCleanup() {
     }
     await tx.ledgerPosting.deleteMany({ where: { journalEntryId: { in: grants.map(grant => grant.id) } } });
     await tx.journalEntry.deleteMany({ where: { id: { in: grants.map(grant => grant.id) } } });
+
+    const operatorAdjustments = await tx.journalEntry.findMany({
+      where: { id: { in: [...EXPECTED_OPERATOR_ADJUSTMENTS.keys()] } },
+      include: { postings: true },
+    });
+    if (operatorAdjustments.length !== EXPECTED_OPERATOR_ADJUSTMENTS.size) fail("reviewed operator adjustments are missing");
+    for (const journal of operatorAdjustments) {
+      const expected = EXPECTED_OPERATOR_ADJUSTMENTS.get(journal.id)!;
+      if (journal.type !== expected.type || journal.idempotencyScope !== expected.scope || journal.idempotencyKey !== expected.key ||
+          journal.referenceType !== "USER" || journal.referenceId !== EXPECTED_ACTIVE.get("arsonistduck") || journal.status !== "POSTED" ||
+          journal.postings.length < 2 || journal.postings.reduce((sum, posting) => sum + posting.amountMilli, 0n) !== 0n ||
+          journal.postings.filter(posting => userWallet.get(journal.referenceId)?.id === posting.ledgerAccountId).length !== 1) {
+        fail(`reviewed operator adjustment ${journal.id} changed`);
+      }
+      for (const posting of journal.postings) {
+        await tx.ledgerAccount.update({ where: { id: posting.ledgerAccountId }, data: { balanceMilli: { decrement: posting.amountMilli } } });
+      }
+    }
+    await tx.ledgerPosting.deleteMany({ where: { journalEntryId: { in: [...EXPECTED_OPERATOR_ADJUSTMENTS.keys()] } } });
+    await tx.journalEntry.deleteMany({ where: { id: { in: [...EXPECTED_OPERATOR_ADJUSTMENTS.keys()] } } });
+
     const remainingJournals = await tx.journalEntry.count({ where: { actorUserId: { in: targetIds } } });
     if (remainingJournals) fail("target journal activity remains after reviewed removal");
     const remainingWalletPostings = await tx.ledgerPosting.findMany({
