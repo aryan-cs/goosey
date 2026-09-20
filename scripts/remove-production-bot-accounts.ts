@@ -410,7 +410,11 @@ async function applyCleanup() {
     if (!publisher || publisher.role !== "ADMIN" || publisher.status !== "ACTIVE") fail("audit publisher is unavailable");
 
     const userWallet = new Map((await tx.ledgerAccount.findMany({ where: { ownerType: "USER", ownerId: { in: [...new Set(plan.ordered.map(t => t.userId))] }, purpose: "USER_FEATHERS" } })).map(account => [account.ownerId!, account]));
-    const revenue = await tx.ledgerAccount.findUnique({ where: { ownerType_ownerId_purpose: { ownerType: "SYSTEM", ownerId: "GOOSEY", purpose: "PROTOCOL_REVENUE" } } });
+    const [revenue, issuance] = await Promise.all([
+      tx.ledgerAccount.findUnique({ where: { ownerType_ownerId_purpose: { ownerType: "SYSTEM", ownerId: "GOOSEY", purpose: "PROTOCOL_REVENUE" } } }),
+      tx.ledgerAccount.findUnique({ where: { ownerType_ownerId_purpose: { ownerType: "SYSTEM", ownerId: "GOOSEY", purpose: "ISSUANCE" } } }),
+    ]);
+    if (!issuance || !issuance.allowsNegative) fail("system issuance account is unavailable");
     const oldUserCash = new Map<string, bigint>();
     let oldRevenue = 0n;
     for (const trade of plan.ordered) for (const posting of trade.journal.postings) {
@@ -422,15 +426,40 @@ async function applyCleanup() {
       const delta = item.trade.action === "BUY" ? -item.quote.totalDebitMilli! : item.quote.netCreditMilli!;
       newUserCash.set(item.trade.userId, (newUserCash.get(item.trade.userId) ?? 0n) + delta); newRevenue += item.quote.feeMilli;
     }
+    let remediationIssuanceDelta = 0n;
+    const remediatedUsers: string[] = [];
     for (const userId of new Set([...oldUserCash.keys(), ...newUserCash.keys()])) {
       if (plan.targetIds.has(userId)) continue;
       const delta = (newUserCash.get(userId) ?? 0n) - (oldUserCash.get(userId) ?? 0n);
       const oldRealized = plan.existingPositions.get(userId)?.realizedPnlMilli ?? 0n;
       const newRealized = plan.replayPositions.get(userId)?.realizedPnlMilli ?? 0n;
       const wallet = userWallet.get(userId); if (!wallet) fail(`surviving user ${userId} lacks a wallet`);
-      await tx.user.update({ where: { id: userId }, data: { balanceMilli: { increment: delta }, realizedPnlMilli: { increment: newRealized - oldRealized } } });
-      await tx.ledgerAccount.update({ where: { id: wallet.id }, data: { balanceMilli: { increment: delta } } });
+      // Reprice the retained execution history against the bot-free curve, but
+      // do not retroactively charge or credit an innocent participant. The
+      // exact offset is represented as a balanced incident-remediation journal.
+      await tx.user.update({ where: { id: userId }, data: { realizedPnlMilli: { increment: newRealized - oldRealized } } });
+      if (delta !== 0n) {
+        await tx.journalEntry.create({
+          data: {
+            type: "INCIDENT_REMEDIATION",
+            status: "POSTED",
+            referenceType: "MARKET",
+            referenceId: MARKET_ID,
+            idempotencyScope: "BOT_INCIDENT_REMEDIATION",
+            idempotencyKey: `${plan.digest}:${userId}`,
+            actorUserId: publisher.id,
+            metadata: json({ cleanupDigest: plan.digest, userId, repricingOffsetMilli: (-delta).toString() }),
+            postings: { create: [
+              { ledgerAccountId: wallet.id, amountMilli: -delta },
+              { ledgerAccountId: issuance.id, amountMilli: delta },
+            ] },
+          },
+        });
+        remediationIssuanceDelta += delta;
+        remediatedUsers.push(userId);
+      }
     }
+    if (remediationIssuanceDelta !== 0n) await tx.ledgerAccount.update({ where: { id: issuance.id }, data: { balanceMilli: { increment: remediationIssuanceDelta } } });
     if ((oldRevenue !== 0n || newRevenue !== 0n) && !revenue) fail("protocol revenue account is missing");
     if (revenue) await tx.ledgerAccount.update({ where: { id: revenue.id }, data: { balanceMilli: { increment: newRevenue - oldRevenue } } });
 
@@ -517,7 +546,7 @@ async function applyCleanup() {
     await tx.ledgerAccount.deleteMany({ where: { ownerType: "USER", ownerId: { in: targetIds } } });
     const deviceRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT id FROM "RegistrationDevice" WHERE "userId" IN (${Prisma.join(targetIds)})`);
     const deviceIds = deviceRows.map(device => device.id);
-    await tx.auditLog.create({ data: { actorUserId: publisher.id, action: "BOT_INCIDENT_REMOVED", entityType: "MARKET", entityId: MARKET_ID, metadata: json({ digest: plan.digest, removedAccounts: [...plan.nameById.entries()], removedTradeIds: targetTrades.map(t => t.id), replayedTradeIds: plan.surviving.map(t => t.id), retainedDeviceTombstones: deviceIds }) } });
+    await tx.auditLog.create({ data: { actorUserId: publisher.id, action: "BOT_INCIDENT_REMOVED", entityType: "MARKET", entityId: MARKET_ID, metadata: json({ digest: plan.digest, removedAccounts: [...plan.nameById.entries()], removedTradeIds: targetTrades.map(t => t.id), replayedTradeIds: plan.surviving.map(t => t.id), remediatedUsers, retainedDeviceTombstones: deviceIds }) } });
     const deleted = await tx.user.deleteMany({ where: { id: { in: targetIds } } });
     if (deleted.count !== targetIds.length) fail("not every reviewed target account was deleted");
     if (deviceIds.length) {
@@ -525,7 +554,7 @@ async function applyCleanup() {
       if (linked[0]?.count !== 0n) fail("a registration-device tombstone still references a deleted account");
     }
     await assertTransactionReconciles(tx, MARKET_ID);
-    return { digest: plan.digest, removedAccounts: targetIds.length, removedTrades: targetTrades.length, replayedTrades: plan.surviving.length, retainedDeviceTombstones: deviceIds.length, market: { yesShares: plan.state.yesShares, noShares: plan.state.noShares, volumeMilli: plan.volumeMilli, version: input.market.version + 1 } };
+    return { digest: plan.digest, removedAccounts: targetIds.length, removedTrades: targetTrades.length, replayedTrades: plan.surviving.length, remediatedUsers: remediatedUsers.length, retainedDeviceTombstones: deviceIds.length, market: { yesShares: plan.state.yesShares, noShares: plan.state.noShares, volumeMilli: plan.volumeMilli, version: input.market.version + 1 } };
   }, { isolationLevel: "Serializable", timeout: 60_000 });
 }
 
