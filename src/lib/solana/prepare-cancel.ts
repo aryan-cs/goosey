@@ -6,14 +6,20 @@ import { buildCancelOrderInstruction } from "./exchange-client";
 import type { SolanaRuntime } from "./runtime";
 import type { PreparedWalletTransaction } from "./wallet-transaction";
 
+export type PrepareCancelOrderInput = Readonly<{
+  runtime: SolanaRuntime;
+  sender: TransactionSigner;
+  marketId: bigint;
+  orderId: bigint;
+  signal?: AbortSignal;
+}>;
+
 /** Prepare an explicit owner cancellation, not a cleanup or replacement.
  * Derive the target hint and nonce from a single finalized book/escrow read.
  * A concurrent fill/removal can invalidate the hint; never retarget or sign again
  * automatically. Cancellation does not require the market to remain open.
  */
-export async function prepareCancelOrder(input: {
-  runtime: SolanaRuntime; sender: TransactionSigner; marketId: bigint; orderId: bigint; signal?: AbortSignal;
-}) {
+export async function prepareCancelOrder(input: PrepareCancelOrderInput) {
   const runtime = { ...input.runtime }, sender = input.sender, marketId = input.marketId, orderId = input.orderId;
   assertIsTransactionSigner(sender);
   const senderAddress = address(sender.address), signal = input.signal ?? AbortSignal.timeout(15_000);

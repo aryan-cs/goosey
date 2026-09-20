@@ -17,3 +17,15 @@ Every action is prepared unsigned, reviewed, and approved by the selected linked
 `useChainTransaction` coordinates the wallet page's receipt namespace and cross-tab submission lock. It verifies runtime, configuration, network and account link before and after signing, persists signed bytes before the single broadcast, and recovers status without sending. Account changes abort pending work. Unknown or expired outcomes block further signing; failed transactions unblock only with finalized evidence. The page rereads finalized balances and orders after recovery.
 
 The public catalog remains separate: this direct route does not publish a hidden DRAFT database catalog entry. No synthetic history, price chart, database balance, or automatic funding is added.
+
+## Browser verification
+
+```sh
+GOOSEY_SOLANA_VALIDATOR_BIN=/absolute/path/to/solana-test-validator npm run test:browser:chain-market
+```
+
+Requires the compiled Goosey program, installed dependencies and Playwright Chromium. The runner owns a new validator, SQLite database, app server and ephemeral Wallet Standard keys. It creates a real market, obtains two independent reviewer acceptances, seals the exact terms and activates the market. Existing retained validators and app balances are untouched.
+
+The journey claims an authorized grant, registers the trader's seat, deposits collateral, places a resting limit order, cancels it, and withdraws. It checks finalized on-chain balances after every operation. A forwarded cancellation loses its RPC response; reload must recover the persisted signature without duplicate signing or sending. Altered manifest bytes must block approval. Screenshots and account/transaction evidence are written to `output/playwright/chain-market`.
+
+This test covers the resting-order lifecycle and recovery, not every matching combination or resolved-market claim. Those preparation branches also have focused unit tests; program-level matching and settlement verification remain separate. The test Wallet Standard implementation uses genuine signatures but does not prove compatibility with every wallet extension.

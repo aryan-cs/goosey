@@ -1,11 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { readJsonObject } from "@/lib/http";
 import { cancelOrder, replaceOrder } from "@/lib/order-exchange";
 import { ApiError, apiErrorResponse, jsonResponse, parseIdempotencyKey, requireUser } from "@/lib/market-service";
+import { dispatchManagedCancellationCommand } from "@/lib/solana/managed-cancellation-dispatcher";
+import { acceptManagedCancellation, parseManagedCancellationReference } from "@/lib/solana/managed-cancellation-service";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const paramsSchema = z.object({ id: z.string().min(8).max(200).regex(/^[A-Za-z0-9._:-]+$/) }).strict();
 const replaceSchema = z
@@ -46,6 +49,17 @@ export async function DELETE(
     const idempotencyKey = parseIdempotencyKey(request);
     const { id } = paramsSchema.parse(await context.params);
     const version = expectedVersion(request);
+    const managedReference = parseManagedCancellationReference(id);
+    if (managedReference) {
+      const result = await acceptManagedCancellation({ userId: user.id, orderReference: managedReference,
+        idempotencyKey, ...(version === undefined ? {} : { expectedVersion: version }) });
+      after(async () => {
+        await dispatchManagedCancellationCommand(result.command.id).catch(() => {
+          console.error("Managed cancellation dispatch failed; the durable command remains recoverable.", result.command.id);
+        });
+      });
+      return privateNoStore(jsonResponse(result, { status: 202 }));
+    }
     const result = await cancelOrder({
       userId: user.id,
       authRequest: request,

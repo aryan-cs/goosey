@@ -24,6 +24,7 @@ import {
   type Transaction,
   type TransactionPartialSigner,
 } from "@solana/kit";
+import { ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 
 import { probeSolanaRuntime, resolveSolanaRuntime, type SolanaRuntime } from "./runtime";
 
@@ -33,8 +34,10 @@ const MAX_INSTRUCTIONS = 32;
 const MAX_ACCOUNTS = 256;
 
 export type SponsoredTransactionAllowlist = Readonly<{
-  /** Every invoked program must appear here. The pinned Goosey program is mandatory. */
+  /** Every invoked program must appear here. */
   instructionProgramAddresses: readonly Address[];
+  /** Programs that must each be invoked. Defaults to the pinned Goosey program. */
+  requiredInstructionProgramAddresses?: readonly Address[];
   /** Every account and its maximum permitted signer/write privileges. */
   accounts: readonly Readonly<{ address: Address; maxRole: AccountRole }>[];
   maxInstructions?: number;
@@ -52,6 +55,8 @@ export type SignedSponsoredTransaction = Readonly<{
   messageSha256: string;
   recentBlockhash: string;
   lastValidBlockHeight: bigint;
+  /** Exact invoked program set. Older Goosey-only receipts omit this field. */
+  instructionProgramAddresses?: readonly Address[];
 }>;
 
 type SponsoredRpc = Pick<ReturnType<typeof createSolanaRpc>,
@@ -116,6 +121,17 @@ function captureInstructions(input: {
     throw new Error(`Sponsored transaction requires between 1 and ${maximum} instructions`);
   }
   const programs = exactAddressSet(input.allowlist.instructionProgramAddresses, "Instruction program allowlist");
+  const requiredPrograms = exactAddressSet(
+    input.allowlist.requiredInstructionProgramAddresses ?? [input.runtime.programAddress],
+    "Required instruction program allowlist",
+  );
+  const requiredProgramList = [...requiredPrograms].sort();
+  const gooseyPolicy = requiredProgramList.length === 1 && requiredProgramList[0] === input.runtime.programAddress;
+  const featherTransferPolicy = JSON.stringify(requiredProgramList)
+    === JSON.stringify([ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS].sort());
+  if (!gooseyPolicy && !featherTransferPolicy) {
+    throw new Error("Sponsored transactions require the Goosey program or the exact feather transfer program set");
+  }
   if (!Array.isArray(input.allowlist.accounts) || input.allowlist.accounts.length === 0
     || input.allowlist.accounts.length > MAX_ACCOUNTS) {
     throw new Error(`Instruction account allowlist must contain between 1 and ${MAX_ACCOUNTS} entries`);
@@ -128,11 +144,11 @@ function captureInstructions(input: {
     if (accounts.has(accountAddress)) throw new Error("Instruction account allowlist must not contain duplicates");
     accounts.set(accountAddress, allowance.maxRole);
   }
-  if (!programs.has(input.runtime.programAddress)) {
-    throw new Error("Instruction program allowlist must include the pinned Goosey program");
+  for (const required of requiredPrograms) {
+    if (!programs.has(required)) throw new Error("Required instruction program must appear in the program allowlist");
   }
 
-  let invokesGoosey = false;
+  const invokedPrograms = new Set<string>();
   let participantRequired = false;
   let accountCount = 0;
   const captured = input.instructions.map((instruction, instructionIndex) => {
@@ -140,7 +156,7 @@ function captureInstructions(input: {
     if (!programs.has(programAddress)) {
       throw new Error(`Instruction ${instructionIndex} invokes a program outside the allowlist`);
     }
-    invokesGoosey ||= programAddress === input.runtime.programAddress;
+    invokedPrograms.add(programAddress);
     const sourceAccounts = instruction.accounts ?? [];
     const capturedAccounts = sourceAccounts.map((account: (typeof sourceAccounts)[number], accountIndex: number) => {
       if ("lookupTableAddress" in account) {
@@ -179,7 +195,9 @@ function captureInstructions(input: {
     }) satisfies Instruction;
   });
   if (accountCount > MAX_ACCOUNTS) throw new Error(`Sponsored transaction exceeds ${MAX_ACCOUNTS} account metas`);
-  if (!invokesGoosey) throw new Error("Sponsored transaction must invoke the pinned Goosey program");
+  for (const required of requiredPrograms) {
+    if (!invokedPrograms.has(required)) throw new Error("Sponsored transaction omitted a required instruction program");
+  }
   if (!participantRequired) throw new Error("Sponsored transaction must require the app-managed participant signature");
   return Object.freeze(captured);
 }
@@ -240,6 +258,9 @@ export async function signSponsoredTransaction(input: {
 
   const runtime = pinnedRuntime(input.runtime);
   const instructions = captureInstructions({ ...input, participant, sponsor, runtime });
+  const instructionProgramAddresses = Object.freeze(
+    [...new Set(instructions.map(instruction => address(instruction.programAddress)))].sort(),
+  );
   const signal = input.signal ?? AbortSignal.timeout(15_000);
   const rpc = input.rpc ?? createSolanaRpc(runtime.rpcUrl);
   signal.throwIfAborted();
@@ -297,5 +318,6 @@ export async function signSponsoredTransaction(input: {
     messageSha256: sha256Base64Url(frozenMessage),
     recentBlockhash: latest.value.blockhash,
     lastValidBlockHeight: lifetime.lastValidBlockHeight,
+    instructionProgramAddresses,
   });
 }

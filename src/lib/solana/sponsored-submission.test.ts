@@ -109,6 +109,12 @@ describe("sponsored transaction submission", () => {
     await expect(submitSponsoredTransaction({ runtime, signed: { ...f.signed, recentBlockhash: ACCOUNT },
       onPrepared: vi.fn(), rpc: rebound.rpc as never })).rejects.toThrow(/message binding/);
     expect(rebound.send).not.toHaveBeenCalled();
+
+    const changedPrograms = submissionRpc(f.signed.signature);
+    await expect(submitSponsoredTransaction({ runtime, signed: { ...f.signed,
+      instructionProgramAddresses: [ACCOUNT] }, onPrepared: vi.fn(), rpc: changedPrograms.rpc as never }))
+      .rejects.toThrow(/program set changed/);
+    expect(changedPrograms.send).not.toHaveBeenCalled();
   });
 
   it("re-pins genesis after durable preparation and rejects malformed block heights", async () => {

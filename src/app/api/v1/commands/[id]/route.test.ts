@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(), load: vi.fn(), publicStatus: vi.fn(), after: vi.fn(), dispatch: vi.fn(),
+  cancelDispatch: vi.fn(), transferDispatch: vi.fn(),
 }));
 vi.mock("next/server", async () => {
   const actual = await vi.importActual<typeof import("next/server")>("next/server");
@@ -20,6 +21,10 @@ vi.mock("@/lib/solana/chain-command-store", async () => {
   } };
 });
 vi.mock("@/lib/solana/managed-order-dispatcher", () => ({ dispatchManagedOrderCommand: mocks.dispatch }));
+vi.mock("@/lib/solana/managed-cancellation-dispatcher", () => ({ dispatchManagedCancellationCommand: mocks.cancelDispatch }));
+vi.mock("@/lib/solana/managed-transfer-dispatcher", () => ({
+  dispatchManagedFeatherTransferCommand: mocks.transferDispatch,
+}));
 
 import { GET } from "./route";
 
@@ -32,6 +37,8 @@ beforeEach(() => {
   mocks.publicStatus.mockResolvedValue({ id: "cmd_12345678", status: "FINALIZED" });
   mocks.after.mockImplementation((callback: () => unknown) => callback());
   mocks.dispatch.mockResolvedValue({ status: "FINALIZED" });
+  mocks.cancelDispatch.mockResolvedValue({ status: "FINALIZED" });
+  mocks.transferDispatch.mockResolvedValue({ status: "FINALIZED" });
 });
 
 describe("GET /api/v1/commands/[id]", () => {
@@ -72,5 +79,29 @@ describe("GET /api/v1/commands/[id]", () => {
     await GET(request, context);
     expect(mocks.after).not.toHaveBeenCalled();
     expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(mocks.transferDispatch).not.toHaveBeenCalled();
   });
+
+  it("reconciles retained managed transfer wire through status polling", async () => {
+    mocks.load.mockResolvedValue({ identity: { actorId: "user_12345678", operation: "TRANSFER_FEATHERS" } });
+    mocks.publicStatus.mockResolvedValue({ id: "cmd_12345678", status: "SIGNED" });
+    const response = await GET(request, context);
+    expect(response.status).toBe(200);
+    expect(mocks.transferDispatch).toHaveBeenCalledWith("cmd_12345678");
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(mocks.cancelDispatch).not.toHaveBeenCalled();
+  });
+
+  it.each(["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED", "UNKNOWN", "FAILED_RETRYABLE"])(
+    "reconciles a durable cancellation in %s without using the placement dispatcher",
+    async status => {
+      mocks.load.mockResolvedValue({ identity: { actorId: "user_12345678", operation: "CANCEL_ORDER" } });
+      mocks.publicStatus.mockResolvedValue({ id: "cmd_12345678", status });
+      const response = await GET(request, context);
+      expect(response.status).toBe(200);
+      expect(mocks.cancelDispatch).toHaveBeenCalledWith("cmd_12345678");
+      expect(mocks.dispatch).not.toHaveBeenCalled();
+      expect(mocks.transferDispatch).not.toHaveBeenCalled();
+    },
+  );
 });

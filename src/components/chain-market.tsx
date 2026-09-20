@@ -17,6 +17,7 @@ import { prepareMarketSeat } from "@/lib/solana/prepare-seat";
 import { parseFeatherAmount } from "@/lib/solana/feather-transfer";
 import type { PreparedWalletTransaction } from "@/lib/solana/wallet-transaction";
 import type { CanonicalBookOrder } from "@/lib/solana/order-book-read";
+import type { SolanaRuntime } from "@/lib/solana/runtime";
 import shared from "./solana-wallet.module.css";
 import styles from "./chain-market.module.css";
 
@@ -31,7 +32,55 @@ const date = (seconds: bigint) => new Date(Number(seconds) * 1000).toLocaleStrin
 
 export function ChainMarket({ marketId }: { marketId: string }) {
   const [title, setTitle] = useState(`On-chain market ${marketId}`);
-  return <div className={styles.page}><header className={styles.header}><Link href="/markets" className="section-link">Markets</Link><h1>{title}</h1></header><SolanaWallet renderAccount={props => <MarketAccount key={marketId} {...props} marketId={BigInt(marketId)} onTitle={setTitle} />} /></div>;
+  return <div className={styles.page}><header className={styles.header}><Link href="/markets" className="section-link">Markets</Link><h1>{title}</h1></header><SolanaWallet
+    renderDisconnected={({ runtime }) => <PublicMarket runtime={runtime} marketId={BigInt(marketId)} onTitle={setTitle} />}
+    renderAccount={props => <MarketAccount key={marketId} {...props} marketId={BigInt(marketId)} onTitle={setTitle} />} /></div>;
+}
+
+/** Public observer mode uses the pinned program address only as a non-signing
+ * read selector for the existing coherent snapshot boundary. Personal seat and
+ * token fields are discarded. All displayed market values still come from the
+ * independently verified finalized RPC snapshot and committed terms bytes. */
+function PublicMarket({ runtime, marketId, onTitle }: { runtime: SolanaRuntime; marketId: bigint; onTitle: (title: string) => void }) {
+  const [view, setView] = useState<View | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function read() {
+      try {
+        const next = await loadChainMarket(runtime, marketId, runtime.programAddress,
+          AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]));
+        if (!controller.signal.aborted) { setView(next); setError(null); onTitle(next.terms.question); }
+      } catch (reason) {
+        if (!controller.signal.aborted) { setView(null); setError(describe(reason)); }
+      } finally {
+        if (!controller.signal.aborted) timer = setTimeout(read, 15_000);
+      }
+    }
+    void read();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [runtime, marketId, reload, onTitle]);
+  if (!view) return <section className={shared.panel} aria-label="Verified market">
+    {error ? <><p className={shared.error} role="alert">{error}</p><button className="button button-secondary"
+      type="button" onClick={() => setReload(value => value + 1)}>Try again</button></>
+      : <p role="status">Verifying finalized market data and committed terms…</p>}
+  </section>;
+  return <VerifiedMarketOverview view={view} marketId={marketId} runtime={runtime} />;
+}
+
+export function VerifiedMarketOverview({ view, marketId, runtime }: { view: View; marketId: bigint; runtime: SolanaRuntime }) {
+  const data = view.snapshot, terms = view.terms;
+  return <div className={styles.column} aria-label="Verified on-chain market">
+    <header className={styles.header}><p>{phaseNames[data.resolution.phase]} · Closes {date(data.marketState.closesAt)} · {feathers(data.marketState.payoutMilli)} feathers per winning contract</p><p className={styles.verification}>Finalized on {runtime.cluster} at slot {data.finalizedSlot.toString()} · terms digest {view.digest}</p></header>
+    <div className={styles.layout}>
+      <section className={shared.panel}><h2>Order book</h2><p>Resting orders · YES-equivalent prices · finalized slot {data.finalizedSlot.toString()}</p><Book orders={data.orderBook.bids} label="Bids" /><Book orders={data.orderBook.asks} label="Asks" /></section>
+      <section className={`${shared.panel} ${styles.rules}`}><h2>Market rules</h2>{(["yes","no","void"] as const).map(key=><div key={key}><h3>{key.toUpperCase()}</h3><p>{terms.rules[key]}</p></div>)}<MarketResolutionNote /><h3>Sources</h3>{terms.sources.map(source=><div key={source.id}><a href={source.uri} target="_blank" rel="noreferrer">{source.id}</a><p>{source.selection}</p></div>)}<details><summary>Source policy and verified terms</summary><p>{terms.sourcePolicy.missing}</p><p>{terms.sourcePolicy.revisions}</p><p>Observation: {date(BigInt(terms.observation.startsAt))} – {date(BigInt(terms.observation.endsAt))}</p><code className={shared.address}>{view.digest}</code></details></section>
+    </div>
+    <ChainTradeTape marketId={marketId.toString()} payoutMilli={data.marketState.payoutMilli.toString()}
+      explorerCluster={runtime.cluster === "devnet" ? "devnet" : undefined} />
+  </div>;
 }
 
 function MarketAccount({ runtime, wallet, snapshot, marketId, onTitle }: WalletAccountProps & { marketId: bigint; onTitle: (title: string) => void }) {

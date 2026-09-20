@@ -2,6 +2,7 @@
 .header { display: grid; gap: 12px; }
 .header h1 { font-size: clamp(28px, 4vw, 44px); line-height: 1.15; margin: 0; overflow-wrap: anywhere; }
 .header p { color: var(--ink-muted); margin: 0; }
+.verification { font-size: 12px; overflow-wrap: anywhere; }
 .layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
 .column { min-width: 0; display: grid; gap: 20px; }
 .metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }

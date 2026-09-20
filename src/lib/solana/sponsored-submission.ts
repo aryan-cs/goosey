@@ -51,9 +51,20 @@ async function decodeAndVerify(record: SignedSponsoredTransaction): Promise<void
     || (message.addressTableLookups?.length ?? 0) !== 0) {
     throw new Error("Sponsored transaction receipt message binding changed");
   }
-  const invokesPinnedProgram = message.instructions.some(instruction =>
-    message.staticAccounts[instruction.programAddressIndex] === record.programAddress);
-  if (!invokesPinnedProgram) throw new Error("Sponsored transaction does not invoke the pinned Goosey program");
+  const expectedPrograms = (record.instructionProgramAddresses ?? [record.programAddress])
+    .map(value => address(value)).sort();
+  if (expectedPrograms.length < 1 || expectedPrograms.length > 32
+    || new Set(expectedPrograms).size !== expectedPrograms.length) {
+    throw new Error("Sponsored transaction receipt has an invalid program set");
+  }
+  const invokedPrograms = [...new Set(message.instructions.map(instruction => {
+    const programAddress = message.staticAccounts[instruction.programAddressIndex];
+    if (!programAddress) throw new Error("Sponsored transaction has an invalid program index");
+    return address(programAddress);
+  }))].sort();
+  if (JSON.stringify(invokedPrograms) !== JSON.stringify(expectedPrograms)) {
+    throw new Error("Sponsored transaction invoked program set changed");
+  }
   const expectedSigners = [address(record.participantAddress), address(record.sponsorAddress)].sort();
   if (expectedSigners[0] === expectedSigners[1]
     || Object.keys(transaction.signatures).sort().join(",") !== expectedSigners.join(",")) {

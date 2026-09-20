@@ -11,6 +11,7 @@ import {
   type InstructionWithSigners,
   type TransactionPartialSigner,
 } from "@solana/kit";
+import { ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 
 import { signSponsoredTransaction, type SponsoredTransactionAllowlist } from "./sponsored-transaction";
 
@@ -91,6 +92,7 @@ describe("server-side sponsored transaction signing", () => {
       participantAddress: f.participant.address,
       sponsorAddress: f.sponsor.address,
       lastValidBlockHeight: 100n,
+      instructionProgramAddresses: [PROGRAM],
     });
     expect(Object.keys(transaction.signatures).sort()).toEqual([f.participant.address, f.sponsor.address].sort());
     expect(getSignatureFromTransaction(transaction)).toBe(signed.signature);
@@ -98,6 +100,38 @@ describe("server-side sponsored transaction signing", () => {
     expect(f.controls.account).toHaveBeenCalled();
     expect(f.controls.latest).toHaveBeenCalled();
     expect(f.controls.genesis).toHaveBeenCalledTimes(3);
+  });
+
+  it("supports an explicit non-Goosey required-program policy without weakening the default", async () => {
+    const f = await fixture();
+    const externalInstructions = [
+      { ...f.instruction, programAddress: ASSOCIATED_TOKEN_PROGRAM_ADDRESS },
+      { ...f.instruction, programAddress: TOKEN_PROGRAM_ADDRESS },
+    ];
+    const signed = await signSponsoredTransaction({
+      runtime,
+      participant: f.participant,
+      sponsor: f.sponsor,
+      instructions: externalInstructions,
+      allowlist: {
+        ...f.allowlist,
+        instructionProgramAddresses: [ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS],
+        requiredInstructionProgramAddresses: [ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS],
+      },
+      rpc: f.controls.rpc as never,
+    });
+    expect(signed.signature).toBeTruthy();
+    expect(signed.instructionProgramAddresses).toEqual([ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS].sort());
+
+    await expect(signSponsoredTransaction({
+      runtime,
+      participant: f.participant,
+      sponsor: f.sponsor,
+      instructions: externalInstructions,
+      allowlist: { ...f.allowlist,
+        instructionProgramAddresses: [ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS] },
+      rpc: f.controls.rpc as never,
+    })).rejects.toThrow(/Required instruction program/);
   });
 
   it("copies instruction bytes and allowlists before the first asynchronous boundary", async () => {

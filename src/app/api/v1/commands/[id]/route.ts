@@ -4,12 +4,20 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ApiError, apiErrorResponse, jsonResponse, requireUser } from "@/lib/market-service";
 import { ChainCommandNotFoundError, PrismaChainCommandStore } from "@/lib/solana/chain-command-store";
+import { dispatchManagedCancellationCommand } from "@/lib/solana/managed-cancellation-dispatcher";
 import { dispatchManagedOrderCommand } from "@/lib/solana/managed-order-dispatcher";
+import { dispatchManagedFeatherTransferCommand } from "@/lib/solana/managed-transfer-dispatcher";
 
 export const dynamic = "force-dynamic";
 
 const paramsSchema = z.object({ id: z.string().min(8).max(191).regex(/^[A-Za-z0-9._:-]+$/) }).strict();
 const redispatchableOrderStatuses = new Set(["ACCEPTED", "PREPARED", "SIGNED", "SUBMITTED", "CONFIRMED", "FAILED_RETRYABLE"]);
+const redispatchableCancellationStatuses = new Set([...redispatchableOrderStatuses, "UNKNOWN"]);
+const recoveryDispatchers = {
+  CANCEL_ORDER: dispatchManagedCancellationCommand,
+  PLACE_ORDER: dispatchManagedOrderCommand,
+  TRANSFER_FEATHERS: dispatchManagedFeatherTransferCommand,
+} as const;
 
 function privateNoStore(response: NextResponse) {
   response.headers.set("Cache-Control", "private, no-store, max-age=0");
@@ -33,12 +41,15 @@ export async function GET(
       throw new ApiError(404, "COMMAND_NOT_FOUND", "Order status not found.");
     }
     const status = await store.publicStatus(id);
-    if (command.identity.operation === "PLACE_ORDER" && redispatchableOrderStatuses.has(status.status)) {
+    const dispatch = recoveryDispatchers[command.identity.operation as keyof typeof recoveryDispatchers];
+    const redispatchableStatuses = command.identity.operation === "CANCEL_ORDER"
+      ? redispatchableCancellationStatuses : redispatchableOrderStatuses;
+    if (dispatch && redispatchableStatuses.has(status.status)) {
       // Status polling is also the crash-recovery trigger. Fenced dispatch and
       // append-only wire reconciliation make concurrent polls harmless.
       after(async () => {
-        await dispatchManagedOrderCommand(id).catch(() => {
-          console.error("Managed order recovery dispatch failed; the durable command remains recoverable.", id);
+        await dispatch(id).catch(() => {
+          console.error("Managed command recovery dispatch failed; the durable command remains recoverable.", id);
         });
       });
     }
