@@ -9,6 +9,7 @@ import { PageNavigation } from "@/components/page-navigation";
 import { getLeaderboardPage } from "@/lib/leaderboard";
 import { LeaderboardFocus } from "./leaderboard-focus";
 import { LeaderboardSearch } from "./leaderboard-search";
+import { UserProfileLink } from "@/components/user-profile-link";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,14 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
     <header className="page-header"><span className="eyebrow">Hackathon standings</span><h1>Leaderboard</h1><p>Total balance includes your available feathers, reserved feathers and open positions. Available is what you can spend now. Rank is based on total portfolio value, highest first, including welcome feathers.</p><LivePageRefresh showButton={false} /></header>
     <div className={viewer ? styles.layout : undefined}>
     {viewer && <aside className={styles.yourRank} aria-labelledby="your-ranking-heading">
-      <Link className={styles.yourRankLink} href={viewerHref} aria-label={`Your ranking: ${viewer.rank.toLocaleString()} of ${total.toLocaleString()}. Jump to your position in the leaderboard.`} data-leaderboard-locate>
+      <div className={styles.yourRankLink}>
+      <Link href={viewerHref} aria-label={`Your ranking: ${viewer.rank.toLocaleString()} of ${total.toLocaleString()}. Jump to your position in the leaderboard.`} data-leaderboard-locate>
         <h2 id="your-ranking-heading">Your ranking</h2>
         <p className={styles.rank}>#{viewer.rank.toLocaleString()} <span>of {total.toLocaleString()}</span></p>
-        <p className={styles.username}>@{viewer.username}</p>
         <dl><div><dt>Total balance</dt><dd>{formatFeathers(viewer.equityMilli)} feathers</dd></div><div><dt>Available</dt><dd>{formatFeathers(viewer.cashMilli)} feathers</dd></div></dl>
       </Link>
+      <p className={styles.username}><UserProfileLink username={viewer.username}>@{viewer.username}</UserProfileLink></p>
+      </div>
       <LeaderboardSearch />
     </aside>}
     <div className={styles.standings}>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "./badge-link.module.css";
+import { UserProfileLink } from "./user-profile-link";
 
 type Device = { id: string; code: string; expiresAt: string };
 export function BadgeLink() {
@@ -53,7 +54,7 @@ export function BadgeLink() {
   return <section className={`stacked-form ${styles.card}`}>
     <h1>Link your badge</h1>
     {loading ? <p>Loading your account…</p> : !user ? <><p>Sign in once to use your Goosey balance on your badge.</p><Link className="button button-primary" href={`/login?next=${next}`}>Sign in</Link><Link href={`/signup?next=${next}`}>Create an account</Link></> : <>
-      <p>Signed in as <strong>@{user.username}</strong>.</p>
+      <p>Signed in as <strong><UserProfileLink username={user.username}>@{user.username}</UserProfileLink></strong>.</p>
       {challenge && !linked ? <>
         <p>Link the badge you scanned to your Goosey account.</p>
         <p>Linking lets this badge’s USB gateway read your balance and submit trades you confirm on the badge. Access expires in seven days and can be revoked here.</p>

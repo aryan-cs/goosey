@@ -6,6 +6,7 @@
 .market { color: var(--ink); font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; transition: color 140ms ease; }
 .market:hover { color: var(--yes); }
 .user { color: var(--ink-muted); font-size: 12px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user:hover { color: var(--yes); }
 .trade { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; font-size: 14px; line-height: 22px; }
 .trade > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .yes { color: var(--yes); }

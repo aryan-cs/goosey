@@ -5,7 +5,8 @@
 .yourRankLink:hover { background: var(--surface-sunken); transform: translateY(-2px); }
 .yourRankLink:focus-visible { outline: 2px solid var(--feather-500); outline-offset: 2px; }
 .yourRank h2 { margin: 0; font-size: 18px; }
-.yourRankLink > p { overflow-wrap: anywhere; }
+.yourRankLink p { overflow-wrap: anywhere; }
+.username a:hover { color: var(--yes); }
 .rank { font: 700 36px var(--font-data); margin: 16px 0 4px; }
 .rank span { font-size: 14px; font-weight: 400; color: var(--ink-muted); }
 .username { margin-bottom: 0; }
@@ -20,9 +21,12 @@
 .searchField input::placeholder { color: var(--ink-muted); }
 .searchField input::-webkit-search-cancel-button { cursor: pointer; }
 .searchResults { position: absolute; z-index: 12; top: calc(100% + 8px); left: 0; right: 0; overflow: hidden; padding: 6px; background: var(--surface-raised); border: 0; border-radius: var(--radius-md); box-shadow: 0 14px 32px color-mix(in srgb, var(--ink) 14%, transparent); }
-.searchResults button { width: 100%; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 11px; color: inherit; background: transparent; border: 0; border-radius: calc(var(--radius-md) - 6px); text-align: left; cursor: pointer; }
-.searchResults button:hover, .searchResultActive { background: var(--feather-50) !important; }
+.searchResult { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-radius: calc(var(--radius-md) - 6px); }
+.searchResults button { width: 100%; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 5px 10px 11px; color: inherit; background: transparent; border: 0; text-align: left; cursor: pointer; }
+.searchResult:hover, .searchResultActive { background: var(--feather-50) !important; }
 .searchResults button span { min-width: 0; display: grid; gap: 1px; }
+.searchProfile { padding: 10px 11px 10px 5px; color: var(--ink-muted); font-size: 11px; white-space: nowrap; }
+.searchProfile:hover { color: var(--yes); }
 .searchResults strong, .searchResults small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .searchResults strong { font-size: 13px; }
 .searchResults small { color: var(--ink-muted); font-size: 11px; }

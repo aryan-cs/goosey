@@ -18,7 +18,7 @@ async function loadRankedPlayers() {
   const activity = await loadTradingActivity(db, userIds);
   const [wallets, grants, reservations] = userIds.length ? await Promise.all([
     db.ledgerAccount.findMany({ where: { ownerType: "USER", ownerId: { in: userIds }, purpose: "USER_FEATHERS", status: "ACTIVE" }, select: { ownerId: true, balanceMilli: true } }),
-    db.journalEntry.findMany({ where: { type: "WELCOME_GRANT", actorUserId: { in: userIds } }, select: { actorUserId: true, metadata: true } }),
+    db.journalEntry.findMany({ where: { status: "POSTED", OR: [{ type: "WELCOME_GRANT", actorUserId: { in: userIds } }, { type: "ADMIN_GRANT", referenceType: "USER", referenceId: { in: userIds } }] }, select: { type: true, actorUserId: true, referenceId: true, metadata: true } }),
     db.orderReservation.findMany({ where: { market: DATABASE_MARKET_FILTER, userId: { in: userIds }, cashAccountId: { not: null } }, select: { userId: true, cashAccount: { select: { balanceMilli: true } } } }),
   ]) : [[], [], []];
   const reservedByUser = new Map<string, bigint>();
@@ -27,10 +27,11 @@ async function loadRankedPlayers() {
   }
   const grantByUser = new Map<string, bigint>();
   for (const grant of grants) {
-    if (!grant.actorUserId) continue;
+    const recipientId = grant.type === "ADMIN_GRANT" ? grant.referenceId : grant.actorUserId;
+    if (!recipientId) continue;
     try {
       const amount = BigInt((JSON.parse(grant.metadata) as { amountMilli?: string }).amountMilli ?? "0");
-      grantByUser.set(grant.actorUserId, (grantByUser.get(grant.actorUserId) ?? 0n) + amount);
+      grantByUser.set(recipientId, (grantByUser.get(recipientId) ?? 0n) + amount);
     } catch { /* Reconciliation reports malformed financial metadata separately. */ }
   }
   const walletByUser = new Map(wallets.flatMap((wallet) => wallet.ownerId ? [[wallet.ownerId, wallet.balanceMilli] as const] : []));

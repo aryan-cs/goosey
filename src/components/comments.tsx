@@ -8,8 +8,9 @@ import { AlertCircle, Flag, MessageCircle, Pencil, Reply, Send, Trash2, X } from
 import { EmptyState, LoadingState } from "./states";
 import { apiFetch } from "@/lib/client-api";
 import styles from "./comments.module.css";
+import { UserProfileLink } from "./user-profile-link";
 
-export interface CommentAuthor { id: string; displayName: string; avatarUrl?: string | null; badge?: string | null }
+export interface CommentAuthor { id: string; username: string; displayName: string; avatarUrl?: string | null; badge?: string | null }
 export interface MarketComment { id: string; body: string; createdAt: string; editedAt?: string | null; author: CommentAuthor; replyCount?: number; status?: string; replies?: MarketComment[]; repliesNextCursor?: string | null }
 export interface CommentSectionProps { marketId: string; marketSlug: string; focusedCommentId?: string; currentUserId?: string; csrfToken?: string; endpoint?: string; maxLength?: number }
 
@@ -22,7 +23,7 @@ function normalizeComment(value: unknown): MarketComment | null {
   const rawAuthor = (item.author ?? item.user) as Record<string, unknown> | undefined;
   const displayName = typeof rawAuthor?.displayName === "string" ? rawAuthor.displayName : typeof rawAuthor?.username === "string" ? rawAuthor.username : "Goosey member";
   const replies = Array.isArray(item.replies) ? item.replies.map(normalizeComment).filter((reply): reply is MarketComment => Boolean(reply)) : [];
-  return { id: item.id, body: item.body, createdAt: item.createdAt, editedAt: typeof item.editedAt === "string" ? item.editedAt : null, status: typeof item.status === "string" ? item.status : undefined, replyCount: typeof item.replyCount === "number" ? item.replyCount : replies.length, replies, repliesNextCursor: typeof item.repliesNextCursor === "string" ? item.repliesNextCursor : null, author: { id: typeof rawAuthor?.id === "string" ? rawAuthor.id : typeof rawAuthor?.username === "string" ? rawAuthor.username : item.id, displayName, badge: typeof rawAuthor?.badge === "string" ? rawAuthor.badge : null } };
+  return { id: item.id, body: item.body, createdAt: item.createdAt, editedAt: typeof item.editedAt === "string" ? item.editedAt : null, status: typeof item.status === "string" ? item.status : undefined, replyCount: typeof item.replyCount === "number" ? item.replyCount : replies.length, replies, repliesNextCursor: typeof item.repliesNextCursor === "string" ? item.repliesNextCursor : null, author: { id: typeof rawAuthor?.id === "string" ? rawAuthor.id : typeof rawAuthor?.username === "string" ? rawAuthor.username : item.id, username: typeof rawAuthor?.username === "string" ? rawAuthor.username : "", displayName, badge: typeof rawAuthor?.badge === "string" ? rawAuthor.badge : null } };
 }
 
 export function CommentSection(props: CommentSectionProps) {
@@ -192,7 +193,7 @@ function CommentSectionContent({ marketId, marketSlug, focusedCommentId, current
   function commentContent(comment: MarketComment, rootId: string) {
     const replying = replyTo?.comment.id === comment.id;
     return <>
-      <header><strong>{comment.author.displayName}</strong>{comment.author.badge && <span className="author-badge">{comment.author.badge}</span>}<time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></header>
+      <header><strong>{comment.author.username ? <UserProfileLink username={comment.author.username}>{comment.author.displayName}</UserProfileLink> : comment.author.displayName}</strong>{comment.author.badge && <span className="author-badge">{comment.author.badge}</span>}<time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></header>
       <p>{comment.status === "DELETED" ? <em>This comment was deleted.</em> : comment.body}</p>
       {comment.status !== "DELETED" && <footer>
         <button type="button" disabled={sending} aria-expanded={replying} aria-controls={replying ? `reply-form-${comment.id}` : undefined} onClick={() => { setReplyTo({ comment, rootId }); setReplyError(null); }}><Reply /> Reply</button>

@@ -6,8 +6,10 @@ const state = vi.hoisted(() => ({
   position: { findMany: vi.fn() },
   orderReservation: { findMany: vi.fn() },
   ledgerAccount: { findUnique: vi.fn() },
-  user: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn() },
-  orderFill: { count: vi.fn() },
+  user: { findFirst: vi.fn(), findUnique: vi.fn(), findUniqueOrThrow: vi.fn() },
+  trade: { findMany: vi.fn(), groupBy: vi.fn() },
+  marketOrder: { findMany: vi.fn() },
+  orderFill: { count: vi.fn(), findMany: vi.fn() },
   marketEvent: { findUnique: vi.fn() },
   marks: vi.fn(), valuations: vi.fn(), serverUser: vi.fn(),
 }));
@@ -40,7 +42,7 @@ beforeEach(() => {
   state.watchlistEntry.findMany.mockResolvedValue([]);
   state.position.findMany.mockResolvedValue([]);
   state.orderReservation.findMany.mockResolvedValue([]);
-  state.ledgerAccount.findUnique.mockResolvedValue({ balanceMilli: 0n });
+  state.ledgerAccount.findUnique.mockResolvedValue({ balanceMilli: 0n, postings: [] });
   state.user.findUniqueOrThrow.mockResolvedValue({ balanceMilli: 0n });
   state.serverUser.mockResolvedValue({ id: "viewer", role: "USER", emailVerifiedAt: new Date() });
   state.marks.mockResolvedValue(new Map());
@@ -49,6 +51,12 @@ beforeEach(() => {
     username: "profile", displayName: "Profile", bio: "", createdAt: new Date(), realizedPnlMilli: 0n,
     _count: { positions: 0, trades: 0, comments: 0 }, comments: [] });
   state.orderFill.count.mockResolvedValue(0);
+  state.user.findFirst.mockResolvedValue({ id: "profile", role: "USER", profilePublic: false, balanceMilli: 0n,
+    username: "profile", displayName: "Profile", bio: "", createdAt: new Date(), positions: [] });
+  state.trade.findMany.mockResolvedValue([]);
+  state.trade.groupBy.mockResolvedValue([]);
+  state.marketOrder.findMany.mockResolvedValue([]);
+  state.orderFill.findMany.mockResolvedValue([]);
 });
 
 describe("legacy server page SQL query boundaries (mocked reads)", () => {
@@ -100,17 +108,12 @@ describe("legacy server page SQL query boundaries (mocked reads)", () => {
     } }));
     expect(state.valuations).toHaveBeenCalledWith(state, []);
   });
-  it("filters profile financial counts but keeps shared public comments", async () => {
+  it("filters a public trading profile to active users and published database markets", async () => {
     await UserProfilePage({ params: Promise.resolve({ username: "PROFILE" }) });
-    const query = state.user.findUnique.mock.calls[0][0];
-    expect(query.where).toEqual({ username: "profile" });
-    expect(query.include._count.select.trades.where.market).toEqual({ ...boundary, status: { not: "DRAFT" } });
-    expect(query.include._count.select.positions.where.market).toEqual({ ...boundary, status: { not: "DRAFT" } });
-    expect(state.orderFill.count).toHaveBeenCalledWith({ where: {
-      market: { ...boundary, status: { not: "DRAFT" } },
-      OR: [{ makerOrder: { userId: "profile" } }, { takerOrder: { userId: "profile" } }],
-    } });
-    expect(query.include.comments.where).toEqual({ status: "VISIBLE", market: { status: { not: "DRAFT" } } });
-    expect(query.include._count.select.comments.where).toEqual(query.include.comments.where);
+    const query = state.user.findFirst.mock.calls[0][0];
+    expect(query.where).toEqual({ username: "profile", role: "USER", status: "ACTIVE" });
+    expect(query.select.positions.where.market).toEqual({ ...boundary, status: { not: "DRAFT" } });
+    expect(state.trade.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ market: { ...boundary, status: { not: "DRAFT" } } }) }));
+    expect(state.orderFill.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ market: { ...boundary, status: { not: "DRAFT" } } }) }));
   });
 });

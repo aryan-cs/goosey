@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import styles from "./leaderboard.module.css";
+import { UserProfileLink } from "@/components/user-profile-link";
 
 export interface LeaderboardSearchResult {
   userId: string;
@@ -105,17 +106,15 @@ export function LeaderboardSearch() {
     </div>
     <span className="sr-only" role="status" aria-live="polite">{status}</span>
     {open && query.trim() && <div className={styles.searchResults} id={listId} role="listbox" aria-label="Leaderboard people">
-      {loading ? <p className={styles.searchMessage}>Searching…</p> : results.length ? results.map((player, index) => <button
+      {loading ? <p className={styles.searchMessage}>Searching…</p> : results.length ? results.map((player, index) => <div
         id={`${listId}-${index}`}
-        type="button"
         role="option"
         aria-selected={index === activeIndex}
-        className={index === activeIndex ? styles.searchResultActive : undefined}
+        className={`${styles.searchResult} ${index === activeIndex ? styles.searchResultActive : ""}`}
         key={player.userId}
         onMouseDown={(event) => event.preventDefault()}
         onMouseEnter={() => setActiveIndex(index)}
-        onClick={() => choose(player)}
-      ><span><strong>{player.displayName}</strong><small>@{player.username}</small></span><b>#{player.rank.toLocaleString()}</b></button>) : <p className={styles.searchMessage}>No people found</p>}
+      ><button type="button" onClick={() => choose(player)}><span><strong>{player.displayName}</strong></span><b>#{player.rank.toLocaleString()}</b></button><UserProfileLink className={styles.searchProfile} username={player.username}>@{player.username}</UserProfileLink></div>) : <p className={styles.searchMessage}>No people found</p>}
     </div>}
   </div>;
 }

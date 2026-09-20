@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowUpRight, ChevronRight, Crown, Trophy } from "lucide-react";
 import { FeatherIcon } from "./brand";
+import { UserProfileLink } from "./user-profile-link";
 
 export function MetricCard({ label, value, detail, trend, icon }: { label: string; value: ReactNode; detail?: string; trend?: number; icon?: ReactNode }) {
   return <article className="metric-card"><div className="metric-label">{icon && <span>{icon}</span>}{label}</div><strong>{value}</strong><div className="metric-detail">{trend !== undefined && <span className={trend >= 0 ? "movement-up" : "movement-down"}>{trend >= 0 ? <ArrowUpRight /> : <ArrowDownRight />}{Math.round(Math.abs(trend))}%</span>}{detail && <span>{detail}</span>}</div></article>;
@@ -17,9 +18,7 @@ export function PositionRow(props: PositionRowProps) {
 
 export interface LeaderboardUser { id: string; username: string; rank: number; displayName: string; score: number; profilePublic?: boolean; availableBalance?: number; movement?: number; marketsTraded?: number; badge?: string }
 function LeaderboardIdentity({ user, className, label, id, children }: { user: LeaderboardUser; className: string; label: string; id?: string; children: ReactNode }) {
-  return user.profilePublic
-    ? <Link id={id} className={className} href={`/users/${encodeURIComponent(user.username)}`} aria-label={`View ${user.displayName}'s profile. ${label}`}>{children}</Link>
-    : <div id={id} className={className} aria-label={label} tabIndex={id ? -1 : undefined}>{children}</div>;
+  return <UserProfileLink id={id} className={className} username={user.username} aria-label={`View ${user.displayName}'s profile. ${label}`}>{children}</UserProfileLink>;
 }
 
 export function LeaderboardRow({ user, current = false }: { user: LeaderboardUser; current?: boolean }) {
