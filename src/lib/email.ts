@@ -39,23 +39,30 @@ function booleanEnvironment(name: string, defaultValue: boolean): boolean {
 }
 
 export function smtpConfigFromEnvironment(): SmtpConfig {
-  const port = Number(required("SMTP_PORT"));
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  const explicitHost = process.env.SMTP_HOST?.trim();
+  const explicitPassword = process.env.SMTP_PASSWORD;
+  const useResendDefaults = Boolean(
+    resendApiKey && !explicitPassword && (!explicitHost || explicitHost === "smtp.resend.com"),
+  );
+  const host = explicitHost || (useResendDefaults ? "smtp.resend.com" : required("SMTP_HOST"));
+  const port = Number(process.env.SMTP_PORT?.trim() || (useResendDefaults ? "465" : required("SMTP_PORT")));
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
     throw new EmailConfigurationError();
   }
 
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASSWORD;
+  const user = process.env.SMTP_USER?.trim() || (useResendDefaults ? "resend" : undefined);
+  const pass = explicitPassword || (useResendDefaults ? resendApiKey : undefined);
   if (Boolean(user) !== Boolean(pass)) throw new EmailConfigurationError();
 
-  const secure = booleanEnvironment("SMTP_SECURE", false);
+  const secure = booleanEnvironment("SMTP_SECURE", useResendDefaults);
   const requireTLS = booleanEnvironment("SMTP_REQUIRE_TLS", true);
   if (process.env.NODE_ENV === "production" && !secure && !requireTLS) {
     throw new EmailConfigurationError();
   }
 
   return {
-    host: required("SMTP_HOST"),
+    host,
     port,
     secure,
     requireTLS,

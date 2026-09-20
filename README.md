@@ -183,6 +183,7 @@ Copy `.env.example` to `.env`. Never commit `.env` or production secrets.
 | `EMAIL_VERIFICATION_TTL_MINUTES` | `60` | Verification-token lifetime, constrained to 5–1440 minutes. |
 | `PASSWORD_RESET_URL` | `http://localhost:8080/reset-password` | Public password-reset page URL. The mailer adds the one-time token as a URL fragment so it is not sent in the initial HTTP request. Must use HTTPS in production. |
 | `PASSWORD_RESET_TTL_MINUTES` | `30` | Password-reset token lifetime, constrained to 5–240 minutes. |
+| `RESEND_API_KEY` | empty | Optional Resend credential provisioned by the Vercel Marketplace integration. When set with `SMTP_FROM`, Goosey uses Resend's TLS SMTP relay without duplicating the secret into `SMTP_PASSWORD`. Explicit SMTP settings continue to take precedence. |
 | `SMTP_HOST`, `SMTP_PORT` | empty, `587` | SMTP endpoint. Recovery request endpoints return `503` when mail delivery is not fully configured. |
 | `SMTP_SECURE`, `SMTP_REQUIRE_TLS` | `false`, `true` | Use implicit TLS and/or require STARTTLS. Certificate validation is always enabled. |
 | `SMTP_USER`, `SMTP_PASSWORD` | empty | Optional SMTP authentication; configure both or neither. Values are read only from the runtime environment. |
