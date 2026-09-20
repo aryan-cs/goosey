@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from "./states";
 import styles from "./portfolio-activity.module.css";
 import { OrderAmendment } from "./order-amendment";
 import { formatFeathers } from "@/lib/feather-format";
+import { LocalTime } from "./local-time";
 
 type Activity = {
   orderId: string; fillId?: string; market: { slug: string; title: string; payoutMilli: string };
@@ -145,7 +146,7 @@ function History({ kind, filter }: { kind: "orders" | "fills"; filter: OrderFilt
         <div><dt>{kind === "orders" ? "Fees so far" : "Your fee"}</dt><dd>{feathers(kind === "orders" ? row.cumulativeFeeMilli : row.feeMilli)}</dd></div>
       </dl>
       {kind === "orders" && row.canceledQuantity !== undefined && row.canceledQuantity > 0 && <p className={styles.help}>{row.canceledQuantity.toLocaleString("en-CA")} contracts canceled{row.terminalReason ? ` · ${readable(row.terminalReason)}` : ""}</p>}
-      <time className={styles.time} dateTime={row.createdAt}>{new Date(row.createdAt).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Toronto" })} Toronto time</time>
+      <LocalTime className={styles.time} value={row.createdAt} preset="medium" />
       {kind === "orders" && activeStatuses.includes(row.status ?? "") && (row.remainingQuantity ?? 0) > 0 && <>
         <div className={styles.actions}><button type="button" className="button button-secondary" disabled={canceling !== null || amending || loading || row.version === undefined} onClick={() => void cancel(row)}>{canceling === row.orderId ? "Canceling…" : "Cancel remaining order"}</button></div>
         {row.timeInForce === "GTC" && row.version !== undefined && row.limitPriceMilli !== undefined && row.remainingQuantity !== undefined && <OrderAmendment

@@ -22,7 +22,6 @@ export type UnifiedSolanaMarketDetailProps = Readonly<{
 const dateTimeFormat = new Intl.DateTimeFormat("en-CA", {
   dateStyle: "medium",
   timeStyle: "short",
-  timeZone: "America/Toronto",
 });
 
 function formatProbability(bps: number | null) {

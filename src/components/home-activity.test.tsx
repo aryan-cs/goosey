@@ -19,7 +19,7 @@ describe("HomeActivity", () => {
 
     expect(html).toContain('<time');
     expect(html).toContain('datetime="2026-09-19T19:55:00.000Z"');
-    expect(html).toContain('title="Sep 19, 2026, 3:55 p.m. Toronto time"');
+    expect(html).toContain('title="Sep 19, 2026, 7:55 p.m. UTC"');
     expect(html).toContain('>5 minutes ago</time>');
     expect(html.indexOf("5 minutes ago")).toBeLessThan(html.indexOf("Will a GPT wrapper win?"));
     expect(html).toContain("Bought");

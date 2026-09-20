@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ApiError } from "@/lib/market-service";
 import { listPublicEvents, parseEventListQuery } from "@/lib/public-events";
 import styles from "./events.module.css";
+import { LocalTime } from "@/components/local-time";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
       <button className="button button-primary">Show events</button>
     </form>
     <section className={styles.grid} aria-label="Event results">{result.items.map((event) => <Link href={`/events/${event.slug}`} className={styles.card} key={event.id}>
-      <span className={styles.eyebrow}>{event.category}</span><h2>{event.shortTitle || event.title}</h2><p>{event.description}</p><span className={styles.meta}>{event.markets.length} markets · {event.startsAt.toLocaleDateString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric", year: "numeric" })}</span><strong>Explore event →</strong>
+      <span className={styles.eyebrow}>{event.category}</span><h2>{event.shortTitle || event.title}</h2><p>{event.description}</p><span className={styles.meta}>{event.markets.length} markets · <LocalTime value={event.startsAt} preset="date" /></span><strong>Explore event →</strong>
     </Link>)}</section>
     {!result.items.length && <section className={styles.notice}><h2>No events found</h2><p>Try another timing or category.</p><Link href="/events">See all events</Link></section>}
     <nav className={styles.pagination} aria-label="Event pages">{query.cursor && <Link href={`/events?${new URLSearchParams({ timing: query.timing, ...(query.category ? { category: query.category } : {}) })}`}>First page</Link>}{result.nextCursor && <Link className="button button-secondary" href={`/events?${next}`}>More events</Link>}</nav>

@@ -1,19 +1,13 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useBackgroundRouterRefresh } from "./use-background-router-refresh";
 
 /** Refresh server-rendered market activity without resetting the trade form. */
 export function MarketActivityRefresh() {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const { refresh } = useBackgroundRouterRefresh();
 
   useEffect(() => {
-    function refresh() {
-      if (pending || document.visibilityState !== "visible" || !navigator.onLine) return;
-      startTransition(() => router.refresh());
-    }
-
     const timer = window.setInterval(refresh, 5_000);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
@@ -24,7 +18,7 @@ export function MarketActivityRefresh() {
       window.removeEventListener("online", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [router, pending]);
+  }, [refresh]);
 
   return null;
 }

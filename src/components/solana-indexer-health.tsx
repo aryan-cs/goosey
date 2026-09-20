@@ -176,7 +176,6 @@ function formatTimestamp(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    timeZone: "America/Toronto",
     timeZoneName: "short",
   }).format(new Date(value));
 }

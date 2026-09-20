@@ -15,7 +15,7 @@ export function probabilityLabel(value: number) {
 }
 
 function dateLabel(timestamp: number) {
-  return new Date(timestamp).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone: "America/Toronto" });
+  return new Date(timestamp).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 export function ProbabilityPlot({ points, compact = false, positive = true, startAt, endAt, label = "YES probability", emptyLabel = "No probability history yet", onInspect }: {
@@ -96,7 +96,7 @@ export function ProbabilityPlot({ points, compact = false, positive = true, star
       </span>
       {!compact && <span className="probability-point-label" style={{ left: `clamp(0px, ${selectedX}% + 10px, max(0px, 100% - 120px))`, top: `${y(selected.probability)}%` }} aria-hidden="true">YES {probabilityLabel(selected.probability)}</span>}
     </div>
-    {!compact && <div className="probability-time-axis"><time>{new Date(firstTime).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" })}</time><time>{new Date(lastTime).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" })}</time></div>}
+    {!compact && <div className="probability-time-axis"><time>{dateLabel(firstTime)}</time><time>{dateLabel(lastTime)}</time></div>}
   </div>;
 }
 

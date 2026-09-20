@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import { EmptyState, LoadingState } from "./states";
@@ -15,9 +14,11 @@ import {
 } from "@/lib/notification-feed";
 import { startVisiblePolling } from "@/lib/visible-polling";
 import styles from "./notification-center.module.css";
+import { useBackgroundRouterRefresh } from "./use-background-router-refresh";
+import { LocalTime } from "./local-time";
 
 export function NotificationCenter() {
-  const router = useRouter();
+  const { refresh: refreshShell } = useBackgroundRouterRefresh();
   const [feed, setFeed] = useState<NotificationFeed>(EMPTY_NOTIFICATION_FEED);
   const current = useRef<NotificationFeed>(EMPTY_NOTIFICATION_FEED);
   const pending = useRef(false);
@@ -34,9 +35,9 @@ export function NotificationCenter() {
     if (!mounted.current) return;
     current.current = next;
     setFeed(next);
-    if (lastUnread.current !== null && lastUnread.current !== next.unreadCount) router.refresh();
+    if (lastUnread.current !== null && lastUnread.current !== next.unreadCount) refreshShell();
     lastUnread.current = next.unreadCount;
-  }, [router]);
+  }, [refreshShell]);
 
   const clearSession = useCallback(() => {
     commit({ ...EMPTY_NOTIFICATION_FEED, initialized: true, signedOut: true });
@@ -188,7 +189,7 @@ export function NotificationCenter() {
       : !initialFinished && !feed.initialized ? <LoadingState rows={5} label="Loading notifications" />
       : !feed.items.length && !error ? <EmptyState title="You are all caught up" description="Trades, market results, and replies will appear here." action={<Link className="button button-primary" href="/markets">Browse markets</Link>} />
       : <div className="notification-list">{feed.items.map((item) => <article className={item.readAt ? "notification-item" : "notification-item unread"} aria-label={`${item.title}, ${item.readAt ? "read" : "unread"}`} key={item.id}>
-        <span className="notification-icon"><Bell /></span><div><header><strong>{item.title}</strong><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</time></header><p>{item.body}</p>{item.href && <Link href={item.href} onClick={() => void mark(item.id, true)}>View details</Link>}</div>
+        <span className="notification-icon"><Bell /></span><div><header><strong>{item.title}</strong><LocalTime value={item.createdAt} preset="medium" /></header><p>{item.body}</p>{item.href && <Link href={item.href} onClick={() => void mark(item.id, true)}>View details</Link>}</div>
         {!item.readAt && <button type="button" className="notification-read" disabled={Boolean(busy)} onClick={() => void mark(item.id)} aria-label={`Mark ${item.title} read`}><span /></button>}
       </article>)}</div>}
     {!feed.signedOut && feed.nextCursor && <button type="button" className="button button-secondary" disabled={Boolean(busy)} onClick={() => void refresh("more")}>{busy === "more" ? "Loading older notifications…" : "Load older notifications"}</button>}

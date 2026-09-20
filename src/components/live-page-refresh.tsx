@@ -1,16 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useBackgroundRouterRefresh } from "./use-background-router-refresh";
 
 /** Refresh server-rendered activity without discarding the current page or cursor. */
 export function LivePageRefresh({ showButton = true }: { showButton?: boolean }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const refresh = useCallback(() => {
-    if (document.visibilityState !== "visible" || !navigator.onLine || pending) return;
-    startTransition(() => router.refresh());
-  }, [router, pending]);
+  const { pending, refresh } = useBackgroundRouterRefresh();
 
   useEffect(() => {
     const timer = window.setInterval(refresh, 15_000);

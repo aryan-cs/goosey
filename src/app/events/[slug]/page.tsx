@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { getPublicEvent } from "@/lib/public-events";
 import styles from "../events.module.css";
 import { probabilityBpsToWholePercent } from "@/lib/probability-format";
+import { LocalTime } from "@/components/local-time";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
       <DanceMarketPanel independent={independent} title={event.title} markets={options} signedIn={Boolean(user)} balanceMilli={user?.balanceMilli.toString()} initialSlug={typeof query.option === "string" ? query.option : undefined} initialAction={query.action === "SELL" ? "SELL" : "BUY"} />
     </div>;
   }
-  const date = (value: Date) => value.toLocaleString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
   return <div className={`page-shell ${styles.page}`}>
     <nav aria-label="Breadcrumb"><Link href="/events">Events</Link><span aria-hidden="true"> / </span><span>{event.category}</span></nav>
-    <header><p className={styles.eyebrow}>{event.category}</p><h1>{event.title}</h1><p>{event.description}</p><p className={styles.meta}><time dateTime={event.startsAt.toISOString()}>{date(event.startsAt)}</time> – <time dateTime={event.endsAt.toISOString()}>{date(event.endsAt)}</time></p></header>
+    <header><p className={styles.eyebrow}>{event.category}</p><h1>{event.title}</h1><p>{event.description}</p><p className={styles.meta}><LocalTime value={event.startsAt} preset="medium" /> – <LocalTime value={event.endsAt} preset="medium" /></p></header>
     <aside className={styles.notice}>These markets are independent contracts. Their YES probabilities do not have to add up to 100%. Read each market’s rules before trading.</aside>
     <section aria-label="Event markets" className={styles.markets}>
       <div className={styles.sectionTitle}><h2>{event.markets.length} markets</h2><span>YES probability</span></div>
