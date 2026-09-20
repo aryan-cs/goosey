@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => {
   const tx = {
     market: { findMany: vi.fn(), findUnique: vi.fn() },
     marketEvent: { findMany: vi.fn(), findUnique: vi.fn() },
-    user: { findMany: vi.fn() },
+    user: { findMany: vi.fn(), findUnique: vi.fn() },
   };
   return { tx, transaction: vi.fn(), loadMarketMarks: vi.fn(), getAuthenticatedUser: vi.fn() };
 });
@@ -19,7 +19,7 @@ vi.mock("@/lib/market-service", () => {
     init,
   );
   return {
-    prisma: { $transaction: mocks.transaction },
+    prisma: { $transaction: mocks.transaction, user: { findUnique: mocks.tx.user.findUnique } },
     ApiError,
     jsonResponse,
     apiErrorResponse: (error: unknown) => jsonResponse(
@@ -42,11 +42,13 @@ import { GET as calendarGet } from "../calendar/route";
 const recordedAt = new Date("2026-09-19T10:00:00Z");
 function market(id: string, pricingModel = "ORDER_BOOK") {
   return {
-    id, slug: id, title: id, shortTitle: id, description: "Forecast contract", category: "Campus",
+    id, slug: id, title: id, shortTitle: id, description: "Forecast contract", rules: "Rules",
+    resolutionSource: "Source", category: "Campus", featured: false, color: "gold", icon: "sparkles",
+    executionBackend: "DATABASE", collateralAccountId: `collateral-${id}`,
     pricingModel, status: "OPEN", resolution: null, acceptingOrders: true,
     closesAt: new Date("2099-01-01T00:00:00Z"), payoutMilli: 1_000n,
-    yesShares: 0, noShares: 0, liquidityParameter: 100, volumeMilli: 0n,
-    updatedAt: recordedAt,
+    yesShares: 0, noShares: 0, liquidityParameter: 100, volumeMilli: 0n, traderCount: 0,
+    commentCount: 0, createdAt: recordedAt, updatedAt: recordedAt,
     // An initial snapshot must not become trade history for an untraded book.
     priceHistory: [{ createdAt: recordedAt, yesProbabilityBps: 5_000 }],
     orderFills: [] as Array<{ createdAt: Date; canonicalYesPriceMilli: bigint }>,
@@ -59,7 +61,8 @@ beforeEach(() => {
   mocks.getAuthenticatedUser.mockResolvedValue(null);
   const markets = [market("empty-book"), market("amm", "LMSR")];
   const event = { id: "event", slug: "event", title: "Campus", markets, _count: { markets: 2 } };
-  mocks.tx.market.findMany.mockResolvedValue(markets);
+  mocks.tx.market.findMany.mockImplementation(async (args?: { where?: { executionBackend?: string } }) =>
+    args?.where?.executionBackend === "SOLANA" ? [] : markets);
   mocks.tx.market.findUnique.mockResolvedValue(markets[0]);
   mocks.tx.marketEvent.findMany.mockResolvedValue([event]);
   mocks.tx.marketEvent.findUnique.mockResolvedValue(event);
@@ -111,8 +114,9 @@ describe("forecast API batch mark contract", () => {
   it("market listing uses only real CLOB fills and retains the LMSR chronological helper", async () => {
     const response = await marketsGet(new NextRequest("http://localhost/api/markets"));
     const body = await response.json();
-    expect(body.items[0].priceHistory).toEqual([]);
-    expect(body.items[1].priceHistory.map((point: { probabilityYesBps: number }) => point.probabilityYesBps)).toEqual([5_000, 6_250]);
+    expect(body.items.find((item: { id: string }) => item.id === "empty-book").priceHistory).toEqual([]);
+    expect(body.items.find((item: { id: string }) => item.id === "amm").priceHistory
+      .map((point: { probabilityYesBps: number }) => point.probabilityYesBps)).toEqual([5_000, 6_250]);
     expect(body.items[0]).not.toHaveProperty("orderFills");
   });
 
@@ -140,7 +144,7 @@ describe("forecast API batch mark contract", () => {
     const body = await (await marketsGet(new NextRequest("http://localhost/api/markets?limit=1"))).json();
     expect(body.items).toHaveLength(1);
     expect(body.nextCursor).toEqual(expect.any(String));
-    expect(mocks.loadMarketMarks.mock.calls[0][1].map((row: { id: string }) => row.id)).toEqual(["empty-book"]);
+    expect(mocks.loadMarketMarks.mock.calls[0][1].map((row: { id: string }) => row.id)).toEqual(["empty-book", "amm"]);
   });
 
   it("emits chronological, rounded fill history without a synthetic current midpoint", async () => {

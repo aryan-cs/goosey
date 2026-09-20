@@ -80,6 +80,9 @@ describe("registration and welcome grant contention", () => {
 
   it("still defers the welcome grant when email verification is required", async () => {
     vi.stubEnv("REQUIRE_EMAIL_VERIFICATION", "true");
+    vi.stubEnv("SMTP_HOST", "smtp.example.test");
+    vi.stubEnv("SMTP_PORT", "587");
+    vi.stubEnv("SMTP_FROM", "Goosey <noreply@example.test>");
     const { tx, database } = fixture();
     await registerUser(input, database);
     expect(tx.ledgerAccount.create).toHaveBeenCalledOnce();
