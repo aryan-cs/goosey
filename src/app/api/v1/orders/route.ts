@@ -7,6 +7,7 @@ import { ApiError, apiErrorResponse, jsonResponse, parseIdempotencyKey, prisma, 
 import { listUserOrders, parseListOrdersQuery } from "@/lib/order-service";
 import { acceptManagedOrder } from "@/lib/solana/managed-order-service";
 import { dispatchManagedOrderCommand } from "@/lib/solana/managed-order-dispatcher";
+import { listManagedSolanaOrders } from "@/lib/solana/managed-order-read";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -39,6 +40,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const user = await requireUser(request);
     const query = parseListOrdersQuery(request.nextUrl.searchParams);
+    const marketSlug = query.marketSlug;
+    const managed = marketSlug
+      ? await listManagedSolanaOrders({ userId: user.id, ...query, marketSlug, signal: request.signal })
+      : null;
+    if (managed) return privateNoStore(jsonResponse(managed));
     const result = await listUserOrders({ userId: user.id, ...query });
     return privateNoStore(jsonResponse(result));
   } catch (error) {
