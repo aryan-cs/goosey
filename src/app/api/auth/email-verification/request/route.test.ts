@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
+  emailVerificationEnabled: vi.fn(),
   requestEmailVerification: vi.fn(),
   enforceRateLimit: vi.fn(),
+}));
+
+vi.mock("@/lib/auth", () => ({
+  emailVerificationEnabled: mocks.emailVerificationEnabled,
 }));
 
 vi.mock("@/lib/auth-recovery", () => ({
@@ -47,8 +52,19 @@ function request(body: unknown): NextRequest {
 describe("POST /api/auth/email-verification/request", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.emailVerificationEnabled.mockReturnValue(true);
     mocks.enforceRateLimit.mockResolvedValue(undefined);
     mocks.requestEmailVerification.mockResolvedValue(undefined);
+  });
+
+  it("does not expose the verification sender while the feature is unavailable", async () => {
+    mocks.emailVerificationEnabled.mockReturnValue(false);
+
+    const response = await POST(request({ email: "user@example.com" }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "EMAIL_UNAVAILABLE" } });
+    expect(mocks.requestEmailVerification).not.toHaveBeenCalled();
   });
 
   it("passes the canonical email and preserved local destination to the service", async () => {

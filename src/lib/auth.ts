@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { isEmailDeliveryConfigured } from "@/lib/email";
 import { deterministicSecretToken, randomToken, RegistrationDeviceInUseError, sha256 } from "@/lib/security";
 import { runSerializableTransaction } from "@/lib/serializable-transaction";
 
@@ -56,10 +57,14 @@ const ISSUANCE_OWNER_ID = "issuance";
 
 export type PublicUser = Pick<User, "id" | "email" | "username" | "displayName" | "role" | "status" | "emailVerifiedAt">;
 
+export function emailVerificationEnabled(): boolean {
+  return process.env.REQUIRE_EMAIL_VERIFICATION === "true" && isEmailDeliveryConfigured();
+}
+
 export function requiresEmailVerification(
   user: Pick<User, "role" | "emailVerifiedAt">,
 ): boolean {
-  return process.env.REQUIRE_EMAIL_VERIFICATION === "true" && user.role === "USER" && user.emailVerifiedAt === null;
+  return emailVerificationEnabled() && user.role === "USER" && user.emailVerifiedAt === null;
 }
 
 export function emailVerificationState(user: Pick<User, "role" | "emailVerifiedAt">) {

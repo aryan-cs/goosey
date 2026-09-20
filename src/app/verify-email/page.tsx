@@ -1,5 +1,10 @@
 import { EmailVerificationFlow } from "@/components/email-verification-flow";
+import { emailVerificationEnabled } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { connection } from "next/server";
 
-export default function VerifyEmailPage() {
+export default async function VerifyEmailPage() {
+  await connection();
+  if (!emailVerificationEnabled()) redirect("/");
   return <div className="auth-page"><div className="auth-texture" aria-hidden="true" /><EmailVerificationFlow /></div>;
 }

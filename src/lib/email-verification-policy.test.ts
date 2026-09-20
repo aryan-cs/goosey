@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { emailVerificationState, requiresEmailVerification } from "@/lib/auth";
+import { emailVerificationEnabled, emailVerificationState, requiresEmailVerification } from "@/lib/auth";
 
 const authMocks = vi.hoisted(() => ({ getAuthenticatedUser: vi.fn() }));
 
@@ -23,12 +23,27 @@ const participant = {
 };
 
 describe("email verification access policy", () => {
-  beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("REQUIRE_EMAIL_VERIFICATION", "true"); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("REQUIRE_EMAIL_VERIFICATION", "true");
+    vi.stubEnv("SMTP_HOST", "smtp.example.com");
+    vi.stubEnv("SMTP_PORT", "465");
+    vi.stubEnv("SMTP_SECURE", "true");
+    vi.stubEnv("SMTP_FROM", "Goosey <no-reply@example.com>");
+  });
   afterEach(() => vi.unstubAllEnvs());
 
   it("allows accounts without email verification by default", async () => {
     vi.stubEnv("REQUIRE_EMAIL_VERIFICATION", "");
     authMocks.getAuthenticatedUser.mockResolvedValue(participant);
+    expect(emailVerificationState(participant)).toEqual({ required: false, allowedActions: [] });
+    await expect(requireUser(new NextRequest("http://localhost:8080/api/portfolio"))).resolves.toMatchObject({ id: participant.id });
+  });
+
+  it("keeps verification hidden when outbound email is not configured", async () => {
+    vi.stubEnv("SMTP_HOST", "");
+    authMocks.getAuthenticatedUser.mockResolvedValue(participant);
+    expect(emailVerificationEnabled()).toBe(false);
     expect(emailVerificationState(participant)).toEqual({ required: false, allowedActions: [] });
     await expect(requireUser(new NextRequest("http://localhost:8080/api/portfolio"))).resolves.toMatchObject({ id: participant.id });
   });

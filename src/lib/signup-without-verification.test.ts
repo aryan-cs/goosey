@@ -51,6 +51,10 @@ describe("signup without a verification email", () => {
 
   it("still defers the grant when verification is explicitly required", async () => {
     vi.stubEnv("REQUIRE_EMAIL_VERIFICATION", "true");
+    vi.stubEnv("SMTP_HOST", "smtp.example.com");
+    vi.stubEnv("SMTP_PORT", "465");
+    vi.stubEnv("SMTP_SECURE", "true");
+    vi.stubEnv("SMTP_FROM", "Goosey <no-reply@example.com>");
     const result = await registerUser({ email: "optional@example.com", username: "optionalgoose", displayName: "Optional Goose", password: "a long test password" }, database);
     expect(emailVerificationState(result.user).required).toBe(true);
     expect((await database.user.findUniqueOrThrow({ where: { id: result.user.id } })).balanceMilli).toBe(0n);

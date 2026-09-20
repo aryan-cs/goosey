@@ -65,6 +65,16 @@ export function smtpConfigFromEnvironment(): SmtpConfig {
   };
 }
 
+export function isEmailDeliveryConfigured(): boolean {
+  try {
+    smtpConfigFromEnvironment();
+    return true;
+  } catch (error) {
+    if (error instanceof EmailConfigurationError) return false;
+    throw error;
+  }
+}
+
 export async function sendEmail(input: {
   to: string;
   subject: string;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { emailVerificationEnabled } from "@/lib/auth";
 import { requestEmailVerification } from "@/lib/auth-recovery";
 import { authDestination } from "@/lib/auth-destination";
 import { EmailDeliveryError } from "@/lib/email";
@@ -17,6 +18,7 @@ const schema = z.object({ email: z.string(), next: z.string().max(2048).optional
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    if (!emailVerificationEnabled()) throw new EmailDeliveryError();
     assertMutationOrigin(request);
     await enforceRateLimit(requestRateLimitKey(request, "email-verification-request:ip"), 5, 60 * 60_000);
     const parsed = schema.safeParse(await readJsonObject(request));
