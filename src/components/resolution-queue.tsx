@@ -41,8 +41,6 @@ async function requestFingerprint(body: string): Promise<string> {
 export function ResolutionQueue({
   initialProposals,
   initialRuns,
-  viewerId,
-  proposerIds,
 }: {
   initialProposals: Proposal[];
   initialRuns: SettlementRun[];
@@ -70,10 +68,6 @@ export function ResolutionQueue({
 
   async function review(id: string, action: "APPROVE" | "REJECT") {
     if (operationInFlight.current) return;
-    if (proposerIds[id] === viewerId) {
-      setError("A proposer cannot review their own resolution.");
-      return;
-    }
     const note = action === "REJECT" ? window.prompt("Explain why this proposal is rejected") : "";
     if (action === "REJECT" && (!note || note.trim().length < 3)) return;
     if (action === "APPROVE" && !approvalPassword) {
@@ -116,6 +110,7 @@ export function ResolutionQueue({
         ]);
       }
       setApprovalPassword("");
+      if (body.run) await drainRun(body.run.id);
     } catch (reason) {
       setError(reason instanceof Error && reason.message ? reason.message : "Resolution review failed. Check your connection and retry.");
     } finally {
@@ -127,12 +122,8 @@ export function ResolutionQueue({
     }
   }
 
-  async function processRun(id: string) {
-    if (operationInFlight.current) return;
-    operationInFlight.current = true;
-    setBusyId(id);
-    setError(null);
-    try {
+  async function drainRun(id: string) {
+    for (;;) {
       const response = await fetch(`/api/admin/settlement-runs/${id}`, {
         method: "POST",
         credentials: "same-origin",
@@ -141,10 +132,20 @@ export function ResolutionQueue({
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(body?.error?.message ?? "Settlement batch failed. The run remains resumable.");
-        return;
+        throw new Error(body?.error?.message ?? "Settlement failed. Resume payouts below.");
       }
       setRuns((current) => current.map((run) => (run.id === id ? { ...run, ...body.run } : run)));
+      if (body.run.status === "COMPLETED") return;
+    }
+  }
+
+  async function processRun(id: string) {
+    if (operationInFlight.current) return;
+    operationInFlight.current = true;
+    setBusyId(id);
+    setError(null);
+    try {
+      await drainRun(id);
     } catch (reason) {
       setError(reason instanceof Error && reason.message ? reason.message : "Settlement batch failed. Check your connection and retry.");
     } finally {
@@ -159,7 +160,7 @@ export function ResolutionQueue({
   return (
     <section className="moderation-panel">
       <div className="section-heading">
-        <div><span className="eyebrow">Two-person control</span><h2>Resolution approvals</h2></div>
+        <div><span className="eyebrow">Administrator confirmation</span><h2>Resolution approvals</h2></div>
         <span>{proposals.length} pending</span>
       </div>
       {error && <p className="form-error">{error}</p>}
@@ -177,8 +178,8 @@ export function ResolutionQueue({
                 <small>Evidence: {proposal.evidence}</small>
                 <footer>
                   <Link href={`/markets/${proposal.market.slug}`}>Review market</Link>
-                  <button className="button button-ghost" disabled={busyId !== null || proposerIds[proposal.id] === viewerId} onClick={() => void review(proposal.id, "REJECT")}>Reject</button>
-                  <button className="button button-secondary" disabled={busyId !== null || proposerIds[proposal.id] === viewerId} onClick={() => void review(proposal.id, "APPROVE")}>{busyId === proposal.id ? "Approving…" : "Approve outcome"}</button>
+                  <button className="button button-ghost" disabled={busyId !== null} onClick={() => void review(proposal.id, "REJECT")}>Reject</button>
+                  <button className="button button-secondary" disabled={busyId !== null} onClick={() => void review(proposal.id, "APPROVE")}>{busyId === proposal.id ? "Approving…" : "Confirm outcome and pay"}</button>
                 </footer>
               </article>
             ))}
@@ -201,7 +202,7 @@ export function ResolutionQueue({
                 {run.market.slug && <Link href={`/markets/${run.market.slug}`}>View market</Link>}
                 {run.status !== "COMPLETED" && (
                   <button className="button button-secondary" disabled={busyId !== null} onClick={() => void processRun(run.id)}>
-                    {busyId === run.id ? "Processing…" : "Process next ≤100"}
+                    {busyId === run.id ? "Processing…" : "Resume payouts"}
                   </button>
                 )}
               </footer>
